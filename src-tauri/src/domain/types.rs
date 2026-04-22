@@ -1,0 +1,241 @@
+use serde::{Deserialize, Serialize};
+use sqlx::Type;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[sqlx(type_name = "TEXT", rename_all = "snake_case")]
+pub enum CardType {
+    Concrete,
+    Placeholder,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[sqlx(type_name = "TEXT", rename_all = "snake_case")]
+pub enum PlaceholderTag {
+    Unspecified,
+    Push,
+    Pull,
+    Legs,
+    Core,
+    Mobility,
+}
+
+impl PlaceholderTag {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PlaceholderTag::Unspecified => "unspecified",
+            PlaceholderTag::Push => "push",
+            PlaceholderTag::Pull => "pull",
+            PlaceholderTag::Legs => "legs",
+            PlaceholderTag::Core => "core",
+            PlaceholderTag::Mobility => "mobility",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[sqlx(type_name = "TEXT", rename_all = "snake_case")]
+pub enum SessionStatus {
+    Draft,
+    InProgress,
+    Completed,
+    Abandoned,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[sqlx(type_name = "TEXT", rename_all = "snake_case")]
+pub enum ExerciseStatus {
+    Pending,
+    Active,
+    Completed,
+    Skipped,
+}
+
+// ── Row types returned from DB queries ─────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ExerciseRow {
+    pub id: String,
+    pub name: String,
+    pub notes: Option<String>,
+    pub image_url: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ExerciseCardRef {
+    pub card_id: String,
+    pub set_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExerciseReferences {
+    pub cards: Vec<ExerciseCardRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct SetTemplateRow {
+    pub id: String,
+    pub name: String,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct SetTemplateSummaryRow {
+    pub id: String,
+    pub name: String,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub card_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct SetTemplateCardRow {
+    pub id: String,
+    pub set_template_id: String,
+    pub card_type: String,
+    pub order_index: i64,
+    pub duration_hint_sec: Option<i64>,
+    pub notes: Option<String>,
+    pub exercise_id: Option<String>,
+    pub placeholder_tag: Option<String>,
+    pub placeholder_label: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetTemplateDetail {
+    pub id: String,
+    pub name: String,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub cards: Vec<SetTemplateCardRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct WorkoutTemplateRow {
+    pub id: String,
+    pub name: String,
+    pub notes: Option<String>,
+    pub default_exercise_duration_sec: i64,
+    pub rest_between_sets_sec: Option<i64>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct WorkoutTemplateSummaryRow {
+    pub id: String,
+    pub name: String,
+    pub notes: Option<String>,
+    pub default_exercise_duration_sec: i64,
+    pub rest_between_sets_sec: Option<i64>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub set_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct WorkoutTemplateSetRefRow {
+    pub id: String,
+    pub workout_template_id: String,
+    pub set_template_id: String,
+    pub order_index: i64,
+    pub set_name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct WorkoutTemplateCardAssignmentRow {
+    pub id: String,
+    pub workout_template_set_ref_id: String,
+    pub set_template_card_id: String,
+    pub exercise_id: Option<String>,
+    pub display_label: Option<String>,
+    pub duration_hint_sec: Option<i64>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkoutTemplateDetail {
+    pub id: String,
+    pub name: String,
+    pub notes: Option<String>,
+    pub default_exercise_duration_sec: i64,
+    pub rest_between_sets_sec: Option<i64>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub set_refs: Vec<WorkoutTemplateSetRefRow>,
+    pub assignments: Vec<WorkoutTemplateCardAssignmentRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct WorkoutSessionRow {
+    pub id: String,
+    pub workout_template_id: Option<String>,
+    pub source_workout_template_name: Option<String>,
+    pub status: String,
+    pub session_date: Option<String>,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct WorkoutSessionSetRow {
+    pub id: String,
+    pub workout_session_id: String,
+    pub source_set_template_id: Option<String>,
+    pub order_index: i64,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub paused_total_sec: i64,
+    pub paused_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct WorkoutSessionExerciseRow {
+    pub id: String,
+    pub workout_session_set_id: String,
+    pub order_index: i64,
+    pub exercise_id: Option<String>,
+    pub placeholder_tag: Option<String>,
+    pub display_name: String,
+    pub duration_hint_sec: Option<i64>,
+    pub status: String,
+    pub skipped: i64,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimerBase {
+    pub set_started_at_ms: Option<i64>,
+    pub paused_total_sec: i64,
+    pub paused_at_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveSessionPayload {
+    pub session: WorkoutSessionRow,
+    pub sets: Vec<WorkoutSessionSetRow>,
+    pub exercises: Vec<WorkoutSessionExerciseRow>,
+    pub current_exercise_id: Option<String>,
+    pub current_set_id: Option<String>,
+    pub timer_base: TimerBase,
+}

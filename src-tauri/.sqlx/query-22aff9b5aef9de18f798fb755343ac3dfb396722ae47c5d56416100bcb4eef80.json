@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, workout_template_id, source_workout_template_name, status,\n                session_date, started_at, ended_at, notes, created_at, updated_at\n         FROM workout_sessions\n         WHERE status = 'completed'\n         ORDER BY session_date DESC, started_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "workout_template_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_workout_template_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "session_date",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "started_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "ended_at",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 9,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "22aff9b5aef9de18f798fb755343ac3dfb396722ae47c5d56416100bcb4eef80"
+}

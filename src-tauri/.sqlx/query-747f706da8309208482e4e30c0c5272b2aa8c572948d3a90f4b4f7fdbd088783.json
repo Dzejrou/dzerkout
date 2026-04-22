@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n           (SELECT set_template_id FROM workout_template_set_refs WHERE id = ?) AS ref_set_id,\n           (SELECT set_template_id FROM set_template_cards WHERE id = ?) AS card_set_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "ref_set_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "card_set_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "747f706da8309208482e4e30c0c5272b2aa8c572948d3a90f4b4f7fdbd088783"
+}

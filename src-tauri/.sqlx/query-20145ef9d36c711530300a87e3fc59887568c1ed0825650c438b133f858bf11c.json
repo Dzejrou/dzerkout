@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT wt.id, wt.name, wt.notes,\n                wt.default_exercise_duration_sec, wt.rest_between_sets_sec,\n                wt.created_at, wt.updated_at,\n                COUNT(DISTINCT wtsr.id) AS set_count\n         FROM workout_templates wt\n         LEFT JOIN workout_template_set_refs wtsr ON wtsr.workout_template_id = wt.id\n         GROUP BY wt.id ORDER BY wt.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "default_exercise_duration_sec",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "rest_between_sets_sec",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "set_count",
+        "ordinal": 7,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "20145ef9d36c711530300a87e3fc59887568c1ed0825650c438b133f858bf11c"
+}

@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT st.id, st.name, st.notes, st.created_at, st.updated_at,\n                COUNT(stc.id) AS card_count\n         FROM set_templates st\n         LEFT JOIN set_template_cards stc ON stc.set_template_id = st.id\n         GROUP BY st.id ORDER BY st.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "card_count",
+        "ordinal": 5,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b1a499f5a7820cc0672e0e5d524bd512591657ffd3a9f95a02999429e200f716"
+}

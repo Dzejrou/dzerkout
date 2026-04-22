@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT wtsr.id, wtsr.workout_template_id, wtsr.set_template_id,\n                wtsr.order_index, st.name AS set_name,\n                wtsr.created_at, wtsr.updated_at\n         FROM workout_template_set_refs wtsr\n         JOIN set_templates st ON st.id = wtsr.set_template_id\n         WHERE wtsr.id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "workout_template_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "set_template_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "order_index",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "set_name",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "df6878a2ccdb5c4b71a556daaa219efad1b6edc30eddffaac72cf9f37d0215a7"
+}

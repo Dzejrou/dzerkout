@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT stc.id AS card_id, st.name AS set_name\n         FROM set_template_cards stc\n         JOIN set_templates st ON st.id = stc.set_template_id\n         WHERE stc.exercise_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "card_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "set_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "693702bb51fcaa7e792ed8370a854dc2d787accac740713d42794cbf668f5550"
+}

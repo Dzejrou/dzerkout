@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM set_template_cards WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "629f8e04d617f2d96d91a07479801e4ae33a2118fcdc7c30d41ec978b9688064"
+}

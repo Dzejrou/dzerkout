@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE workout_templates\n         SET name = ?, notes = ?,\n             default_exercise_duration_sec = ?, rest_between_sets_sec = ?\n         WHERE id = ?\n         RETURNING id, name, notes, default_exercise_duration_sec,\n                   rest_between_sets_sec, created_at, updated_at",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "default_exercise_duration_sec",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "rest_between_sets_sec",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "a0709b06af2b141fde71aa13176d5bc6dff312327939b64887f45a0d5f9dca27"
+}

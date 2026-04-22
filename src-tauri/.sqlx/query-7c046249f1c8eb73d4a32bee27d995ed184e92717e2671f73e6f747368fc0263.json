@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, workout_template_set_ref_id, set_template_card_id,\n                exercise_id, display_label, duration_hint_sec,\n                notes, created_at, updated_at\n         FROM workout_template_card_assignments\n         WHERE workout_template_set_ref_id = ? AND set_template_card_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "workout_template_set_ref_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "set_template_card_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "exercise_id",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "display_label",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "duration_hint_sec",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "notes",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 8,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "7c046249f1c8eb73d4a32bee27d995ed184e92717e2671f73e6f747368fc0263"
+}

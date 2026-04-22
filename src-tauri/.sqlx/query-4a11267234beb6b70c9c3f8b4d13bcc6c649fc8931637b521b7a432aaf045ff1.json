@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COALESCE(MAX(order_index), -1) + 1 AS next_idx\n         FROM set_template_cards WHERE set_template_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "next_idx",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4a11267234beb6b70c9c3f8b4d13bcc6c649fc8931637b521b7a432aaf045ff1"
+}

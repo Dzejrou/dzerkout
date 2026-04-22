@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COALESCE(MAX(order_index), -1) + 1 AS next_idx\n         FROM workout_template_set_refs WHERE workout_template_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "next_idx",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "be99fd7d369e2eecc25f62794479c86817ef6c6c4f0e680e6c6108197b38058e"
+}

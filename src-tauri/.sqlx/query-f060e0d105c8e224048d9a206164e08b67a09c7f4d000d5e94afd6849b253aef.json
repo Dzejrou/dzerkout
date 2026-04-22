@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO workout_template_set_refs\n             (id, workout_template_id, set_template_id, order_index)\n         VALUES (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "f060e0d105c8e224048d9a206164e08b67a09c7f4d000d5e94afd6849b253aef"
+}

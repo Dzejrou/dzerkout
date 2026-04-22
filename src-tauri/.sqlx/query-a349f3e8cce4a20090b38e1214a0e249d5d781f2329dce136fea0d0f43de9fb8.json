@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT wtca.id, wtca.workout_template_set_ref_id, wtca.set_template_card_id,\n                wtca.exercise_id, wtca.display_label, wtca.duration_hint_sec,\n                wtca.notes, wtca.created_at, wtca.updated_at\n         FROM workout_template_card_assignments wtca\n         JOIN workout_template_set_refs wtsr\n           ON wtsr.id = wtca.workout_template_set_ref_id\n         WHERE wtsr.workout_template_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "workout_template_set_ref_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "set_template_card_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "exercise_id",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "display_label",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "duration_hint_sec",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "notes",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 8,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "a349f3e8cce4a20090b38e1214a0e249d5d781f2329dce136fea0d0f43de9fb8"
+}

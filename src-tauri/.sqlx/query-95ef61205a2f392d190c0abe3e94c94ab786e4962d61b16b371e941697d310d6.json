@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE set_template_cards\n         SET card_type = 'placeholder',\n             exercise_id = NULL,\n             placeholder_tag = 'unspecified',\n             placeholder_label = ?\n         WHERE exercise_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "95ef61205a2f392d190c0abe3e94c94ab786e4962d61b16b371e941697d310d6"
+}

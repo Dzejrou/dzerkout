@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE workout_template_set_refs SET order_index = ?\n             WHERE id = ? AND workout_template_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "89f7419d444533b72f11c1e536d4e68859648176f2206ffe19d8a3f427441900"
+}

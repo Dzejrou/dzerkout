@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO workout_templates\n             (id, name, notes, default_exercise_duration_sec, rest_between_sets_sec)\n         VALUES (?, ?, ?, ?, ?)\n         RETURNING id, name, notes, default_exercise_duration_sec,\n                   rest_between_sets_sec, created_at, updated_at",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "default_exercise_duration_sec",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "rest_between_sets_sec",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "2ea5c45ed8caa252eb8cc728327d6f09c6cbadfe3a0d7bc27e4656d56a5efcc7"
+}

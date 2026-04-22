@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE set_template_cards SET order_index = ?\n             WHERE id = ? AND set_template_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "84e867ea6364315657760a93f0b4593c094ba0fde51037a97336bfb905d2a044"
+}

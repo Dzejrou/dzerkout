@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE workout_template_card_assignments\n         SET exercise_id = NULL,\n             display_label = COALESCE(display_label, ?)\n         WHERE exercise_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "3b7da61b361efac4b30446cef62dc75c6283b5de2491cbb97563b682d894b1fe"
+}

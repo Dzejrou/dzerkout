@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COUNT(stc.id) AS cnt\n         FROM workout_template_set_refs wtsr\n         JOIN set_template_cards stc ON stc.set_template_id = wtsr.set_template_id\n         WHERE wtsr.workout_template_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "cnt",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c3baefd7211d7d6b76f94f2b3210bad63cd1b9425a0716dad9466fad7987fa8a"
+}
