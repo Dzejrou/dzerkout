@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE workout_session_sets\n         SET started_at       = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),\n             paused_total_sec = 0,\n             paused_at        = NULL\n         WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "29434025bde33305a6161f6ab8784b25d7b7b54f3b0416d4681252c77ebbf06f"
+}

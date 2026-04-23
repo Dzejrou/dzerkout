@@ -3,7 +3,7 @@
 
 use sqlx::SqlitePool;
 use crate::{
-    domain::{exercise, set_template, workout_template},
+    domain::{exercise, session, set_template, workout_template},
     error::AppError,
 };
 
@@ -11,75 +11,33 @@ use crate::{
 
 #[sqlx::test]
 async fn test_assignment_validation_rejects_wrong_set(pool: SqlitePool) {
-    // Create two set templates, each with one card
     let set_a = set_template::create(&pool, "Set A", None).await.unwrap();
     let set_b = set_template::create(&pool, "Set B", None).await.unwrap();
     let exercise = exercise::create(&pool, "Squat", None).await.unwrap();
 
     let card_a = set_template::add_card(
-        &pool,
-        &set_a.id,
-        "concrete",
-        Some(&exercise.id),
-        None,
-        None,
-        None,
-        None,
-    )
-    .await
-    .unwrap();
+        &pool, &set_a.id, "concrete", Some(&exercise.id), None, None, None, None,
+    ).await.unwrap();
 
-    // Create a workout that references only Set A
-    let wt = workout_template::create(&pool, "My Workout", None, 120, None)
-        .await
-        .unwrap();
-    let ref_a = workout_template::add_set_ref(&pool, &wt.id, &set_a.id)
-        .await
-        .unwrap();
+    let wt = workout_template::create(&pool, "My Workout", None, 120, None).await.unwrap();
+    let ref_a = workout_template::add_set_ref(&pool, &wt.id, &set_a.id).await.unwrap();
 
-    // Also add a card to Set B (not referenced by the workout ref)
     let card_b = set_template::add_card(
-        &pool,
-        &set_b.id,
-        "concrete",
-        Some(&exercise.id),
-        None,
-        None,
-        None,
-        None,
-    )
-    .await
-    .unwrap();
+        &pool, &set_b.id, "concrete", Some(&exercise.id), None, None, None, None,
+    ).await.unwrap();
 
-    // Attempt to assign card_b to ref_a — card_b belongs to set_b, not set_a → must fail
     let result = workout_template::upsert_card_assignment(
-        &pool,
-        &ref_a.id,
-        &card_b.id, // wrong set
-        None,
-        Some("Override"),
-        None,
-        None,
-    )
-    .await;
-
+        &pool, &ref_a.id, &card_b.id, None, Some("Override"), None, None,
+    ).await;
     assert!(
         matches!(result, Err(AppError::Validation(_))),
         "expected Validation error for cross-set assignment, got: {:?}",
         result
     );
 
-    // Assigning card_a to ref_a (same set) must succeed
     let ok = workout_template::upsert_card_assignment(
-        &pool,
-        &ref_a.id,
-        &card_a.id, // correct set
-        None,
-        Some("Override"),
-        None,
-        None,
-    )
-    .await;
+        &pool, &ref_a.id, &card_a.id, None, Some("Override"), None, None,
+    ).await;
     assert!(ok.is_ok(), "valid same-set assignment should succeed: {:?}", ok);
 }
 
@@ -90,30 +48,16 @@ async fn test_reorder_cards_two_phase(pool: SqlitePool) {
     let exercise = exercise::create(&pool, "Push-up", None).await.unwrap();
     let set = set_template::create(&pool, "Reorder Set", None).await.unwrap();
 
-    // Add three cards
-    let c0 = set_template::add_card(
-        &pool, &set.id, "concrete", Some(&exercise.id), None, None, None, None,
-    ).await.unwrap();
-    let c1 = set_template::add_card(
-        &pool, &set.id, "concrete", Some(&exercise.id), None, None, None, None,
-    ).await.unwrap();
-    let c2 = set_template::add_card(
-        &pool, &set.id, "concrete", Some(&exercise.id), None, None, None, None,
-    ).await.unwrap();
+    let c0 = set_template::add_card(&pool, &set.id, "concrete", Some(&exercise.id), None, None, None, None).await.unwrap();
+    let c1 = set_template::add_card(&pool, &set.id, "concrete", Some(&exercise.id), None, None, None, None).await.unwrap();
+    let c2 = set_template::add_card(&pool, &set.id, "concrete", Some(&exercise.id), None, None, None, None).await.unwrap();
 
-    // Reverse order: 2 → 0, 1 → 1, 0 → 2 (maximum collision scenario)
-    set_template::reorder_cards(
-        &pool,
-        &set.id,
-        vec![c2.id.clone(), c1.id.clone(), c0.id.clone()],
-    )
-    .await
-    .unwrap();
+    set_template::reorder_cards(&pool, &set.id, vec![c2.id.clone(), c1.id.clone(), c0.id.clone()]).await.unwrap();
 
     let detail = set_template::get(&pool, &set.id).await.unwrap();
-    assert_eq!(detail.cards[0].id, c2.id, "first card should be c2");
-    assert_eq!(detail.cards[1].id, c1.id, "second card should be c1");
-    assert_eq!(detail.cards[2].id, c0.id, "third card should be c0");
+    assert_eq!(detail.cards[0].id, c2.id);
+    assert_eq!(detail.cards[1].id, c1.id);
+    assert_eq!(detail.cards[2].id, c0.id);
     assert_eq!(detail.cards[0].order_index, 0);
     assert_eq!(detail.cards[1].order_index, 1);
     assert_eq!(detail.cards[2].order_index, 2);
@@ -125,21 +69,12 @@ async fn test_reorder_set_refs_two_phase(pool: SqlitePool) {
     let set_b = set_template::create(&pool, "Beta", None).await.unwrap();
     let set_c = set_template::create(&pool, "Gamma", None).await.unwrap();
 
-    let wt = workout_template::create(&pool, "Reorder Workout", None, 120, None)
-        .await
-        .unwrap();
+    let wt = workout_template::create(&pool, "Reorder Workout", None, 120, None).await.unwrap();
     let r0 = workout_template::add_set_ref(&pool, &wt.id, &set_a.id).await.unwrap();
     let r1 = workout_template::add_set_ref(&pool, &wt.id, &set_b.id).await.unwrap();
     let r2 = workout_template::add_set_ref(&pool, &wt.id, &set_c.id).await.unwrap();
 
-    // Reverse: c → 0, b → 1, a → 2
-    workout_template::reorder_set_refs(
-        &pool,
-        &wt.id,
-        vec![r2.id.clone(), r1.id.clone(), r0.id.clone()],
-    )
-    .await
-    .unwrap();
+    workout_template::reorder_set_refs(&pool, &wt.id, vec![r2.id.clone(), r1.id.clone(), r0.id.clone()]).await.unwrap();
 
     let detail = workout_template::get(&pool, &wt.id).await.unwrap();
     assert_eq!(detail.set_refs[0].id, r2.id);
@@ -156,42 +91,28 @@ async fn test_clone_set_template(pool: SqlitePool) {
     let ex = exercise::create(&pool, "Deadlift", None).await.unwrap();
     let src = set_template::create(&pool, "Source Set", Some("notes")).await.unwrap();
 
-    set_template::add_card(
-        &pool, &src.id, "concrete", Some(&ex.id), None, None, Some(45), Some("note"),
-    ).await.unwrap();
-    set_template::add_card(
-        &pool, &src.id, "placeholder", None, Some("push"), Some("Upper push"), None, None,
-    ).await.unwrap();
+    set_template::add_card(&pool, &src.id, "concrete", Some(&ex.id), None, None, Some(45), Some("note")).await.unwrap();
+    set_template::add_card(&pool, &src.id, "placeholder", None, Some("push"), Some("Upper push"), None, None).await.unwrap();
 
     let clone = set_template::clone_set(&pool, &src.id).await.unwrap();
-
-    // Name
     assert_eq!(clone.name, "Source Set (copy)");
     assert_ne!(clone.id, src.id);
 
-    // Cards are duplicated
     let src_detail = set_template::get(&pool, &src.id).await.unwrap();
     let clone_detail = set_template::get(&pool, &clone.id).await.unwrap();
-
     assert_eq!(src_detail.cards.len(), clone_detail.cards.len());
 
-    // IDs are different
     for (s, c) in src_detail.cards.iter().zip(clone_detail.cards.iter()) {
-        assert_ne!(s.id, c.id, "cloned card must have a new ID");
+        assert_ne!(s.id, c.id);
         assert_eq!(s.card_type, c.card_type);
         assert_eq!(s.exercise_id, c.exercise_id);
         assert_eq!(s.placeholder_tag, c.placeholder_tag);
         assert_eq!(s.order_index, c.order_index);
     }
 
-    // Modifying source does not affect clone (independent)
     set_template::remove_card(&pool, &src_detail.cards[0].id).await.unwrap();
-    let clone_detail_after = set_template::get(&pool, &clone.id).await.unwrap();
-    assert_eq!(
-        clone_detail_after.cards.len(),
-        2,
-        "clone should still have 2 cards after source card removed"
-    );
+    let clone_after = set_template::get(&pool, &clone.id).await.unwrap();
+    assert_eq!(clone_after.cards.len(), 2);
 }
 
 // ── clone_set_from_workout ───────────────────────────────────────────────────
@@ -200,32 +121,20 @@ async fn test_clone_set_template(pool: SqlitePool) {
 async fn test_clone_set_from_workout(pool: SqlitePool) {
     let ex = exercise::create(&pool, "Bench Press", None).await.unwrap();
     let src_set = set_template::create(&pool, "Push Set", None).await.unwrap();
-    set_template::add_card(
-        &pool, &src_set.id, "concrete", Some(&ex.id), None, None, Some(60), None,
-    ).await.unwrap();
+    set_template::add_card(&pool, &src_set.id, "concrete", Some(&ex.id), None, None, Some(60), None).await.unwrap();
 
-    let wt = workout_template::create(&pool, "Chest Day", None, 120, None)
-        .await
-        .unwrap();
-    let ref_a = workout_template::add_set_ref(&pool, &wt.id, &src_set.id)
-        .await
-        .unwrap();
+    let wt = workout_template::create(&pool, "Chest Day", None, 120, None).await.unwrap();
+    let ref_a = workout_template::add_set_ref(&pool, &wt.id, &src_set.id).await.unwrap();
 
-    let new_ref = workout_template::clone_set_from_workout(&pool, &ref_a.id)
-        .await
-        .unwrap();
-
-    // New ref replaces old ref at same order_index
+    let new_ref = workout_template::clone_set_from_workout(&pool, &ref_a.id).await.unwrap();
     assert_eq!(new_ref.order_index, ref_a.order_index);
     assert_ne!(new_ref.id, ref_a.id);
-    assert_ne!(new_ref.set_template_id, src_set.id, "must point at new clone");
+    assert_ne!(new_ref.set_template_id, src_set.id);
 
-    // Workout now has exactly one ref (replacement, not insertion)
     let detail = workout_template::get(&pool, &wt.id).await.unwrap();
     assert_eq!(detail.set_refs.len(), 1);
     assert_eq!(detail.set_refs[0].id, new_ref.id);
 
-    // Original set template is untouched
     let src_detail = set_template::get(&pool, &src_set.id).await.unwrap();
     assert_eq!(src_detail.cards.len(), 1);
 }
@@ -237,51 +146,570 @@ async fn test_exercise_delete_unlinks_cards_and_assignments(pool: SqlitePool) {
     let ex = exercise::create(&pool, "Squat", None).await.unwrap();
     let set = set_template::create(&pool, "Leg Day", None).await.unwrap();
 
-    // Concrete card referencing exercise
-    set_template::add_card(
-        &pool, &set.id, "concrete", Some(&ex.id), None, None, None, None,
-    ).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
 
-    // Workout + assignment
     let wt = workout_template::create(&pool, "Legs", None, 120, None).await.unwrap();
     let ref_ = workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
     let set_detail = set_template::get(&pool, &set.id).await.unwrap();
     let card = &set_detail.cards[0];
 
-    workout_template::upsert_card_assignment(
-        &pool, &ref_.id, &card.id, Some(&ex.id), None, None, None,
-    ).await.unwrap();
-
-    // Delete exercise with confirmation
+    workout_template::upsert_card_assignment(&pool, &ref_.id, &card.id, Some(&ex.id), None, None, None).await.unwrap();
     exercise::delete_with_unlink(&pool, &ex.id, true).await.unwrap();
 
-    // Card converted to placeholder
     let set_after = set_template::get(&pool, &set.id).await.unwrap();
     assert_eq!(set_after.cards[0].card_type, "placeholder");
     assert_eq!(set_after.cards[0].exercise_id, None);
-    assert_eq!(
-        set_after.cards[0].placeholder_label.as_deref(),
-        Some("Squat"),
-        "placeholder_label must be the exercise's prior name"
-    );
+    assert_eq!(set_after.cards[0].placeholder_label.as_deref(), Some("Squat"));
 
-    // Assignment exercise_id nulled, display_label = exercise name
     let wt_after = workout_template::get(&pool, &wt.id).await.unwrap();
-    let assignment = &wt_after.assignments[0];
-    assert_eq!(assignment.exercise_id, None);
-    assert_eq!(
-        assignment.display_label.as_deref(),
-        Some("Squat"),
-        "display_label should fall back to exercise name"
-    );
+    assert_eq!(wt_after.assignments[0].exercise_id, None);
+    assert_eq!(wt_after.assignments[0].display_label.as_deref(), Some("Squat"));
 }
 
 #[sqlx::test]
 async fn test_exercise_delete_requires_confirmed_flag(pool: SqlitePool) {
     let ex = exercise::create(&pool, "Lunge", None).await.unwrap();
     let result = exercise::delete_with_unlink(&pool, &ex.id, false).await;
+    assert!(matches!(result, Err(AppError::Validation(_))));
+}
+
+// ── Session snapshot: mixed empty/non-empty sets ─────────────────────────────
+
+#[sqlx::test]
+async fn test_snapshot_skips_empty_sets(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Squat", None).await.unwrap();
+
+    let empty_set = set_template::create(&pool, "Empty Set", None).await.unwrap();
+    let set_a = set_template::create(&pool, "Set A", None).await.unwrap();
+    let set_b = set_template::create(&pool, "Set B", None).await.unwrap();
+
+    set_template::add_card(&pool, &set_a.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(&pool, &set_a.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(&pool, &set_b.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(&pool, &set_b.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(&pool, &set_b.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "Mixed Workout", None, 60, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &empty_set.id).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set_a.id).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set_b.id).await.unwrap();
+
+    let payload = session::create_session_draft(&pool, &wt.id).await.unwrap();
+
+    assert_eq!(payload.sets.len(), 2, "empty set must be skipped");
+    assert_eq!(payload.exercises.len(), 5, "5 exercises across the 2 non-empty sets");
+    assert_eq!(payload.session.status, "draft");
+    assert!(payload.current_exercise_id.is_none());
+}
+
+// ── Snapshot fallback chains ──────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_snapshot_fallback_chains(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Bench Press", None).await.unwrap();
+    let set = set_template::create(&pool, "Push Set", None).await.unwrap();
+
+    let card1 = set_template::add_card(
+        &pool, &set.id, "concrete", Some(&ex.id), None, None, Some(45), Some("card note"),
+    ).await.unwrap();
+
+    let card2 = set_template::add_card(
+        &pool, &set.id, "concrete", Some(&ex.id), None, None, None, None,
+    ).await.unwrap();
+
+    let card3 = set_template::add_card(
+        &pool, &set.id, "placeholder", None, Some("push"), Some("Upper push"), None, None,
+    ).await.unwrap();
+
+    let card4 = set_template::add_card(
+        &pool, &set.id, "placeholder", None, Some("legs"), None, None, None,
+    ).await.unwrap();
+
+    let card5 = set_template::add_card(
+        &pool, &set.id, "placeholder", None, Some("pull"), Some("Pull slot"), None, None,
+    ).await.unwrap();
+
+    let wt = workout_template::create(&pool, "Fallback Workout", None, 120, None).await.unwrap();
+    let ref_ = workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    workout_template::upsert_card_assignment(
+        &pool, &ref_.id, &card2.id, None, Some("My Override"), Some(30), None,
+    ).await.unwrap();
+
+    workout_template::upsert_card_assignment(
+        &pool, &ref_.id, &card5.id, Some(&ex.id), None, None, None,
+    ).await.unwrap();
+
+    let payload = session::create_session_draft(&pool, &wt.id).await.unwrap();
+    let exs = &payload.exercises;
+    assert_eq!(exs.len(), 5);
+
+    assert_eq!(exs[0].display_name, "Bench Press", "concrete no assignment → exercise name");
+    assert_eq!(exs[0].duration_hint_sec, Some(45), "card duration preserved");
+    assert_eq!(exs[0].notes.as_deref(), Some("card note"), "card notes preserved");
+
+    assert_eq!(exs[1].display_name, "My Override", "assignment display_label overrides");
+    assert_eq!(exs[1].duration_hint_sec, Some(30), "assignment duration overrides card");
+
+    assert_eq!(exs[2].display_name, "Upper push", "placeholder label used");
+    assert_eq!(exs[2].placeholder_tag.as_deref(), Some("push"), "placeholder_tag preserved");
+
+    assert_eq!(exs[3].display_name, "legs", "placeholder tag used when no label");
+
+    assert_eq!(exs[4].display_name, "Bench Press", "assignment exercise_id resolves placeholder");
+    assert_eq!(exs[4].exercise_id.as_deref(), Some(ex.id.as_str()), "exercise_id set");
+
+    assert_eq!(exs[2].duration_hint_sec, Some(120), "fallback to template default duration");
+    assert_eq!(exs[3].duration_hint_sec, Some(120));
+    assert_eq!(exs[4].duration_hint_sec, Some(120));
+
+    // suppress unused variable warnings
+    let _ = (card1, card3, card4);
+}
+
+// ── Placeholder-only workout startability ────────────────────────────────────
+
+#[sqlx::test]
+async fn test_placeholder_only_workout_is_startable(pool: SqlitePool) {
+    let set = set_template::create(&pool, "Placeholder Set", None).await.unwrap();
+    set_template::add_card(
+        &pool, &set.id, "placeholder", None, Some("push"), Some("Push slot"), None, None,
+    ).await.unwrap();
+
+    let wt = workout_template::create(&pool, "Placeholder Workout", None, 60, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    let payload = session::create_session_draft(&pool, &wt.id).await.unwrap();
+    assert_eq!(payload.exercises.len(), 1);
+    assert_eq!(payload.exercises[0].exercise_id, None, "placeholder has no exercise_id");
+    assert_eq!(payload.exercises[0].placeholder_tag.as_deref(), Some("push"));
+    assert_eq!(payload.exercises[0].display_name, "Push slot");
+}
+
+// ── start_session transitions ────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_start_session_transitions(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Squat", None).await.unwrap();
+    let set = set_template::create(&pool, "Leg Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "Leg Day", None, 120, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    let draft = session::create_session_draft(&pool, &wt.id).await.unwrap();
+    assert_eq!(draft.session.status, "draft");
+    assert!(draft.session.started_at.is_none());
+    assert!(draft.current_exercise_id.is_none());
+
+    let started = session::start_session(&pool, &draft.session.id).await.unwrap();
+    assert_eq!(started.session.status, "in_progress");
+    assert!(started.session.started_at.is_some(), "started_at set");
+    assert!(started.session.session_date.is_some(), "session_date set");
+
+    let first_set = &started.sets[0];
+    assert!(first_set.started_at.is_some(), "first set started_at set");
+
+    let first_ex = started.exercises.iter().find(|e| e.status == "active");
+    assert!(first_ex.is_some(), "one exercise is active");
+    assert!(first_ex.unwrap().started_at.is_some(), "active exercise has started_at");
+
+    let pending = started.exercises.iter().filter(|e| e.status == "pending").count();
+    assert_eq!(pending, 1, "remaining exercise is pending");
+
+    assert!(started.current_exercise_id.is_some());
+    assert!(started.current_set_id.is_some());
+}
+
+// ── discard_session removes children via cascade ──────────────────────────────
+
+#[sqlx::test]
+async fn test_discard_session_cascades(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Pull-up", None).await.unwrap();
+    let set = set_template::create(&pool, "Pull Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "Pull Day", None, 120, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    let payload = session::create_session_draft(&pool, &wt.id).await.unwrap();
+    let session_id = payload.session.id.clone();
+    let set_id = payload.sets[0].id.clone();
+    let ex_id = payload.exercises[0].id.clone();
+
+    session::discard_session(&pool, &session_id).await.unwrap();
+
+    let mut conn = pool.acquire().await.unwrap();
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM workout_sessions WHERE id = ?"
+    ).bind(&session_id).fetch_optional(&mut *conn).await.unwrap();
+    assert!(row.is_none(), "session deleted");
+
+    let set_row: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM workout_session_sets WHERE id = ?"
+    ).bind(&set_id).fetch_optional(&mut *conn).await.unwrap();
+    assert!(set_row.is_none(), "session set deleted via CASCADE");
+
+    let ex_row: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM workout_session_exercises WHERE id = ?"
+    ).bind(&ex_id).fetch_optional(&mut *conn).await.unwrap();
+    assert!(ex_row.is_none(), "session exercise deleted via CASCADE");
+}
+
+// ── Helpers for runner transition tests ──────────────────────────────────────
+
+async fn make_two_set_session(pool: &SqlitePool) -> (String, Vec<String>, Vec<String>) {
+    // Returns (session_id, set_ids[2], exercise_ids[4]) for a started session
+    // Set 1: 2 exercises, Set 2: 2 exercises
+    let ex = exercise::create(pool, "Exercise", None).await.unwrap();
+
+    let set_a = set_template::create(pool, "Set A", None).await.unwrap();
+    let set_b = set_template::create(pool, "Set B", None).await.unwrap();
+
+    set_template::add_card(pool, &set_a.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(pool, &set_a.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(pool, &set_b.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(pool, &set_b.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(pool, "Two Set Workout", None, 120, None).await.unwrap();
+    workout_template::add_set_ref(pool, &wt.id, &set_a.id).await.unwrap();
+    workout_template::add_set_ref(pool, &wt.id, &set_b.id).await.unwrap();
+
+    let draft = session::create_session_draft(pool, &wt.id).await.unwrap();
+    let started = session::start_session(pool, &draft.session.id).await.unwrap();
+
+    let session_id = started.session.id.clone();
+    let set_ids: Vec<String> = started.sets.iter().map(|s| s.id.clone()).collect();
+    let ex_ids: Vec<String> = started.exercises.iter().map(|e| e.id.clone()).collect();
+
+    (session_id, set_ids, ex_ids)
+}
+
+// ── pause / resume accumulation ──────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_pause_resume_accumulation(pool: SqlitePool) {
+    let (session_id, set_ids, _) = make_two_set_session(&pool).await;
+    let set_id = &set_ids[0];
+
+    // Pause
+    let paused = session::pause_session(&pool, &session_id, set_id).await.unwrap();
+    let set_after_pause = paused.sets.iter().find(|s| s.id == *set_id).unwrap();
+    assert!(set_after_pause.paused_at.is_some(), "paused_at set after pause");
+    assert_eq!(set_after_pause.paused_total_sec, 0, "no accumulated time yet");
+
+    // Resume (immediately — paused_total_sec will be 0 since unixepoch resolution is 1s)
+    let resumed = session::resume_session(&pool, &session_id, set_id).await.unwrap();
+    let set_after_resume = resumed.sets.iter().find(|s| s.id == *set_id).unwrap();
+    assert!(set_after_resume.paused_at.is_none(), "paused_at cleared after resume");
+
+    // Pause again
+    let paused2 = session::pause_session(&pool, &session_id, set_id).await.unwrap();
+    let set_after_pause2 = paused2.sets.iter().find(|s| s.id == *set_id).unwrap();
+    assert!(set_after_pause2.paused_at.is_some(), "paused_at set again");
+
+    // Resume again
+    let resumed2 = session::resume_session(&pool, &session_id, set_id).await.unwrap();
+    let set_after_resume2 = resumed2.sets.iter().find(|s| s.id == *set_id).unwrap();
+    assert!(set_after_resume2.paused_at.is_none(), "paused_at cleared again");
+
+    // Timer base is populated correctly
+    assert!(resumed2.timer_base.set_started_at_ms.is_some(), "timer base has started_at");
+    assert!(resumed2.timer_base.paused_at_ms.is_none(), "timer not paused");
+}
+
+// ── advance within same set ──────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_advance_within_same_set(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session(&pool).await;
+    // ex_ids: [set1_ex0, set1_ex1, set2_ex0, set2_ex1]
+    // Started: set1_ex0 is active
+
+    let advanced = session::advance_exercise(&pool, &session_id).await.unwrap();
+
+    // set1_ex0 should now be completed
+    let ex0 = advanced.exercises.iter().find(|e| e.id == ex_ids[0]).unwrap();
+    assert_eq!(ex0.status, "completed", "first exercise completed");
+    assert!(ex0.ended_at.is_some(), "ended_at set");
+
+    // set1_ex1 should now be active
+    let ex1 = advanced.exercises.iter().find(|e| e.id == ex_ids[1]).unwrap();
+    assert_eq!(ex1.status, "active", "second exercise active");
+    assert!(ex1.started_at.is_some(), "started_at set");
+
+    // Set 1 timing unchanged (no ended_at)
+    let s1 = advanced.sets.iter().find(|s| s.id == set_ids[0]).unwrap();
+    assert!(s1.ended_at.is_none(), "set 1 still open");
+
+    // current_exercise_id updated
+    assert_eq!(advanced.current_exercise_id.as_deref(), Some(ex_ids[1].as_str()));
+    assert_eq!(advanced.current_set_id.as_deref(), Some(set_ids[0].as_str()));
+}
+
+// ── advance across set boundary ──────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_advance_across_set_boundary(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session(&pool).await;
+
+    // Advance twice to get into set 2
+    session::advance_exercise(&pool, &session_id).await.unwrap(); // set1_ex0 → set1_ex1
+    let crossed = session::advance_exercise(&pool, &session_id).await.unwrap(); // set1_ex1 → set2_ex0
+
+    // set1_ex1 completed
+    let ex1 = crossed.exercises.iter().find(|e| e.id == ex_ids[1]).unwrap();
+    assert_eq!(ex1.status, "completed");
+
+    // set1 ended
+    let s1 = crossed.sets.iter().find(|s| s.id == set_ids[0]).unwrap();
+    assert!(s1.ended_at.is_some(), "set 1 ended after crossing");
+
+    // set2 started with fresh timer
+    let s2 = crossed.sets.iter().find(|s| s.id == set_ids[1]).unwrap();
+    assert!(s2.started_at.is_some(), "set 2 started");
+    assert_eq!(s2.paused_total_sec, 0, "set 2 timer fresh");
+    assert!(s2.paused_at.is_none(), "set 2 not paused");
+
+    // set2_ex0 is active
+    let ex2 = crossed.exercises.iter().find(|e| e.id == ex_ids[2]).unwrap();
+    assert_eq!(ex2.status, "active");
+
+    assert_eq!(crossed.current_set_id.as_deref(), Some(set_ids[1].as_str()));
+    assert_eq!(crossed.current_exercise_id.as_deref(), Some(ex_ids[2].as_str()));
+}
+
+// ── retreat within same set ──────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_retreat_within_same_set(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session(&pool).await;
+
+    // Advance to set1_ex1
+    session::advance_exercise(&pool, &session_id).await.unwrap();
+
+    // Save set1's started_at before retreat
+    let before = session::advance_exercise(&pool, &session_id).await; // puts us in set2
+    let _ = before; // ignore, we'll retreat back
+
+    // Actually, let's retreat from set1_ex1 position
+    // Re-setup: fresh session
+    let ex = exercise::create(&pool, "X", None).await.unwrap();
+    let set = set_template::create(&pool, "S", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    let wt2 = workout_template::create(&pool, "W2", None, 120, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt2.id, &set.id).await.unwrap();
+    let draft2 = session::create_session_draft(&pool, &wt2.id).await.unwrap();
+    let s2 = session::start_session(&pool, &draft2.session.id).await.unwrap();
+    let sid2 = s2.session.id.clone();
+    let set2_ids: Vec<String> = s2.sets.iter().map(|s| s.id.clone()).collect();
+    let ex2_ids: Vec<String> = s2.exercises.iter().map(|e| e.id.clone()).collect();
+
+    // Record set started_at
+    let set_started = s2.sets[0].started_at.clone();
+
+    // Advance to ex1
+    session::advance_exercise(&pool, &sid2).await.unwrap();
+
+    // Retreat from ex1 → back to ex0 (same set)
+    let retreated = session::retreat_exercise(&pool, &sid2).await.unwrap();
+
+    // ex1 back to pending
+    let ex1 = retreated.exercises.iter().find(|e| e.id == ex2_ids[1]).unwrap();
+    assert_eq!(ex1.status, "pending", "ex1 reset to pending");
+    assert!(ex1.started_at.is_none(), "ex1 started_at cleared");
+    assert!(ex1.ended_at.is_none(), "ex1 ended_at cleared");
+
+    // ex0 back to active with fresh started_at
+    let ex0 = retreated.exercises.iter().find(|e| e.id == ex2_ids[0]).unwrap();
+    assert_eq!(ex0.status, "active", "ex0 reactivated");
+    assert!(ex0.started_at.is_some(), "ex0 started_at set");
+
+    // Set timing unchanged (started_at same or at least not null)
+    let set_row = retreated.sets.iter().find(|s| s.id == set2_ids[0]).unwrap();
+    assert_eq!(set_row.started_at, set_started, "set started_at unchanged");
+    assert!(set_row.ended_at.is_none(), "set not ended");
+
+    assert_eq!(retreated.current_exercise_id.as_deref(), Some(ex2_ids[0].as_str()));
+}
+
+// ── retreat across set boundary ──────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_retreat_across_set_boundary(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session(&pool).await;
+
+    // Advance through all of set 1 to reach set 2
+    session::advance_exercise(&pool, &session_id).await.unwrap(); // → set1_ex1
+    session::advance_exercise(&pool, &session_id).await.unwrap(); // → set2_ex0
+
+    // Now retreat from set2_ex0 back to set1_ex1
+    let retreated = session::retreat_exercise(&pool, &session_id).await.unwrap();
+
+    // set2 timing fully reset
+    let s2 = retreated.sets.iter().find(|s| s.id == set_ids[1]).unwrap();
+    assert!(s2.started_at.is_none(), "set2 started_at cleared");
+    assert!(s2.ended_at.is_none(), "set2 ended_at cleared");
+    assert!(s2.paused_at.is_none(), "set2 paused_at cleared");
+    assert_eq!(s2.paused_total_sec, 0, "set2 paused_total_sec reset");
+
+    // set1 restarted with fresh timer
+    let s1 = retreated.sets.iter().find(|s| s.id == set_ids[0]).unwrap();
+    assert!(s1.started_at.is_some(), "set1 restarted");
+    assert!(s1.ended_at.is_none(), "set1 ended_at cleared");
+    assert!(s1.paused_at.is_none(), "set1 paused_at cleared");
+    assert_eq!(s1.paused_total_sec, 0, "set1 paused_total_sec reset");
+
+    // set2_ex0 reset to pending
+    let ex2_0 = retreated.exercises.iter().find(|e| e.id == ex_ids[2]).unwrap();
+    assert_eq!(ex2_0.status, "pending");
+    assert!(ex2_0.started_at.is_none());
+
+    // set1_ex1 is active
+    let ex1_1 = retreated.exercises.iter().find(|e| e.id == ex_ids[1]).unwrap();
+    assert_eq!(ex1_1.status, "active");
+    assert!(ex1_1.started_at.is_some());
+
+    assert_eq!(retreated.current_exercise_id.as_deref(), Some(ex_ids[1].as_str()));
+    assert_eq!(retreated.current_set_id.as_deref(), Some(set_ids[0].as_str()));
+}
+
+// ── retreat at first exercise returns error ───────────────────────────────────
+
+#[sqlx::test]
+async fn test_retreat_at_first_exercise_errors(pool: SqlitePool) {
+    let (session_id, _, _) = make_two_set_session(&pool).await;
+    let result = session::retreat_exercise(&pool, &session_id).await;
     assert!(
         matches!(result, Err(AppError::Validation(_))),
-        "unconfirmed delete must return Validation error"
+        "should error at first exercise, got: {:?}", result
     );
+}
+
+// ── skip persistence ─────────────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_skip_exercise_persistence(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session(&pool).await;
+
+    // Skip the first exercise
+    let skipped = session::skip_exercise(&pool, &session_id, &ex_ids[0]).await.unwrap();
+
+    // Skipped exercise preserved with correct fields
+    let ex0 = skipped.exercises.iter().find(|e| e.id == ex_ids[0]).unwrap();
+    assert_eq!(ex0.status, "skipped", "status = skipped");
+    assert_eq!(ex0.skipped, 1, "skipped flag set");
+    assert!(ex0.ended_at.is_some(), "ended_at set on skip");
+
+    // Next exercise is now active
+    let ex1 = skipped.exercises.iter().find(|e| e.id == ex_ids[1]).unwrap();
+    assert_eq!(ex1.status, "active", "next exercise activated");
+
+    // Set still open (same set)
+    let s1 = skipped.sets.iter().find(|s| s.id == set_ids[0]).unwrap();
+    assert!(s1.ended_at.is_none(), "set still open");
+
+    assert_eq!(skipped.current_exercise_id.as_deref(), Some(ex_ids[1].as_str()));
+}
+
+// ── finish_session closes all open rows ──────────────────────────────────────
+
+#[sqlx::test]
+async fn test_finish_session_closes_rows(pool: SqlitePool) {
+    let (session_id, _, _) = make_two_set_session(&pool).await;
+
+    let finished = session::finish_session(&pool, &session_id).await.unwrap();
+
+    assert_eq!(finished.status, "completed", "session completed");
+    assert!(finished.ended_at.is_some(), "session ended_at set");
+
+    // Verify via direct query
+    let mut conn = pool.acquire().await.unwrap();
+    let session_row: Option<(String, Option<String>)> = sqlx::query_as(
+        "SELECT status, ended_at FROM workout_sessions WHERE id = ?"
+    ).bind(&session_id).fetch_optional(&mut *conn).await.unwrap();
+    let (status, ended_at) = session_row.unwrap();
+    assert_eq!(status, "completed");
+    assert!(ended_at.is_some());
+
+    // The first set (which was started and contained the active exercise) has ended_at.
+    // Spec §9.17 only closes the CURRENT set; unstarted future sets remain with ended_at=NULL.
+    let started_set_open: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM workout_session_sets WHERE workout_session_id = ? AND started_at IS NOT NULL AND ended_at IS NULL"
+    ).bind(&session_id).fetch_optional(&mut *conn).await.unwrap();
+    assert!(started_set_open.is_none(), "all started sets should have ended_at after finish");
+
+    // The current (active) exercise has ended_at set.
+    // Spec §9.17 only sets ended_at on the exercise; status stays 'active' (it was the last active).
+    let ex_active_no_end: Option<(String,)> = sqlx::query_as(
+        "SELECT wse.id FROM workout_session_exercises wse
+         JOIN workout_session_sets wss ON wss.id = wse.workout_session_set_id
+         WHERE wss.workout_session_id = ? AND wse.status = 'active' AND wse.ended_at IS NULL"
+    ).bind(&session_id).fetch_optional(&mut *conn).await.unwrap();
+    assert!(ex_active_no_end.is_none(), "active exercise should have ended_at set after finish");
+}
+
+// ── abandon_session ───────────────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_abandon_session(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session(&pool).await;
+
+    session::abandon_session(&pool, &session_id).await.unwrap();
+
+    let mut conn = pool.acquire().await.unwrap();
+    let row: Option<(String, Option<String>)> = sqlx::query_as(
+        "SELECT status, ended_at FROM workout_sessions WHERE id = ?"
+    ).bind(&session_id).fetch_optional(&mut *conn).await.unwrap();
+    let (status, ended_at) = row.unwrap();
+    assert_eq!(status, "abandoned", "session abandoned");
+    assert!(ended_at.is_some(), "ended_at set");
+
+    // Child rows NOT deleted (unlike discard)
+    let set_row: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM workout_session_sets WHERE id = ?"
+    ).bind(&set_ids[0]).fetch_optional(&mut *conn).await.unwrap();
+    assert!(set_row.is_some(), "set row preserved on abandon");
+
+    let ex_row: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM workout_session_exercises WHERE id = ?"
+    ).bind(&ex_ids[0]).fetch_optional(&mut *conn).await.unwrap();
+    assert!(ex_row.is_some(), "exercise row preserved on abandon");
+}
+
+// ── pause then cross-set retreat clears paused state ─────────────────────────
+
+#[sqlx::test]
+async fn test_paused_cross_set_retreat_clears_pause(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session(&pool).await;
+
+    // Advance through set 1 into set 2
+    session::advance_exercise(&pool, &session_id).await.unwrap();
+    session::advance_exercise(&pool, &session_id).await.unwrap();
+
+    // Pause set 2
+    session::pause_session(&pool, &session_id, &set_ids[1]).await.unwrap();
+
+    // Retreat across set boundary
+    let retreated = session::retreat_exercise(&pool, &session_id).await.unwrap();
+
+    // set2 fully cleared
+    let s2 = retreated.sets.iter().find(|s| s.id == set_ids[1]).unwrap();
+    assert!(s2.paused_at.is_none(), "set2 paused_at cleared by retreat");
+    assert_eq!(s2.paused_total_sec, 0, "set2 paused_total_sec reset");
+    assert!(s2.started_at.is_none(), "set2 started_at cleared");
+
+    // set1 restarted cleanly
+    let s1 = retreated.sets.iter().find(|s| s.id == set_ids[0]).unwrap();
+    assert!(s1.started_at.is_some(), "set1 restarted");
+    assert!(s1.paused_at.is_none(), "set1 not paused");
+    assert_eq!(s1.paused_total_sec, 0, "set1 paused_total_sec reset");
+
+    // last exercise of set1 is active
+    let ex1_1 = retreated.exercises.iter().find(|e| e.id == ex_ids[1]).unwrap();
+    assert_eq!(ex1_1.status, "active");
+
+    assert_eq!(retreated.current_set_id.as_deref(), Some(set_ids[0].as_str()));
 }

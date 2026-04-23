@@ -1,0 +1,98 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, workout_session_set_id, order_index,\n                exercise_id, placeholder_tag, display_name,\n                duration_hint_sec, status, skipped,\n                started_at, ended_at, notes,\n                created_at, updated_at\n         FROM workout_session_exercises\n         WHERE workout_session_set_id = ? AND order_index > ?\n         ORDER BY order_index\n         LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "workout_session_set_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "order_index",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "exercise_id",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "placeholder_tag",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "display_name",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "duration_hint_sec",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "status",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "skipped",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "started_at",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "ended_at",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 12,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 13,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "9e7f13a95c1271441d91e5be6290c91be3a66a39aadb0a7094a8512dde3584f3"
+}

@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO workout_session_sets\n             (id, workout_session_id, source_set_template_id, order_index)\n         VALUES (?, ?, ?, ?)\n         RETURNING id, workout_session_id, source_set_template_id, order_index,\n                   started_at, ended_at, paused_total_sec, paused_at,\n                   created_at, updated_at",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "workout_session_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_set_template_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "order_index",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "started_at",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "ended_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "paused_total_sec",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "paused_at",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 9,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "55dc0692c7aad1b844847024bae34f0cb1d54780dedcf0de773a5fb010584a3d"
+}

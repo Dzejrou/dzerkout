@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE workout_session_sets\n         SET paused_total_sec = paused_total_sec + (unixepoch('now') - unixepoch(paused_at)),\n             paused_at = NULL\n         WHERE id = ? AND paused_at IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "dec1fd2ef608d1475f25b26115e043ded8dbe2ec2c69e39e0269f3fbedc8855e"
+}

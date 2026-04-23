@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE workout_session_sets\n         SET started_at       = NULL,\n             ended_at         = NULL,\n             paused_at        = NULL,\n             paused_total_sec = 0\n         WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "4dfc4b16dfa93f2a513024ccbf684b090f711360837067f9def78725603dab6b"
+}

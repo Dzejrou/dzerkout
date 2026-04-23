@@ -1,9 +1,14 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { workoutTemplatesApi } from "../../api/workoutTemplates";
 import { setTemplatesApi } from "../../api/setTemplates";
+import { exercisesApi } from "../../api/exercises";
+import { sessionsApi } from "../../api/sessions";
+import { useSessionStore } from "../../store/sessionStore";
 import type { WorkoutTemplateSetRef, WorkoutTemplateCardAssignment } from "../../types/workoutTemplate";
 import type { SetTemplateCard } from "../../types/setTemplate";
+import type { Exercise } from "../../types/exercise";
 import { SortableList } from "../../components/SortableList";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import AssignmentEditor from "./AssignmentEditor";
@@ -20,13 +25,23 @@ type Modal =
 
 export default function WorkoutEditor({ workoutId, onBack }: Props) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const loadSession = useSessionStore((s) => s.load);
   const [modal, setModal] = useState<Modal | null>(null);
   const [expandedRefId, setExpandedRefId] = useState<string | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
 
   const { data: workout, isLoading } = useQuery({
     queryKey: ["workout-template", workoutId],
     queryFn: () => workoutTemplatesApi.get(workoutId),
   });
+
+  const { data: allExercises = [] } = useQuery({
+    queryKey: ["exercises"],
+    queryFn: exercisesApi.list,
+  });
+
+  const exerciseMap = new Map<string, Exercise>(allExercises.map((e) => [e.id, e]));
 
   const { data: allSets = [] } = useQuery({
     queryKey: ["set-templates"],
@@ -95,6 +110,22 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
     },
   });
 
+  const [startPending, setStartPending] = useState(false);
+
+  async function handleStart() {
+    setStartError(null);
+    setStartPending(true);
+    try {
+      const payload = await sessionsApi.createDraft(workoutId);
+      loadSession(payload);
+      navigate("/runner");
+    } catch (e) {
+      setStartError(String(e));
+    } finally {
+      setStartPending(false);
+    }
+  }
+
   if (isLoading || !workout) {
     return (
       <div style={pageStyle}>
@@ -102,6 +133,18 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
         <p style={{ color: "#6b7280" }}>Loading…</p>
       </div>
     );
+  }
+
+  function cardLabel(card: SetTemplateCard, assignment: WorkoutTemplateCardAssignment | undefined): string {
+    if (assignment?.display_label) return assignment.display_label;
+    // Concrete card: look up exercise name
+    const exId = assignment?.exercise_id ?? card.exercise_id;
+    if (exId) {
+      const ex = exerciseMap.get(exId);
+      if (ex) return ex.name;
+    }
+    // Placeholder fallback
+    return card.placeholder_label ?? card.placeholder_tag ?? "Unknown";
   }
 
   function getAssignment(setRefId: string, cardId: string): WorkoutTemplateCardAssignment | undefined {
@@ -118,105 +161,118 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
   return (
     <div style={pageStyle}>
       <button onClick={onBack} style={backBtnStyle}>← Workouts</button>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{workout.name}</h2>
-        <button onClick={() => setModal({ type: "add-set" })} style={addBtnStyle}>+ Set</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setModal({ type: "add-set" })} style={addBtnStyle}>+ Set</button>
+          <button
+            onClick={handleStart}
+            disabled={startPending}
+            style={startBtnStyle}
+            title="Start a workout session from this template"
+          >
+            {startPending ? "Starting…" : "▶ Start"}
+          </button>
+        </div>
       </div>
-      <p style={{ margin: "0 0 16px", fontSize: 12, color: "#6b7280" }}>
+      <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6b7280" }}>
         Default duration: {workout.default_exercise_duration_sec}s
         {workout.rest_between_sets_sec != null ? ` · Rest: ${workout.rest_between_sets_sec}s` : ""}
       </p>
+      {startError && (
+        <p style={{ color: "#dc2626", fontSize: 12, margin: "4px 0 8px" }}>{startError}</p>
+      )}
 
-      <SortableList
-        items={workout.set_refs}
-        onReorder={(newOrder) => reorderMut.mutate(newOrder.map((r) => r.id))}
-        renderItem={(ref) => {
-          const isExpanded = expandedRefId === ref.id;
-          const cards = isExpanded && expandedSetDetail?.id === ref.set_template_id
-            ? expandedSetDetail?.cards ?? []
-            : [];
+      <div style={{ marginTop: 12 }}>
+        <SortableList
+          items={workout.set_refs}
+          onReorder={(newOrder) => reorderMut.mutate(newOrder.map((r) => r.id))}
+          renderItem={(ref) => {
+            const isExpanded = expandedRefId === ref.id;
+            const cards = isExpanded && expandedSetDetail?.id === ref.set_template_id
+              ? expandedSetDetail?.cards ?? []
+              : [];
 
-          return (
-            <div style={setRefStyle}>
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <button
-                  onClick={() => setExpandedRefId(isExpanded ? null : ref.id)}
-                  style={expandBtnStyle}
-                >
-                  {isExpanded ? "▾" : "▸"}
-                </button>
-                <span style={{ flex: 1, fontWeight: 500, cursor: "pointer" }}
-                  onClick={() => setExpandedRefId(isExpanded ? null : ref.id)}
-                >
-                  {ref.set_name}
-                </span>
-                <div style={{ display: "flex", gap: 6 }}>
+            return (
+              <div style={setRefStyle}>
+                <div style={{ display: "flex", alignItems: "center" }}>
                   <button
-                    onClick={() => cloneMut.mutate(ref.id)}
-                    style={iconBtnStyle}
-                    disabled={cloneMut.isPending}
-                    title="Clone set into workout (make independent)"
+                    onClick={() => setExpandedRefId(isExpanded ? null : ref.id)}
+                    style={expandBtnStyle}
                   >
-                    Fork
+                    {isExpanded ? "▾" : "▸"}
                   </button>
-                  <button
-                    onClick={() => setModal({ type: "remove-set", ref })}
-                    style={{ ...iconBtnStyle, color: "#dc2626" }}
+                  <span
+                    style={{ flex: 1, fontWeight: 500, cursor: "pointer" }}
+                    onClick={() => setExpandedRefId(isExpanded ? null : ref.id)}
                   >
-                    ✕
-                  </button>
+                    {ref.set_name}
+                  </span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      onClick={() => cloneMut.mutate(ref.id)}
+                      style={iconBtnStyle}
+                      disabled={cloneMut.isPending}
+                      title="Clone set into workout (make independent)"
+                    >
+                      Fork
+                    </button>
+                    <button
+                      onClick={() => setModal({ type: "remove-set", ref })}
+                      style={{ ...iconBtnStyle, color: "#dc2626" }}
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {isExpanded && (
-                <div style={{ marginTop: 8, paddingLeft: 24 }}>
-                  {cards.length === 0 && (
-                    <p style={{ fontSize: 12, color: "#9ca3af" }}>No cards</p>
-                  )}
-                  {cards.map((card) => {
-                    const assignment = getAssignment(ref.id, card.id);
-                    return (
-                      <div
-                        key={card.id}
-                        style={cardItemStyle}
-                        onClick={() => setModal({ type: "assignment", setRef: ref, card })}
-                      >
-                        <span
-                          style={{
-                            fontSize: 11, padding: "1px 5px", borderRadius: 3,
-                            background: card.card_type === "concrete" ? "#dbeafe" : "#fef3c7",
-                            color: card.card_type === "concrete" ? "#1d4ed8" : "#92400e",
-                            marginRight: 6,
-                          }}
+                {isExpanded && (
+                  <div style={{ marginTop: 8, paddingLeft: 24 }}>
+                    {cards.length === 0 && (
+                      <p style={{ fontSize: 12, color: "#9ca3af" }}>No cards</p>
+                    )}
+                    {cards.map((card) => {
+                      const assignment = getAssignment(ref.id, card.id);
+                      return (
+                        <div
+                          key={card.id}
+                          style={cardItemStyle}
+                          onClick={() => setModal({ type: "assignment", setRef: ref, card })}
                         >
-                          {card.card_type}
-                        </span>
-                        <span style={{ fontSize: 13 }}>
-                          {assignment?.display_label
-                            ?? card.placeholder_label
-                            ?? card.placeholder_tag
-                            ?? "Exercise card"}
-                        </span>
-                        {assignment && (
-                          <span style={{ marginLeft: 6, fontSize: 11, color: "#7c3aed", fontWeight: 600 }}>
-                            overridden
+                          <span
+                            style={{
+                              fontSize: 11, padding: "1px 5px", borderRadius: 3,
+                              background: card.card_type === "concrete" ? "#dbeafe" : "#fef3c7",
+                              color: card.card_type === "concrete" ? "#1d4ed8" : "#92400e",
+                              marginRight: 6, flexShrink: 0,
+                            }}
+                          >
+                            {card.card_type}
                           </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                          <span style={{ fontSize: 13, flex: 1 }}>
+                            {cardLabel(card, assignment)}
+                          </span>
+                          {assignment && (
+                            <span style={{ marginLeft: 6, fontSize: 11, color: "#7c3aed", fontWeight: 600, flexShrink: 0 }}>
+                              overridden
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }}
+          renderFallbackControls={(_ref, i, total, move) => (
+            <div style={{ display: "flex", gap: 4, padding: "4px 12px" }}>
+              <button disabled={i === 0} onClick={() => move(i, i - 1)} style={iconBtnStyle}>↑</button>
+              <button disabled={i === total - 1} onClick={() => move(i, i + 1)} style={iconBtnStyle}>↓</button>
             </div>
-          );
-        }}
-        renderFallbackControls={(_ref, i, total, move) => (
-          <div style={{ display: "flex", gap: 4, padding: "4px 12px" }}>
-            <button disabled={i === 0} onClick={() => move(i, i - 1)} style={iconBtnStyle}>↑</button>
-            <button disabled={i === total - 1} onClick={() => move(i, i + 1)} style={iconBtnStyle}>↓</button>
-          </div>
-        )}
-      />
+          )}
+        />
+      </div>
 
       {workout.set_refs.length === 0 && (
         <p style={{ color: "#9ca3af", textAlign: "center", padding: "24px 0" }}>
@@ -303,6 +359,10 @@ const backBtnStyle: React.CSSProperties = {
 const addBtnStyle: React.CSSProperties = {
   padding: "6px 14px", borderRadius: 6, border: "none",
   background: "#2563eb", color: "#fff", cursor: "pointer", fontWeight: 600,
+};
+const startBtnStyle: React.CSSProperties = {
+  padding: "6px 14px", borderRadius: 6, border: "none",
+  background: "#16a34a", color: "#fff", cursor: "pointer", fontWeight: 600,
 };
 const setRefStyle: React.CSSProperties = {
   padding: "10px 12px", background: "#fff", border: "1px solid #e5e7eb",

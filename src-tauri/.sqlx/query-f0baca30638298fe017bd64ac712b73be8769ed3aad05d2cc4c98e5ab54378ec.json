@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE workout_sessions\n         SET status   = 'completed',\n             ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n         WHERE id = ?\n         RETURNING id, workout_template_id, source_workout_template_name, status,\n                   session_date, started_at, ended_at, notes, created_at, updated_at",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "workout_template_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_workout_template_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "session_date",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "started_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "ended_at",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 9,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "f0baca30638298fe017bd64ac712b73be8769ed3aad05d2cc4c98e5ab54378ec"
+}

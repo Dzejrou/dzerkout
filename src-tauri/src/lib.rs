@@ -50,11 +50,21 @@ pub fn run() {
             clone_set_from_workout,
             upsert_card_assignment,
             delete_card_assignment,
-            // sessions (partial — runner deferred)
+            // sessions
             get_active_session,
-            // history (stub)
+            create_session_draft,
+            start_session,
+            pause_session,
+            resume_session,
+            advance_exercise,
+            retreat_exercise,
+            skip_exercise,
+            finish_session,
+            abandon_session,
+            discard_session,
+            // history
             list_session_history,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("error while running tauri application")
 }

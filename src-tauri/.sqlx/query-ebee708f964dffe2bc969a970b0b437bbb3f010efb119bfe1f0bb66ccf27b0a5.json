@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE workout_sessions\n         SET status   = 'abandoned',\n             ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n         WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "ebee708f964dffe2bc969a970b0b437bbb3f010efb119bfe1f0bb66ccf27b0a5"
+}
