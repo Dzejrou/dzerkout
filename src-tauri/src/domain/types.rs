@@ -147,6 +147,9 @@ pub struct WorkoutTemplateSetRefRow {
     pub set_template_id: String,
     pub order_index: i64,
     pub set_name: String,
+    /// Set when this ref was forked (clone_set_from_workout). Records the
+    /// original set template ID. NULL = normal non-forked reference.
+    pub source_set_template_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

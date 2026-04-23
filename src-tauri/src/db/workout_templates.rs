@@ -102,6 +102,7 @@ pub async fn find_set_refs(
         WorkoutTemplateSetRefRow,
         "SELECT wtsr.id, wtsr.workout_template_id, wtsr.set_template_id,
                 wtsr.order_index, st.name AS set_name,
+                wtsr.source_set_template_id,
                 wtsr.created_at, wtsr.updated_at
          FROM workout_template_set_refs wtsr
          JOIN set_templates st ON st.id = wtsr.set_template_id
@@ -121,6 +122,7 @@ pub async fn find_set_ref_by_id(
         WorkoutTemplateSetRefRow,
         "SELECT wtsr.id, wtsr.workout_template_id, wtsr.set_template_id,
                 wtsr.order_index, st.name AS set_name,
+                wtsr.source_set_template_id,
                 wtsr.created_at, wtsr.updated_at
          FROM workout_template_set_refs wtsr
          JOIN set_templates st ON st.id = wtsr.set_template_id
@@ -151,15 +153,17 @@ pub async fn insert_set_ref(
     workout_id: &str,
     set_id: &str,
     order_index: i64,
+    source_set_template_id: Option<&str>,
 ) -> Result<WorkoutTemplateSetRefRow, sqlx::Error> {
     sqlx::query!(
         "INSERT INTO workout_template_set_refs
-             (id, workout_template_id, set_template_id, order_index)
-         VALUES (?, ?, ?, ?)",
+             (id, workout_template_id, set_template_id, order_index, source_set_template_id)
+         VALUES (?, ?, ?, ?, ?)",
         id,
         workout_id,
         set_id,
-        order_index
+        order_index,
+        source_set_template_id
     )
     .execute(&mut *conn)
     .await?;

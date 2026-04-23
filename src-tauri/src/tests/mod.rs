@@ -800,3 +800,102 @@ async fn test_history_detail_ordered(pool: SqlitePool) {
     assert_eq!(exs0[0].id, ex_ids[0], "exercise order preserved");
     assert_eq!(exs0[1].id, ex_ids[1]);
 }
+
+// ── Fork: targeted set ref points to new template ────────────────────────────
+
+#[sqlx::test]
+async fn test_fork_targeted_ref_reppoints(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Push-up", None).await.unwrap();
+    let set = set_template::create(&pool, "Push Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "W", None, 60, None).await.unwrap();
+    let ref1 = workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    let new_ref = workout_template::clone_set_from_workout(&pool, &ref1.id).await.unwrap();
+
+    // The returned ref must point at a NEW set template (not the original)
+    assert_ne!(new_ref.set_template_id, set.id, "forked ref must point at clone, not original");
+    // And it records the original for provenance
+    assert_eq!(
+        new_ref.source_set_template_id.as_deref(),
+        Some(set.id.as_str()),
+        "source_set_template_id must record the original"
+    );
+    // The ref ID itself is new
+    assert_ne!(new_ref.id, ref1.id, "fork produces a new ref row");
+    // Order index preserved
+    assert_eq!(new_ref.order_index, ref1.order_index);
+}
+
+// ── Fork: sibling set ref still points to original ───────────────────────────
+
+#[sqlx::test]
+async fn test_fork_sibling_ref_unchanged(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Squat", None).await.unwrap();
+    let set = set_template::create(&pool, "Leg Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "W", None, 60, None).await.unwrap();
+    // Add the same set twice
+    let ref1 = workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+    let ref2 = workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    // Fork the first occurrence only
+    workout_template::clone_set_from_workout(&pool, &ref1.id).await.unwrap();
+
+    // Re-fetch the workout to inspect its current set refs
+    let detail = workout_template::get(&pool, &wt.id).await.unwrap();
+
+    // ref2 must still point at the original set
+    let surviving_ref2 = detail.set_refs.iter().find(|r| r.id == ref2.id)
+        .expect("ref2 must still exist");
+    assert_eq!(surviving_ref2.set_template_id, set.id, "sibling ref still points at original");
+    assert!(surviving_ref2.source_set_template_id.is_none(), "sibling ref is not a fork");
+
+    // The forked ref must point at something different
+    let forked_ref = detail.set_refs.iter().find(|r| r.id != ref2.id)
+        .expect("forked ref must exist");
+    assert_ne!(forked_ref.set_template_id, set.id, "forked ref points at clone");
+    assert!(forked_ref.source_set_template_id.is_some(), "forked ref has source_set_template_id");
+}
+
+// ── Fork: editing original after fork does not affect forked ref's cards ─────
+
+#[sqlx::test]
+async fn test_fork_original_edits_do_not_affect_clone(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Lunge", None).await.unwrap();
+    let set = set_template::create(&pool, "Cardio Set", None).await.unwrap();
+    let card = set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "W", None, 60, None).await.unwrap();
+    let ref1 = workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    let new_ref = workout_template::clone_set_from_workout(&pool, &ref1.id).await.unwrap();
+    let cloned_set_id = new_ref.set_template_id.clone();
+
+    // Count cards in the clone before editing original
+    let cloned_detail_before = set_template::get(&pool, &cloned_set_id).await.unwrap();
+    assert_eq!(cloned_detail_before.cards.len(), 1, "clone starts with 1 card");
+
+    // Add a card to the ORIGINAL set
+    let ex2 = exercise::create(&pool, "Jump", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex2.id), None, None, None, None).await.unwrap();
+
+    // Remove the original card from the ORIGINAL set
+    set_template::remove_card(&pool, &card.id).await.unwrap();
+
+    // Verify original set now has 1 card (the new one)
+    let original_detail = set_template::get(&pool, &set.id).await.unwrap();
+    assert_eq!(original_detail.cards.len(), 1);
+    assert_eq!(original_detail.cards[0].exercise_id.as_deref(), Some(ex2.id.as_str()));
+
+    // The clone must be UNAFFECTED — still has the original card
+    let cloned_detail_after = set_template::get(&pool, &cloned_set_id).await.unwrap();
+    assert_eq!(cloned_detail_after.cards.len(), 1, "clone card count unchanged");
+    assert_eq!(
+        cloned_detail_after.cards[0].exercise_id.as_deref(),
+        Some(ex.id.as_str()),
+        "clone still has the original exercise, not the new one from the original set"
+    );
+}

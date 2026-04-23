@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { setTemplatesApi } from "../../api/setTemplates";
+import { exercisesApi } from "../../api/exercises";
 import type { SetTemplateCard, CardType, PlaceholderTag } from "../../types/setTemplate";
+import type { Exercise } from "../../types/exercise";
 import { SortableList } from "../../components/SortableList";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import CardEditor from "./CardEditor";
@@ -24,6 +26,12 @@ export default function SetEditor({ setId, onBack }: Props) {
     queryKey: ["set-template", setId],
     queryFn: () => setTemplatesApi.get(setId),
   });
+
+  const { data: allExercises = [] } = useQuery({
+    queryKey: ["exercises"],
+    queryFn: exercisesApi.list,
+  });
+  const exerciseMap = new Map<string, Exercise>(allExercises.map((e) => [e.id, e]));
 
   const addCardMut = useMutation({
     mutationFn: (params: {
@@ -100,7 +108,12 @@ export default function SetEditor({ setId, onBack }: Props) {
     if (card.card_type === "placeholder") {
       return card.placeholder_label ?? card.placeholder_tag ?? "Placeholder";
     }
-    return `Exercise card`;
+    // Concrete card: look up exercise name from the live exercise list.
+    if (card.exercise_id) {
+      const ex = exerciseMap.get(card.exercise_id);
+      if (ex) return ex.name;
+    }
+    return "Unknown exercise";
   }
 
   return (

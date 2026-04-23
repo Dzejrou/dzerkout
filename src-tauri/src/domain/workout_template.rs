@@ -95,7 +95,7 @@ pub async fn add_set_ref(
     let order_index = workout_templates::next_set_ref_order_index(&mut tx, workout_id).await?;
     let ref_id = Uuid::new_v4().to_string();
     let set_ref =
-        workout_templates::insert_set_ref(&mut tx, &ref_id, workout_id, set_id, order_index)
+        workout_templates::insert_set_ref(&mut tx, &ref_id, workout_id, set_id, order_index, None)
             .await?;
     tx.commit().await?;
     Ok(set_ref)
@@ -162,8 +162,9 @@ pub async fn clone_set_from_workout(
         .await?;
     }
 
-    // Replace the existing set_ref with one pointing at the new clone,
-    // preserving the same order_index position.
+    // Replace the existing set_ref with one pointing at the new clone.
+    // source_set_template_id records the original for the "Forked" badge in the UI.
+    let original_set_id = set_ref.set_template_id.clone();
     let new_ref_id = Uuid::new_v4().to_string();
     workout_templates::delete_set_ref(&mut tx, set_ref_id).await?;
     let new_ref = workout_templates::insert_set_ref(
@@ -172,6 +173,7 @@ pub async fn clone_set_from_workout(
         &set_ref.workout_template_id,
         &new_set_id,
         set_ref.order_index,
+        Some(&original_set_id),
     )
     .await?;
 

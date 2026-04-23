@@ -18,6 +18,9 @@ export interface WorkoutTemplateSetRef {
   set_template_id: string;
   order_index: number;
   set_name: string;
+  /** Non-null when this ref was created by fork (clone_set_from_workout).
+   *  Records the original set template ID. Used to show the "Forked" badge. */
+  source_set_template_id: string | null;
   created_at: string;
   updated_at: string;
 }

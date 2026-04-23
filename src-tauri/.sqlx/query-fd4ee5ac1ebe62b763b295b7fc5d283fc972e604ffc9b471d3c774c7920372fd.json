@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT wtsr.id, wtsr.workout_template_id, wtsr.set_template_id,\n                wtsr.order_index, st.name AS set_name,\n                wtsr.created_at, wtsr.updated_at\n         FROM workout_template_set_refs wtsr\n         JOIN set_templates st ON st.id = wtsr.set_template_id\n         WHERE wtsr.id = ?",
+  "query": "SELECT wtsr.id, wtsr.workout_template_id, wtsr.set_template_id,\n                wtsr.order_index, st.name AS set_name,\n                wtsr.source_set_template_id,\n                wtsr.created_at, wtsr.updated_at\n         FROM workout_template_set_refs wtsr\n         JOIN set_templates st ON st.id = wtsr.set_template_id\n         WHERE wtsr.id = ?",
   "describe": {
     "columns": [
       {
@@ -29,13 +29,18 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "source_set_template_id",
         "ordinal": 5,
         "type_info": "Text"
       },
       {
-        "name": "updated_at",
+        "name": "created_at",
         "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 7,
         "type_info": "Text"
       }
     ],
@@ -48,9 +53,10 @@
       false,
       false,
       false,
+      true,
       false,
       false
     ]
   },
-  "hash": "df6878a2ccdb5c4b71a556daaa219efad1b6edc30eddffaac72cf9f37d0215a7"
+  "hash": "fd4ee5ac1ebe62b763b295b7fc5d283fc972e604ffc9b471d3c774c7920372fd"
 }

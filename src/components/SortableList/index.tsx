@@ -59,7 +59,12 @@ export function SortableList<T extends { id: string }>({
   const isAndroid = useUiStore((s) => s.isAndroid);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      // Require 8px movement before a drag starts. Without this constraint,
+      // dnd-kit's onPointerDown handler (spread on the entire row) swallows
+      // clicks on nested buttons before they can fire.
+      activationConstraint: { distance: 8 },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),

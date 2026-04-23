@@ -81,9 +81,11 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
 
   const cloneMut = useMutation({
     mutationFn: (setRefId: string) => workoutTemplatesApi.cloneSetFromWorkout(setRefId),
-    onSuccess: () => {
+    onSuccess: (newRef) => {
       qc.invalidateQueries({ queryKey: ["workout-template", workoutId] });
       qc.invalidateQueries({ queryKey: ["set-templates"] });
+      // Update expanded state to the new ref ID so the expand view stays coherent.
+      setExpandedRefId((prev) => (prev != null ? newRef.id : null));
     },
   });
 
@@ -203,10 +205,13 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                     {isExpanded ? "▾" : "▸"}
                   </button>
                   <span
-                    style={{ flex: 1, fontWeight: 500, cursor: "pointer" }}
+                    style={{ flex: 1, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
                     onClick={() => setExpandedRefId(isExpanded ? null : ref.id)}
                   >
                     {ref.set_name}
+                    {ref.source_set_template_id !== null && (
+                      <span style={forkedBadgeStyle}>Forked</span>
+                    )}
                   </span>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button
@@ -397,4 +402,9 @@ const setPickerRowStyle: React.CSSProperties = {
 const cancelBtnStyle: React.CSSProperties = {
   padding: "8px 14px", borderRadius: 6, border: "1px solid #d1d5db",
   background: "#f9fafb", cursor: "pointer", fontSize: 14,
+};
+const forkedBadgeStyle: React.CSSProperties = {
+  fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+  background: "#f0fdf4", color: "#15803d", border: "1px solid #86efac",
+  letterSpacing: "0.03em", flexShrink: 0,
 };
