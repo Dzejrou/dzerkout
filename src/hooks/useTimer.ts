@@ -4,19 +4,16 @@ import { useSessionStore } from "../store/sessionStore";
 export function useElapsedMs(): number {
   const { setStartedAt, pausedTotalSec, pausedAt, sessionStatus } =
     useSessionStore();
-  const [tick, setTick] = useState(0);
+  const [now, setNow] = useState(Date.now);
 
   useEffect(() => {
     if (!setStartedAt || pausedAt !== null || sessionStatus !== "in_progress")
       return;
-    const id = setInterval(() => setTick((t) => t + 1), 100);
+    const id = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(id);
   }, [setStartedAt, pausedAt, sessionStatus]);
 
-  // tick is used only to trigger re-renders; value derives from DB base values
-  void tick;
-
   if (!setStartedAt) return 0;
-  const wall = pausedAt !== null ? pausedAt : Date.now();
+  const wall = pausedAt !== null ? pausedAt : now;
   return Math.max(0, wall - setStartedAt - pausedTotalSec * 1000);
 }

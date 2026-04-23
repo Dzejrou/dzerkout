@@ -217,13 +217,19 @@ export default function ActiveWorkoutRunner() {
     showConfirm({
       message: "Abandon this session? It will not appear in your history.",
       confirmLabel: "Abandon",
-      onConfirm: () => {
-        run("abandon", () => sessionsApi.abandon(sessionId!)).then((r) => {
-          if (r !== null) {
-            clear();
-            navigate("/workouts");
-          }
-        });
+      onConfirm: async () => {
+        if (pending) return;
+        setError(null);
+        setPending("abandon");
+        try {
+          await sessionsApi.abandon(sessionId!);
+          clear();
+          navigate("/workouts");
+        } catch (e) {
+          setError(String(e));
+        } finally {
+          setPending(null);
+        }
       },
       onCancel: () => {},
     });
