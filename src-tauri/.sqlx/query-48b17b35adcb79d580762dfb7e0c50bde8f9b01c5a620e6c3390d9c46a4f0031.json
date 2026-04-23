@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "UPDATE set_templates SET name = ?, notes = ?\n         WHERE id = ?\n         RETURNING id, name, notes, created_at, updated_at",
+  "query": "UPDATE set_templates SET name = ?, notes = ?\n         WHERE id = ?\n         RETURNING id, name, notes, owning_workout_template_id, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -19,13 +19,18 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "owning_workout_template_id",
         "ordinal": 3,
         "type_info": "Text"
       },
       {
-        "name": "updated_at",
+        "name": "created_at",
         "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 5,
         "type_info": "Text"
       }
     ],
@@ -36,9 +41,10 @@
       false,
       false,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "bc9847576e91f8d3e563913e8ccc4b28f7981f212ee53aafdefa9c3a4482c42a"
+  "hash": "48b17b35adcb79d580762dfb7e0c50bde8f9b01c5a620e6c3390d9c46a4f0031"
 }

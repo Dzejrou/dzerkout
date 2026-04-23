@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT st.id, st.name, st.notes, st.created_at, st.updated_at,\n                COUNT(stc.id) AS card_count\n         FROM set_templates st\n         LEFT JOIN set_template_cards stc ON stc.set_template_id = st.id\n         GROUP BY st.id ORDER BY st.name",
+  "query": "SELECT st.id, st.name, st.notes, st.owning_workout_template_id,\n                st.created_at, st.updated_at,\n                COUNT(stc.id) AS card_count\n         FROM set_templates st\n         LEFT JOIN set_template_cards stc ON stc.set_template_id = st.id\n         WHERE st.owning_workout_template_id IS NULL\n         GROUP BY st.id ORDER BY st.name",
   "describe": {
     "columns": [
       {
@@ -19,18 +19,23 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "owning_workout_template_id",
         "ordinal": 3,
         "type_info": "Text"
       },
       {
-        "name": "updated_at",
+        "name": "created_at",
         "ordinal": 4,
         "type_info": "Text"
       },
       {
-        "name": "card_count",
+        "name": "updated_at",
         "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "card_count",
+        "ordinal": 6,
         "type_info": "Integer"
       }
     ],
@@ -41,10 +46,11 @@
       false,
       false,
       true,
+      true,
       false,
       false,
       false
     ]
   },
-  "hash": "b1a499f5a7820cc0672e0e5d524bd512591657ffd3a9f95a02999429e200f716"
+  "hash": "c441614a681d2e670e85cc7a59a1b7b6ee2583c38075c73d66c891e915b7950b"
 }

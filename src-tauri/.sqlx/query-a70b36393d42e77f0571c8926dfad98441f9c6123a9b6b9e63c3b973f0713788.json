@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO set_templates (id, name, notes)\n         VALUES (?, ?, ?)\n         RETURNING id, name, notes, created_at, updated_at",
+  "query": "INSERT INTO set_templates (id, name, notes, owning_workout_template_id)\n         VALUES (?, ?, ?, ?)\n         RETURNING id, name, notes, owning_workout_template_id, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -19,26 +19,32 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "owning_workout_template_id",
         "ordinal": 3,
         "type_info": "Text"
       },
       {
-        "name": "updated_at",
+        "name": "created_at",
         "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 5,
         "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 3
+      "Right": 4
     },
     "nullable": [
       false,
       false,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "e1d1aebde1f7e1d9efa1d197886ff224fe4b7db6efbc27519c34516fbe9dcea9"
+  "hash": "a70b36393d42e77f0571c8926dfad98441f9c6123a9b6b9e63c3b973f0713788"
 }

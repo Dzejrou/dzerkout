@@ -6,6 +6,7 @@ import type {
   WorkoutTemplateSetRef,
   WorkoutTemplateCardAssignment,
 } from "../types/workoutTemplate";
+import type { SetTemplate } from "../types/setTemplate";
 
 export const workoutTemplatesApi = {
   list: () => invoke<WorkoutTemplateSummary[]>("list_workout_templates"),
@@ -74,4 +75,7 @@ export const workoutTemplatesApi = {
 
   deleteCardAssignment: (assignmentId: string) =>
     invoke<void>("delete_card_assignment", { assignmentId }),
+
+  exportForkedSet: (setId: string, newName: string) =>
+    invoke<SetTemplate>("export_forked_set", { setId, newName }),
 };

@@ -50,6 +50,7 @@ pub fn run() {
             clone_set_from_workout,
             upsert_card_assignment,
             delete_card_assignment,
+            export_forked_set,
             // sessions
             get_active_session,
             create_session_draft,

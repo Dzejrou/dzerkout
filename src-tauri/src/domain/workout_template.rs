@@ -3,7 +3,7 @@ use uuid::Uuid;
 use crate::{
     db::{set_templates, workout_templates},
     domain::types::{
-        WorkoutTemplateRow, WorkoutTemplateSummaryRow, WorkoutTemplateSetRefRow,
+        SetTemplateRow, WorkoutTemplateRow, WorkoutTemplateSummaryRow, WorkoutTemplateSetRefRow,
         WorkoutTemplateCardAssignmentRow, WorkoutTemplateDetail,
     },
     error::AppError,
@@ -71,10 +71,61 @@ pub async fn update(
 }
 
 pub async fn delete(pool: &SqlitePool, id: &str) -> Result<(), AppError> {
+    // The migration sets ON DELETE CASCADE on owning_workout_template_id, so
+    // deleting the workout row also cleans up its local (forked) set_templates.
     let mut conn = pool.acquire().await?;
     workout_templates::delete(&mut conn, id)
         .await
         .map_err(Into::into)
+}
+
+/// Export a workout-local forked set into the global library under a new name.
+/// Creates an independent global copy; the local fork is not removed.
+pub async fn export_forked_set(
+    pool: &SqlitePool,
+    set_id: &str,
+    new_name: &str,
+) -> Result<SetTemplateRow, AppError> {
+    if new_name.trim().is_empty() {
+        return Err(AppError::Validation("name must not be empty".into()));
+    }
+    let mut tx = pool.begin().await?;
+
+    let source = set_templates::find_by_id(&mut tx, set_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(set_id.to_string()))?;
+
+    if source.owning_workout_template_id.is_none() {
+        return Err(AppError::Validation(
+            "set is already global; only workout-local sets can be exported".into(),
+        ));
+    }
+
+    let source_cards = set_templates::find_cards(&mut tx, set_id).await?;
+
+    let new_id = Uuid::new_v4().to_string();
+    let exported = set_templates::insert(&mut tx, &new_id, new_name, source.notes.as_deref(), None)
+        .await?;
+
+    for card in &source_cards {
+        let card_id = Uuid::new_v4().to_string();
+        set_templates::insert_card(
+            &mut tx,
+            &card_id,
+            &new_id,
+            &card.card_type,
+            card.order_index,
+            card.exercise_id.as_deref(),
+            card.placeholder_tag.as_deref(),
+            card.placeholder_label.as_deref(),
+            card.duration_hint_sec,
+            card.notes.as_deref(),
+        )
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(exported)
 }
 
 pub async fn add_set_ref(
@@ -142,8 +193,14 @@ pub async fn clone_set_from_workout(
     let source_cards = set_templates::find_cards(&mut tx, &set_ref.set_template_id).await?;
 
     let new_set_id = Uuid::new_v4().to_string();
-    let new_name = format!("{} (copy)", source.name);
-    set_templates::insert(&mut tx, &new_set_id, &new_name, source.notes.as_deref()).await?;
+    set_templates::insert(
+        &mut tx,
+        &new_set_id,
+        &source.name,
+        source.notes.as_deref(),
+        Some(&set_ref.workout_template_id),
+    )
+    .await?;
 
     for card in &source_cards {
         let card_id = Uuid::new_v4().to_string();

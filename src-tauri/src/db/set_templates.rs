@@ -4,13 +4,34 @@ use crate::domain::types::{SetTemplateRow, SetTemplateSummaryRow, SetTemplateCar
 pub async fn find_all(pool: &SqlitePool) -> Result<Vec<SetTemplateSummaryRow>, sqlx::Error> {
     sqlx::query_as!(
         SetTemplateSummaryRow,
-        "SELECT st.id, st.name, st.notes, st.created_at, st.updated_at,
+        "SELECT st.id, st.name, st.notes, st.owning_workout_template_id,
+                st.created_at, st.updated_at,
                 COUNT(stc.id) AS card_count
          FROM set_templates st
          LEFT JOIN set_template_cards stc ON stc.set_template_id = st.id
+         WHERE st.owning_workout_template_id IS NULL
          GROUP BY st.id ORDER BY st.name"
     )
     .fetch_all(pool)
+    .await
+}
+
+pub async fn find_local_for_workout(
+    conn: &mut SqliteConnection,
+    workout_id: &str,
+) -> Result<Vec<SetTemplateSummaryRow>, sqlx::Error> {
+    sqlx::query_as!(
+        SetTemplateSummaryRow,
+        "SELECT st.id, st.name, st.notes, st.owning_workout_template_id,
+                st.created_at, st.updated_at,
+                COUNT(stc.id) AS card_count
+         FROM set_templates st
+         LEFT JOIN set_template_cards stc ON stc.set_template_id = st.id
+         WHERE st.owning_workout_template_id = ?
+         GROUP BY st.id ORDER BY st.name",
+        workout_id
+    )
+    .fetch_all(conn)
     .await
 }
 
@@ -20,7 +41,7 @@ pub async fn find_by_id(
 ) -> Result<Option<SetTemplateRow>, sqlx::Error> {
     sqlx::query_as!(
         SetTemplateRow,
-        "SELECT id, name, notes, created_at, updated_at
+        "SELECT id, name, notes, owning_workout_template_id, created_at, updated_at
          FROM set_templates WHERE id = ?",
         id
     )
@@ -33,15 +54,17 @@ pub async fn insert(
     id: &str,
     name: &str,
     notes: Option<&str>,
+    owning_workout_template_id: Option<&str>,
 ) -> Result<SetTemplateRow, sqlx::Error> {
     sqlx::query_as!(
         SetTemplateRow,
-        "INSERT INTO set_templates (id, name, notes)
-         VALUES (?, ?, ?)
-         RETURNING id, name, notes, created_at, updated_at",
+        "INSERT INTO set_templates (id, name, notes, owning_workout_template_id)
+         VALUES (?, ?, ?, ?)
+         RETURNING id, name, notes, owning_workout_template_id, created_at, updated_at",
         id,
         name,
-        notes
+        notes,
+        owning_workout_template_id
     )
     .fetch_one(conn)
     .await
@@ -57,7 +80,7 @@ pub async fn update(
         SetTemplateRow,
         "UPDATE set_templates SET name = ?, notes = ?
          WHERE id = ?
-         RETURNING id, name, notes, created_at, updated_at",
+         RETURNING id, name, notes, owning_workout_template_id, created_at, updated_at",
         name,
         notes,
         id

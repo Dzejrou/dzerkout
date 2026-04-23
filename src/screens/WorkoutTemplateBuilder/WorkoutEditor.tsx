@@ -12,6 +12,7 @@ import type { Exercise } from "../../types/exercise";
 import { SortableList } from "../../components/SortableList";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import AssignmentEditor from "./AssignmentEditor";
+import SetEditor from "../SetTemplateBuilder/SetEditor";
 
 interface Props {
   workoutId: string;
@@ -21,7 +22,8 @@ interface Props {
 type Modal =
   | { type: "add-set" }
   | { type: "remove-set"; ref: WorkoutTemplateSetRef }
-  | { type: "assignment"; setRef: WorkoutTemplateSetRef; card: SetTemplateCard };
+  | { type: "assignment"; setRef: WorkoutTemplateSetRef; card: SetTemplateCard }
+  | { type: "export"; setId: string };
 
 export default function WorkoutEditor({ workoutId, onBack }: Props) {
   const qc = useQueryClient();
@@ -29,6 +31,8 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
   const loadSession = useSessionStore((s) => s.load);
   const [modal, setModal] = useState<Modal | null>(null);
   const [expandedRefId, setExpandedRefId] = useState<string | null>(null);
+  const [editingSetId, setEditingSetId] = useState<string | null>(null);
+  const [exportName, setExportName] = useState("");
   const [startError, setStartError] = useState<string | null>(null);
 
   const { data: workout, isLoading } = useQuery({
@@ -109,6 +113,16 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workout-template", workoutId] });
       setModal(null);
+    },
+  });
+
+  const exportForkedSetMut = useMutation({
+    mutationFn: ({ setId, newName }: { setId: string; newName: string }) =>
+      workoutTemplatesApi.exportForkedSet(setId, newName),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["set-templates"] });
+      setModal(null);
+      setExportName("");
     },
   });
 
@@ -214,14 +228,33 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                     )}
                   </span>
                   <div style={{ display: "flex", gap: 6 }}>
-                    <button
-                      onClick={() => cloneMut.mutate(ref.id)}
-                      style={iconBtnStyle}
-                      disabled={cloneMut.isPending}
-                      title="Clone set into workout (make independent)"
-                    >
-                      Fork
-                    </button>
+                    {ref.source_set_template_id !== null ? (
+                      <>
+                        <button
+                          onClick={() => setEditingSetId(ref.set_template_id)}
+                          style={iconBtnStyle}
+                          title="Edit this workout-local set"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => { setExportName(""); setModal({ type: "export", setId: ref.set_template_id }); }}
+                          style={{ ...iconBtnStyle, color: "#7c3aed" }}
+                          title="Export as a reusable set in the library"
+                        >
+                          Export
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => cloneMut.mutate(ref.id)}
+                        style={iconBtnStyle}
+                        disabled={cloneMut.isPending}
+                        title="Fork set into a workout-local copy"
+                      >
+                        Fork
+                      </button>
+                    )}
                     <button
                       onClick={() => setModal({ type: "remove-set", ref })}
                       style={{ ...iconBtnStyle, color: "#dc2626" }}
@@ -352,6 +385,52 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
           </div>
         </div>
       )}
+
+      {/* Export forked set */}
+      {modal?.type === "export" && (
+        <div style={overlayStyle}>
+          <div style={sheetStyle}>
+            <h3 style={{ margin: "0 0 12px" }}>Export to library</h3>
+            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>
+              Creates a new reusable set in the global library. The workout-local fork is unchanged.
+            </p>
+            <input
+              autoFocus
+              value={exportName}
+              onChange={(e) => setExportName(e.target.value)}
+              placeholder="New set name…"
+              style={exportInputStyle}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button
+                onClick={() => exportForkedSetMut.mutate({ setId: modal.setId, newName: exportName })}
+                disabled={exportForkedSetMut.isPending || !exportName.trim()}
+                style={{ ...addBtnStyle, flex: 1 }}
+              >
+                {exportForkedSetMut.isPending ? "Exporting…" : "Export"}
+              </button>
+              <button onClick={() => setModal(null)} style={{ ...cancelBtnStyle, flex: 1 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inline set editor for workout-local forked sets */}
+      {editingSetId && (
+        <div style={{ ...overlayStyle, alignItems: "stretch" }}>
+          <div style={{ ...sheetStyle, borderRadius: 0, maxHeight: "100vh" }}>
+            <SetEditor
+              setId={editingSetId}
+              onBack={() => {
+                setEditingSetId(null);
+                qc.invalidateQueries({ queryKey: ["workout-template", workoutId] });
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -407,4 +486,8 @@ const forkedBadgeStyle: React.CSSProperties = {
   fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
   background: "#f0fdf4", color: "#15803d", border: "1px solid #86efac",
   letterSpacing: "0.03em", flexShrink: 0,
+};
+const exportInputStyle: React.CSSProperties = {
+  width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db",
+  fontSize: 14, boxSizing: "border-box",
 };

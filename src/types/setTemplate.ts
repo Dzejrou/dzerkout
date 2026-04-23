@@ -12,6 +12,7 @@ export interface SetTemplate {
   id: string;
   name: string;
   notes: string | null;
+  owning_workout_template_id: string | null;
   created_at: string;
   updated_at: string;
 }

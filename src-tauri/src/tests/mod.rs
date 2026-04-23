@@ -899,3 +899,124 @@ async fn test_fork_original_edits_do_not_affect_clone(pool: SqlitePool) {
         "clone still has the original exercise, not the new one from the original set"
     );
 }
+
+// ── Workout-local fork model ─────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_fork_creates_local_set(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Squat", None).await.unwrap();
+    let set = set_template::create(&pool, "Global Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "My Workout", None, 60, None).await.unwrap();
+    let set_ref = workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    let new_ref = workout_template::clone_set_from_workout(&pool, &set_ref.id).await.unwrap();
+
+    // The forked set must be owned by the workout
+    let forked = set_template::get(&pool, &new_ref.set_template_id).await.unwrap();
+    assert_eq!(
+        forked.owning_workout_template_id.as_deref(),
+        Some(wt.id.as_str()),
+        "forked set must be owned by the workout"
+    );
+}
+
+#[sqlx::test]
+async fn test_fork_hidden_from_global_library(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Press", None).await.unwrap();
+    let set = set_template::create(&pool, "My Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "Workout", None, 60, None).await.unwrap();
+    let set_ref = workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+    workout_template::clone_set_from_workout(&pool, &set_ref.id).await.unwrap();
+
+    // Global library must only show the original
+    let global_sets = set_template::list(&pool).await.unwrap();
+    assert_eq!(global_sets.len(), 1, "only the original global set should appear");
+    assert_eq!(global_sets[0].id, set.id, "it must be the original");
+}
+
+#[sqlx::test]
+async fn test_fork_loadable_via_workout(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Row", None).await.unwrap();
+    let set = set_template::create(&pool, "Pull Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "Workout", None, 60, None).await.unwrap();
+    let set_ref = workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+    let new_ref = workout_template::clone_set_from_workout(&pool, &set_ref.id).await.unwrap();
+
+    // The forked set should be accessible directly (for editing from workout flow)
+    let forked = set_template::get(&pool, &new_ref.set_template_id).await.unwrap();
+    assert_eq!(forked.cards.len(), 1, "forked set has the card from the original");
+}
+
+#[sqlx::test]
+async fn test_export_forked_set_creates_global(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Curl", None).await.unwrap();
+    let set = set_template::create(&pool, "Arm Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "Workout", None, 60, None).await.unwrap();
+    let set_ref = workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+    let new_ref = workout_template::clone_set_from_workout(&pool, &set_ref.id).await.unwrap();
+
+    let exported = workout_template::export_forked_set(&pool, &new_ref.set_template_id, "Exported Arm Set")
+        .await
+        .unwrap();
+
+    assert_eq!(exported.name, "Exported Arm Set");
+    assert_eq!(exported.owning_workout_template_id, None, "exported set must be global");
+
+    // Global library must now show the original + the export (not the local fork)
+    let global_sets = set_template::list(&pool).await.unwrap();
+    assert_eq!(global_sets.len(), 2, "original + export in global library");
+    let names: Vec<&str> = global_sets.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"Arm Set"), "original present");
+    assert!(names.contains(&"Exported Arm Set"), "export present");
+}
+
+#[sqlx::test]
+async fn test_export_rejects_already_global_set(pool: SqlitePool) {
+    let set = set_template::create(&pool, "Global", None).await.unwrap();
+    let result = workout_template::export_forked_set(&pool, &set.id, "New Name").await;
+    assert!(
+        matches!(result, Err(AppError::Validation(_))),
+        "exporting a global set should fail with Validation: {:?}",
+        result
+    );
+}
+
+#[sqlx::test]
+async fn test_delete_workout_cleans_up_local_sets(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Deadlift", None).await.unwrap();
+    let set = set_template::create(&pool, "Lift Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "My Workout", None, 60, None).await.unwrap();
+    let set_ref = workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+    let new_ref = workout_template::clone_set_from_workout(&pool, &set_ref.id).await.unwrap();
+    let forked_set_id = new_ref.set_template_id.clone();
+
+    // Verify fork exists
+    let forked = set_template::get(&pool, &forked_set_id).await.unwrap();
+    assert_eq!(forked.owning_workout_template_id.as_deref(), Some(wt.id.as_str()));
+
+    // Delete the workout
+    workout_template::delete(&pool, &wt.id).await.unwrap();
+
+    // Local fork must be gone
+    let result = set_template::get(&pool, &forked_set_id).await;
+    assert!(
+        matches!(result, Err(AppError::NotFound(_))),
+        "forked set must be deleted with its owning workout: {:?}",
+        result
+    );
+
+    // Original global set must still exist
+    let global = set_template::list(&pool).await.unwrap();
+    assert_eq!(global.len(), 1, "original global set remains");
+    assert_eq!(global[0].id, set.id);
+}

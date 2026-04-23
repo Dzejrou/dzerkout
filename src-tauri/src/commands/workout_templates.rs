@@ -4,7 +4,7 @@ use crate::{
     domain::{
         workout_template,
         types::{
-            WorkoutTemplateRow, WorkoutTemplateSummaryRow, WorkoutTemplateDetail,
+            SetTemplateRow, WorkoutTemplateRow, WorkoutTemplateSummaryRow, WorkoutTemplateDetail,
             WorkoutTemplateSetRefRow, WorkoutTemplateCardAssignmentRow,
         },
     },
@@ -127,4 +127,13 @@ pub async fn delete_card_assignment(
     assignment_id: String,
 ) -> Result<(), AppError> {
     workout_template::delete_card_assignment(&pool, &assignment_id).await
+}
+
+#[tauri::command]
+pub async fn export_forked_set(
+    pool: State<'_, SqlitePool>,
+    set_id: String,
+    new_name: String,
+) -> Result<SetTemplateRow, AppError> {
+    workout_template::export_forked_set(&pool, &set_id, &new_name).await
 }

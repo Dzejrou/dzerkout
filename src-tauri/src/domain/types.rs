@@ -78,6 +78,7 @@ pub struct SetTemplateRow {
     pub id: String,
     pub name: String,
     pub notes: Option<String>,
+    pub owning_workout_template_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -87,6 +88,7 @@ pub struct SetTemplateSummaryRow {
     pub id: String,
     pub name: String,
     pub notes: Option<String>,
+    pub owning_workout_template_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub card_count: i64,
@@ -112,6 +114,7 @@ pub struct SetTemplateDetail {
     pub id: String,
     pub name: String,
     pub notes: Option<String>,
+    pub owning_workout_template_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub cards: Vec<SetTemplateCardRow>,

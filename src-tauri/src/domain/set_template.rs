@@ -20,6 +20,7 @@ pub async fn get(pool: &SqlitePool, id: &str) -> Result<SetTemplateDetail, AppEr
         id: row.id,
         name: row.name,
         notes: row.notes,
+        owning_workout_template_id: row.owning_workout_template_id,
         created_at: row.created_at,
         updated_at: row.updated_at,
         cards,
@@ -36,7 +37,7 @@ pub async fn create(
     }
     let id = Uuid::new_v4().to_string();
     let mut conn = pool.acquire().await?;
-    set_templates::insert(&mut conn, &id, name, notes)
+    set_templates::insert(&mut conn, &id, name, notes, None)
         .await
         .map_err(Into::into)
 }
@@ -81,7 +82,7 @@ pub async fn clone_set(pool: &SqlitePool, source_id: &str) -> Result<SetTemplate
 
     let new_id = Uuid::new_v4().to_string();
     let new_name = format!("{} (copy)", source.name);
-    let new_set = set_templates::insert(&mut tx, &new_id, &new_name, source.notes.as_deref())
+    let new_set = set_templates::insert(&mut tx, &new_id, &new_name, source.notes.as_deref(), None)
         .await?;
 
     for card in &source_cards {
