@@ -23,7 +23,8 @@ type Modal =
   | { type: "add-set" }
   | { type: "remove-set"; ref: WorkoutTemplateSetRef }
   | { type: "assignment"; setRef: WorkoutTemplateSetRef; card: SetTemplateCard }
-  | { type: "export"; setId: string };
+  | { type: "export"; setId: string }
+  | { type: "edit-meta" };
 
 export default function WorkoutEditor({ workoutId, onBack }: Props) {
   const qc = useQueryClient();
@@ -34,6 +35,10 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const [exportName, setExportName] = useState("");
   const [startError, setStartError] = useState<string | null>(null);
+  const [metaName, setMetaName] = useState("");
+  const [metaNotes, setMetaNotes] = useState("");
+  const [metaDefaultDuration, setMetaDefaultDuration] = useState("");
+  const [metaRestSec, setMetaRestSec] = useState("");
 
   const { data: workout, isLoading } = useQuery({
     queryKey: ["workout-template", workoutId],
@@ -126,6 +131,27 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
     },
   });
 
+  const updateMetaMut = useMutation({
+    mutationFn: (params: {
+      name: string;
+      notes: string | null;
+      defaultDurationSec: number;
+      restSec: number | null;
+    }) =>
+      workoutTemplatesApi.update({
+        id: workoutId,
+        name: params.name,
+        notes: params.notes,
+        defaultDurationSec: params.defaultDurationSec,
+        restSec: params.restSec,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workout-template", workoutId] });
+      qc.invalidateQueries({ queryKey: ["workout-templates"] });
+      setModal(null);
+    },
+  });
+
   const [startPending, setStartPending] = useState(false);
 
   async function handleStart() {
@@ -178,7 +204,24 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
     <div style={pageStyle}>
       <button onClick={onBack} style={backBtnStyle}>← Workouts</button>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{workout.name}</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {workout.name}
+          </h2>
+          <button
+            onClick={() => {
+              setMetaName(workout.name);
+              setMetaNotes(workout.notes ?? "");
+              setMetaDefaultDuration(String(workout.default_exercise_duration_sec));
+              setMetaRestSec(workout.rest_between_sets_sec != null ? String(workout.rest_between_sets_sec) : "");
+              setModal({ type: "edit-meta" });
+            }}
+            style={editMetaBtnStyle}
+            title="Edit workout details"
+          >
+            Edit
+          </button>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setModal({ type: "add-set" })} style={addBtnStyle}>+ Set</button>
           <button
@@ -431,6 +474,82 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
           </div>
         </div>
       )}
+
+      {/* Edit workout metadata */}
+      {modal?.type === "edit-meta" && (
+        <div style={overlayStyle}>
+          <div style={sheetStyle}>
+            <h3 style={{ margin: "0 0 16px" }}>Edit workout details</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={metaLabelStyle}>Name</label>
+                <input
+                  autoFocus
+                  value={metaName}
+                  onChange={(e) => setMetaName(e.target.value)}
+                  style={metaInputStyle}
+                  placeholder="Workout name"
+                />
+              </div>
+              <div>
+                <label style={metaLabelStyle}>Notes (optional)</label>
+                <textarea
+                  value={metaNotes}
+                  onChange={(e) => setMetaNotes(e.target.value)}
+                  style={{ ...metaInputStyle, minHeight: 60, resize: "vertical" }}
+                  placeholder="Optional notes…"
+                />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={metaLabelStyle}>Default duration (sec)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={metaDefaultDuration}
+                    onChange={(e) => setMetaDefaultDuration(e.target.value)}
+                    style={metaInputStyle}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={metaLabelStyle}>Rest between sets (sec)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={metaRestSec}
+                    onChange={(e) => setMetaRestSec(e.target.value)}
+                    style={metaInputStyle}
+                    placeholder="none"
+                  />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setModal(null)}
+                  style={metaCancelBtnStyle}
+                  disabled={updateMetaMut.isPending}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const name = metaName.trim();
+                    if (!name) return;
+                    const defaultDuration = parseInt(metaDefaultDuration, 10);
+                    if (!defaultDuration || defaultDuration < 1) return;
+                    const restSec = metaRestSec.trim() ? parseInt(metaRestSec, 10) : null;
+                    updateMetaMut.mutate({ name, notes: metaNotes.trim() || null, defaultDurationSec: defaultDuration, restSec });
+                  }}
+                  style={metaSaveBtnStyle}
+                  disabled={!metaName.trim() || !metaDefaultDuration || updateMetaMut.isPending}
+                >
+                  {updateMetaMut.isPending ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -490,4 +609,21 @@ const forkedBadgeStyle: React.CSSProperties = {
 const exportInputStyle: React.CSSProperties = {
   width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db",
   fontSize: 14, boxSizing: "border-box",
+};
+const editMetaBtnStyle: React.CSSProperties = {
+  padding: "2px 8px", borderRadius: 5, border: "1px solid #d1d5db",
+  background: "#f9fafb", cursor: "pointer", fontSize: 12, color: "#374151", flexShrink: 0,
+};
+const metaLabelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4 };
+const metaInputStyle: React.CSSProperties = {
+  width: "100%", boxSizing: "border-box", padding: "8px 10px",
+  border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14,
+};
+const metaCancelBtnStyle: React.CSSProperties = {
+  padding: "7px 14px", borderRadius: 6, border: "1px solid #d1d5db",
+  background: "#f9fafb", cursor: "pointer", fontSize: 14,
+};
+const metaSaveBtnStyle: React.CSSProperties = {
+  padding: "7px 14px", borderRadius: 6, border: "none",
+  background: "#2563eb", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
 };
