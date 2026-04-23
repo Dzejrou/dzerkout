@@ -3,6 +3,7 @@
 
 use sqlx::SqlitePool;
 use crate::{
+    db::history as history_db,
     domain::{exercise, session, set_template, workout_template},
     error::AppError,
 };
@@ -712,4 +713,90 @@ async fn test_paused_cross_set_retreat_clears_pause(pool: SqlitePool) {
     assert_eq!(ex1_1.status, "active");
 
     assert_eq!(retreated.current_set_id.as_deref(), Some(set_ids[0].as_str()));
+}
+
+// ── History: completed session appears ────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_history_completed_appears(pool: SqlitePool) {
+    let (session_id, _, _) = make_two_set_session(&pool).await;
+    session::finish_session(&pool, &session_id).await.unwrap();
+
+    let history = history_db::list_sessions(&pool).await.unwrap();
+    assert!(history.iter().any(|s| s.id == session_id), "completed session in history");
+    let entry = history.iter().find(|s| s.id == session_id).unwrap();
+    assert_eq!(entry.status, "completed");
+    assert!(entry.set_count >= 1, "set_count populated");
+    assert!(entry.exercise_count >= 1, "exercise_count populated");
+}
+
+// ── History: draft excluded ────────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_history_draft_excluded(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "X", None).await.unwrap();
+    let set = set_template::create(&pool, "S", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    let wt = workout_template::create(&pool, "W", None, 60, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    let draft = session::create_session_draft(&pool, &wt.id).await.unwrap();
+
+    let history = history_db::list_sessions(&pool).await.unwrap();
+    assert!(!history.iter().any(|s| s.id == draft.session.id), "draft excluded from history");
+}
+
+// ── History: abandoned excluded ───────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_history_abandoned_excluded(pool: SqlitePool) {
+    let (session_id, _, _) = make_two_set_session(&pool).await;
+    session::abandon_session(&pool, &session_id).await.unwrap();
+
+    let history = history_db::list_sessions(&pool).await.unwrap();
+    assert!(!history.iter().any(|s| s.id == session_id), "abandoned excluded from history");
+}
+
+// ── History: denormalized names stable after exercise delete ─────────────────
+
+#[sqlx::test]
+async fn test_history_denormalized_names_stable(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Burpee", None).await.unwrap();
+    let set = set_template::create(&pool, "S", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    let wt = workout_template::create(&pool, "W", None, 60, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    let draft = session::create_session_draft(&pool, &wt.id).await.unwrap();
+    session::start_session(&pool, &draft.session.id).await.unwrap();
+    session::finish_session(&pool, &draft.session.id).await.unwrap();
+
+    exercise::delete_with_unlink(&pool, &ex.id, true).await.unwrap();
+
+    let mut conn = pool.acquire().await.unwrap();
+    let exercises = history_db::get_exercises_for_set(&mut conn, &draft.sets[0].id).await.unwrap();
+    assert!(!exercises.is_empty(), "exercise row preserved");
+    assert_eq!(exercises[0].display_name, "Burpee", "display_name stable after exercise delete");
+}
+
+// ── History: detail returns ordered sets and exercises ────────────────────────
+
+#[sqlx::test]
+async fn test_history_detail_ordered(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session(&pool).await;
+    session::finish_session(&pool, &session_id).await.unwrap();
+
+    let session_row = history_db::get_session_row(&pool, &session_id).await.unwrap().unwrap();
+    assert_eq!(session_row.id, session_id);
+
+    let mut conn = pool.acquire().await.unwrap();
+    let sets = history_db::get_session_sets(&mut conn, &session_id).await.unwrap();
+    assert_eq!(sets.len(), 2, "two sets");
+    assert_eq!(sets[0].id, set_ids[0], "set order preserved");
+    assert_eq!(sets[1].id, set_ids[1]);
+
+    let exs0 = history_db::get_exercises_for_set(&mut conn, &set_ids[0]).await.unwrap();
+    assert_eq!(exs0.len(), 2, "two exercises in set 1");
+    assert_eq!(exs0[0].id, ex_ids[0], "exercise order preserved");
+    assert_eq!(exs0[1].id, ex_ids[1]);
 }

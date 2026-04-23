@@ -1,0 +1,80 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n            ws.id,\n            ws.source_workout_template_name,\n            ws.status,\n            ws.session_date,\n            ws.started_at,\n            ws.ended_at,\n            ws.notes,\n            ws.created_at,\n            ws.updated_at,\n            (SELECT COUNT(*) FROM workout_session_sets WHERE workout_session_id = ws.id) as \"set_count!: i64\",\n            (SELECT COUNT(*) FROM workout_session_exercises wse\n             JOIN workout_session_sets wss ON wse.workout_session_set_id = wss.id\n             WHERE wss.workout_session_id = ws.id) as \"exercise_count!: i64\"\n         FROM workout_sessions ws\n         WHERE ws.status IN ('completed', 'in_progress')\n         ORDER BY ws.session_date DESC, ws.started_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_workout_template_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "session_date",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "started_at",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "ended_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "set_count!: i64",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "exercise_count!: i64",
+        "ordinal": 10,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "884088b38dd3d425c4794747b22a52d76afc92c67926336cb9e8138bf5582286"
+}

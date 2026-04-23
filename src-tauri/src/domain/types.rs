@@ -230,6 +230,45 @@ pub struct TimerBase {
     pub paused_at_ms: Option<i64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct SessionSummary {
+    pub id: String,
+    pub source_workout_template_name: Option<String>,
+    pub status: String,
+    pub session_date: Option<String>,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub notes: Option<String>,
+    pub set_count: i64,
+    pub exercise_count: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionDetailSet {
+    pub id: String,
+    pub order_index: i64,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub paused_total_sec: i64,
+    pub exercises: Vec<WorkoutSessionExerciseRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionDetail {
+    pub id: String,
+    pub source_workout_template_name: Option<String>,
+    pub status: String,
+    pub session_date: Option<String>,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub sets: Vec<SessionDetailSet>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveSessionPayload {
     pub session: WorkoutSessionRow,

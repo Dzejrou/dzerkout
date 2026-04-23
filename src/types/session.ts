@@ -50,6 +50,42 @@ export interface TimerBase {
   paused_at_ms: number | null;
 }
 
+export interface SessionSummary {
+  id: string;
+  source_workout_template_name: string | null;
+  status: SessionStatus;
+  session_date: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  notes: string | null;
+  set_count: number;
+  exercise_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessionDetailSet {
+  id: string;
+  order_index: number;
+  started_at: string | null;
+  ended_at: string | null;
+  paused_total_sec: number;
+  exercises: WorkoutSessionExerciseRow[];
+}
+
+export interface SessionDetail {
+  id: string;
+  source_workout_template_name: string | null;
+  status: SessionStatus;
+  session_date: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  sets: SessionDetailSet[];
+}
+
 export interface ActiveSessionPayload {
   session: WorkoutSessionRow;
   sets: WorkoutSessionSetRow[];

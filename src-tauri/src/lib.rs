@@ -5,7 +5,7 @@ mod error;
 #[cfg(test)]
 mod tests;
 
-use commands::{exercises::*, history::*, sessions::*, set_templates::*, workout_templates::*};
+use commands::{exercises::*, history::{get_session_detail, list_session_history}, sessions::*, set_templates::*, workout_templates::*};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -64,6 +64,7 @@ pub fn run() {
             discard_session,
             // history
             list_session_history,
+            get_session_detail,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application")

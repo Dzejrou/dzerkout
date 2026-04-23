@@ -1,6 +1,7 @@
 import { HashRouter, NavLink, Route, Routes } from "react-router-dom";
 import { usePlatform } from "./hooks/usePlatform";
 import { useSessionRecovery } from "./hooks/useSessionRecovery";
+import { useSessionStore } from "./store/sessionStore";
 import { useUiStore } from "./store/uiStore";
 import { ConfirmModal } from "./components/ConfirmModal";
 import ExerciseLibrary from "./screens/ExerciseLibrary";
@@ -9,19 +10,23 @@ import WorkoutTemplateBuilder from "./screens/WorkoutTemplateBuilder";
 import ActiveWorkoutRunner from "./screens/ActiveWorkoutRunner";
 import WorkoutHistory from "./screens/WorkoutHistory";
 
-const NAV: { to: string; label: string }[] = [
+const BASE_NAV: { to: string; label: string }[] = [
   { to: "/exercises", label: "Exercises" },
   { to: "/sets", label: "Sets" },
   { to: "/workouts", label: "Workouts" },
-  { to: "/runner", label: "Runner" },
   { to: "/history", label: "History" },
 ];
 
 // Rendered inside HashRouter so useNavigate (and useSessionRecovery) have router context.
 function AppShell() {
   useSessionRecovery();
+  const sessionId = useSessionStore((s) => s.sessionId);
   const confirmModal = useUiStore((s) => s.confirmModal);
   const closeConfirmModal = useUiStore((s) => s.closeConfirmModal);
+
+  const nav = sessionId
+    ? [...BASE_NAV.slice(0, 3), { to: "/runner", label: "Runner" }, BASE_NAV[3]]
+    : BASE_NAV;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -39,7 +44,7 @@ function AppShell() {
       </main>
 
       <nav style={navStyle}>
-        {NAV.map(({ to, label }) => (
+        {nav.map(({ to, label }) => (
           <NavLink key={to} to={to} style={({ isActive }) => linkStyle(isActive)}>
             {label}
           </NavLink>
