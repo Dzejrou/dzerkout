@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { sessionsApi } from "../../api/sessions";
 import { useSessionStore } from "../../store/sessionStore";
@@ -17,6 +17,7 @@ function formatTime(ms: number): string {
 export default function ActiveWorkoutRunner() {
   const navigate = useNavigate();
   const showConfirm = useUiStore((s) => s.showConfirmModal);
+  const isAndroid = useUiStore((s) => s.isAndroid);
   const {
     sessionId,
     sessionStatus,
@@ -32,6 +33,18 @@ export default function ActiveWorkoutRunner() {
   const elapsedMs = useElapsedMs();
   const [pending, setPending] = useState<string | null>(null); // which action is pending
   const [error, setError] = useState<string | null>(null);
+
+  // Keyboard shortcut handler ref — updated each render so the stable listener
+  // always calls the latest closure without stale captures.
+  const keyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
+  keyHandlerRef.current = null; // reset; overwritten below when in-progress
+
+  useEffect(() => {
+    if (isAndroid) return;
+    const listener = (e: KeyboardEvent) => keyHandlerRef.current?.(e);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, [isAndroid]);
 
   // ── No session ──────────────────────────────────────────────────────────────
   if (!sessionId) {
@@ -234,6 +247,21 @@ export default function ActiveWorkoutRunner() {
       onCancel: () => {},
     });
   }
+
+  // ── Keyboard shortcuts (desktop only) ───────────────────────────────────────
+  keyHandlerRef.current = (e: KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT" ||
+      target.isContentEditable
+    ) return;
+    if (e.repeat) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); void handleNext(); }
+    if (e.key === "ArrowLeft")  { e.preventDefault(); void handlePrev(); }
+    if (e.key === " ")          { e.preventDefault(); void (isPaused ? handleResume() : handlePause()); }
+  };
 
   // ── In-progress layout ───────────────────────────────────────────────────────
 
