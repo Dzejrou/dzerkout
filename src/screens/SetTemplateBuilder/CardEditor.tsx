@@ -102,7 +102,7 @@ export default function CardEditor({ card, onSave, onCancel, saving }: Props) {
         ))}
       </div>
       {card && (
-        <p style={{ margin: "0", fontSize: 12, color: "#6b7280" }}>
+        <p style={{ margin: "0", fontSize: 12, color: "#4b5563" }}>
           Card type cannot be changed after creation.
         </p>
       )}
@@ -163,16 +163,21 @@ export default function CardEditor({ card, onSave, onCancel, saving }: Props) {
   );
 }
 
-const labelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4 };
+const labelStyle: React.CSSProperties = {
+  display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4,
+  color: "#8e8e93",
+};
 const inputStyle: React.CSSProperties = {
-  width: "100%", boxSizing: "border-box", padding: "7px 10px",
-  border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14,
+  width: "100%", boxSizing: "border-box", padding: "8px 10px",
+  border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, fontSize: 14,
+  background: "#1c1c1e", color: "#f2f2f7", outline: "none",
 };
 const cancelBtnStyle: React.CSSProperties = {
-  padding: "7px 14px", borderRadius: 6, border: "1px solid #d1d5db",
-  background: "#f9fafb", cursor: "pointer", fontSize: 14,
+  padding: "8px 16px", borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "transparent", color: "#8e8e93", cursor: "pointer", fontSize: 14,
 };
 const saveBtnStyle: React.CSSProperties = {
-  padding: "7px 14px", borderRadius: 6, border: "none",
-  background: "#2563eb", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
+  padding: "8px 16px", borderRadius: 8, border: "none",
+  background: "#2d6a3f", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
 };
