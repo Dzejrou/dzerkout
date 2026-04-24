@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { setTemplatesApi } from "../../api/setTemplates";
 import type { SetTemplateSummary } from "../../types/setTemplate";
@@ -10,6 +11,7 @@ type Modal =
   | { type: "delete"; set: SetTemplateSummary };
 
 export default function SetTemplateBuilder() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modal, setModal] = useState<Modal | null>(null);
@@ -49,6 +51,7 @@ export default function SetTemplateBuilder() {
 
   return (
     <div style={pageStyle}>
+      <button onClick={() => navigate("/")} style={backBtnStyle}>← Menu</button>
       <div style={headerStyle}>
         <h2 style={titleStyle}>Sets</h2>
         <button onClick={() => setModal({ type: "create" })} style={addBtnStyle}>+ New</button>
@@ -136,6 +139,10 @@ export default function SetTemplateBuilder() {
   );
 }
 
+const backBtnStyle: React.CSSProperties = {
+  background: "none", border: "none", cursor: "pointer", fontSize: 13,
+  color: "#6b7280", padding: "0 0 8px", display: "block",
+};
 const pageStyle: React.CSSProperties = { padding: 16, maxWidth: 600, margin: "0 auto" };
 const headerStyle: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 };
 const titleStyle: React.CSSProperties = { margin: 0, fontSize: 20, fontWeight: 700 };

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { historyApi } from "../../api/history";
 import type { SessionDetail, SessionSummary } from "../../types/session";
@@ -78,6 +79,7 @@ function SummaryRow({ s, onSelect }: { s: SessionSummary; onSelect: () => void }
 }
 
 export default function WorkoutHistory() {
+  const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data: sessions = [], isLoading, error } = useQuery({
@@ -91,6 +93,7 @@ export default function WorkoutHistory() {
 
   return (
     <div style={pageStyle}>
+      <button onClick={() => navigate("/")} style={menuBackBtnStyle}>← Menu</button>
       <h2 style={headingStyle}>History</h2>
       {isLoading && <p style={{ color: "#6b7280" }}>Loading…</p>}
       {error && <p style={{ color: "#dc2626" }}>Failed to load history.</p>}
@@ -106,6 +109,10 @@ export default function WorkoutHistory() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
+const menuBackBtnStyle: React.CSSProperties = {
+  background: "none", border: "none", cursor: "pointer", fontSize: 13,
+  color: "#6b7280", padding: "0 0 8px", display: "block",
+};
 const pageStyle: React.CSSProperties = { padding: "12px 16px", maxWidth: 560, margin: "0 auto" };
 const headingStyle: React.CSSProperties = { fontSize: 20, fontWeight: 700, margin: "0 0 12px" };
 const metaStyle: React.CSSProperties = { fontSize: 13, color: "#6b7280", margin: "0 0 16px", display: "flex", alignItems: "center", gap: 8 };

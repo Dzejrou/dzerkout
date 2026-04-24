@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { exercisesApi } from "../../api/exercises";
 import type { Exercise } from "../../types/exercise";
@@ -11,6 +12,7 @@ type Modal =
   | { type: "delete"; exercise: Exercise; refs: number };
 
 export default function ExerciseLibrary() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<Modal | null>(null);
@@ -55,6 +57,7 @@ export default function ExerciseLibrary() {
 
   return (
     <div style={pageStyle}>
+      <button onClick={() => navigate("/")} style={backBtnStyle}>← Menu</button>
       <div style={headerStyle}>
         <h2 style={titleStyle}>Exercises</h2>
         <button onClick={() => setModal({ type: "create" })} style={addBtnStyle}>
@@ -145,6 +148,10 @@ export default function ExerciseLibrary() {
   );
 }
 
+const backBtnStyle: React.CSSProperties = {
+  background: "none", border: "none", cursor: "pointer", fontSize: 13,
+  color: "#6b7280", padding: "0 0 8px", display: "block",
+};
 const pageStyle: React.CSSProperties = { padding: 16, maxWidth: 600, margin: "0 auto" };
 const headerStyle: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 };
 const titleStyle: React.CSSProperties = { margin: 0, fontSize: 20, fontWeight: 700 };

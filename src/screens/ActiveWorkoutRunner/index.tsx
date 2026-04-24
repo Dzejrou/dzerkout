@@ -43,7 +43,7 @@ export default function ActiveWorkoutRunner() {
     return (
       <div style={runnerRootStyle}>
         <div style={topBarStyle}>
-          <button onClick={() => navigate("/workouts")} style={backBtnStyle}>← Back</button>
+          <button onClick={() => navigate("/")} style={backBtnStyle}>← Back</button>
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <p style={{ color: "#8e8e93" }}>No active session.</p>
@@ -96,13 +96,13 @@ export default function ActiveWorkoutRunner() {
       if (!confirmed) return;
       await run("discard", () => sessionsApi.discard(sessionId!));
       clear();
-      navigate("/workouts");
+      navigate("/");
     }
 
     return (
       <div style={runnerRootStyle}>
         <div style={topBarStyle}>
-          <button onClick={() => navigate("/workouts")} style={backBtnStyle}>← Back</button>
+          <button onClick={() => navigate("/")} style={backBtnStyle}>← Back</button>
         </div>
         <div style={{ flex: 1, padding: "24px 32px", overflowY: "auto" }}>
           <h2 style={{ color: "#f2f2f7", fontSize: 24, fontWeight: 700, margin: "0 0 8px" }}>
@@ -197,7 +197,7 @@ export default function ActiveWorkoutRunner() {
         if (pending) return;
         setError(null);
         setPending("abandon");
-        try { await sessionsApi.abandon(sessionId!); clear(); navigate("/workouts"); }
+        try { await sessionsApi.abandon(sessionId!); clear(); navigate("/"); }
         catch (e) { setError(String(e)); }
         finally { setPending(null); }
       },
@@ -227,7 +227,7 @@ export default function ActiveWorkoutRunner() {
     <div style={runnerRootStyle}>
       {/* Top bar */}
       <div style={topBarStyle}>
-        <button onClick={() => navigate("/workouts")} style={backBtnStyle}>← Back</button>
+        <button onClick={() => navigate("/")} style={backBtnStyle}>← Back</button>
       </div>
 
       {/* Main content: left timers + right queue */}
