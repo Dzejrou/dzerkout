@@ -2,10 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { workoutTemplatesApi } from "../../api/workoutTemplates";
+import { setTemplatesApi } from "../../api/setTemplates";
+import { exercisesApi } from "../../api/exercises";
 import { sessionsApi } from "../../api/sessions";
 import { useSessionStore } from "../../store/sessionStore";
 import { useForm } from "react-hook-form";
-import type { WorkoutTemplateSummary } from "../../types/workoutTemplate";
+import type { WorkoutTemplateSummary, WorkoutTemplateCardAssignment } from "../../types/workoutTemplate";
+import type { Exercise } from "../../types/exercise";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import WorkoutEditor from "./WorkoutEditor";
 
@@ -31,6 +34,72 @@ function StatTile({ value, label }: { value: string; label: string }) {
   );
 }
 
+// ── Expanded set cards ────────────────────────────────────────────────────────
+
+function SetRefExpandedContent({
+  setTemplateId,
+  setRefId,
+  assignments,
+}: {
+  setTemplateId: string;
+  setRefId: string;
+  assignments: WorkoutTemplateCardAssignment[];
+}) {
+  const { data: setDetail, isLoading } = useQuery({
+    queryKey: ["set-template", setTemplateId],
+    queryFn: () => setTemplatesApi.get(setTemplateId),
+  });
+
+  const { data: allExercises = [] } = useQuery({
+    queryKey: ["exercises"],
+    queryFn: exercisesApi.list,
+  });
+
+  const exerciseMap = new Map<string, Exercise>(allExercises.map((e) => [e.id, e]));
+  const refAssignments = assignments.filter((a) => a.workout_template_set_ref_id === setRefId);
+
+  if (isLoading || !setDetail) {
+    return (
+      <p style={{ fontSize: 12, color: "#6b7280", padding: "8px 14px 10px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+        Loading…
+      </p>
+    );
+  }
+
+  if (setDetail.cards.length === 0) {
+    return (
+      <p style={{ fontSize: 12, color: "#4b5563", padding: "8px 14px 10px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+        Empty set
+      </p>
+    );
+  }
+
+  return (
+    <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+      {setDetail.cards.map((card, i) => {
+        const assignment = refAssignments.find((a) => a.set_template_card_id === card.id);
+        const label =
+          assignment?.display_label ??
+          (card.card_type === "placeholder"
+            ? (card.placeholder_label ?? card.placeholder_tag ?? "Placeholder")
+            : (card.exercise_id ? (exerciseMap.get(card.exercise_id)?.name ?? "Unknown exercise") : "Unknown exercise"));
+        const duration = assignment?.duration_hint_sec ?? card.duration_hint_sec;
+
+        return (
+          <div key={card.id} style={expandedCardRowStyle}>
+            <span style={expandedCardNumStyle}>{i + 1}</span>
+            <span style={expandedCardBadgeStyle(card.card_type)}>
+              {card.card_type === "concrete" ? "CONCRETE" : "PLACEHOLDER"}
+            </span>
+            <span style={expandedCardLabelStyle}>{label}</span>
+            {duration != null && <span style={expandedCardDurStyle}>{duration}s</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Right-side preview pane ───────────────────────────────────────────────────
 
 function PreviewPane({
@@ -48,6 +117,17 @@ function PreviewPane({
   startPending: boolean;
   startError: string | null;
 }) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  function toggleRef(refId: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(refId)) next.delete(refId);
+      else next.add(refId);
+      return next;
+    });
+  }
+
   const { data: workout, isLoading } = useQuery({
     queryKey: ["workout-template", workoutId],
     queryFn: () => workoutTemplatesApi.get(workoutId),
@@ -102,16 +182,28 @@ function PreviewPane({
             No sets added yet
           </p>
         ) : (
-          workout.set_refs.map((ref, i) => (
-            <div key={ref.id} style={setRefRowStyle}>
-              <span style={setRefNumStyle}>Set {i + 1}</span>
-              <span style={setRefNameStyle}>{ref.set_name}</span>
-              {ref.source_set_template_id !== null && (
-                <span style={forkedBadgeStyle}>Forked</span>
-              )}
-              <span style={setRefChevronStyle}>›</span>
-            </div>
-          ))
+          workout.set_refs.map((ref, i) => {
+            const isExpanded = expandedIds.has(ref.id);
+            return (
+              <div key={ref.id} style={setRefContainerStyle}>
+                <div onClick={() => toggleRef(ref.id)} style={setRefRowStyle}>
+                  <span style={setRefNumStyle}>Set {i + 1}</span>
+                  <span style={setRefNameStyle}>{ref.set_name}</span>
+                  {ref.source_set_template_id !== null && (
+                    <span style={forkedBadgeStyle}>Forked</span>
+                  )}
+                  <span style={{ ...setRefChevronStyle, display: "inline-block", transform: isExpanded ? "rotate(90deg)" : "none", transition: "transform 0.15s ease" }}>›</span>
+                </div>
+                {isExpanded && (
+                  <SetRefExpandedContent
+                    setTemplateId={ref.set_template_id}
+                    setRefId={ref.id}
+                    assignments={workout.assignments}
+                  />
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -307,6 +399,7 @@ export default function WorkoutTemplateBuilder() {
         <div style={rightPanelStyle}>
           {resolvedPreviewId ? (
             <PreviewPane
+              key={resolvedPreviewId}
               workoutId={resolvedPreviewId}
               onEdit={() => setEditingId(resolvedPreviewId)}
               onDelete={() => {
@@ -670,14 +763,19 @@ const setRefsListStyle: React.CSSProperties = {
   marginBottom: 28,
 };
 
+const setRefContainerStyle: React.CSSProperties = {
+  background: "#2c2c2e",
+  border: "1px solid rgba(255,255,255,0.06)",
+  borderRadius: 8,
+  overflow: "hidden",
+};
+
 const setRefRowStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 10,
   padding: "10px 14px",
-  background: "#2c2c2e",
-  border: "1px solid rgba(255,255,255,0.06)",
-  borderRadius: 8,
+  cursor: "pointer",
 };
 
 const setRefNumStyle: React.CSSProperties = {
@@ -830,4 +928,53 @@ const fieldErrorStyle: React.CSSProperties = {
   color: "#ef4444",
   fontSize: 12,
   marginTop: 4,
+};
+
+// ── Expanded set card rows ────────────────────────────────────────────────────
+
+const expandedCardRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "8px 14px",
+  borderTop: "1px solid rgba(255,255,255,0.04)",
+};
+
+const expandedCardNumStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#6b7280",
+  minWidth: 18,
+  textAlign: "right",
+  flexShrink: 0,
+};
+
+function expandedCardBadgeStyle(type: "concrete" | "placeholder"): React.CSSProperties {
+  const isConcrete = type === "concrete";
+  return {
+    fontSize: 10,
+    fontWeight: 700,
+    padding: "2px 6px",
+    borderRadius: 4,
+    flexShrink: 0,
+    letterSpacing: "0.04em",
+    background: isConcrete ? "rgba(59,130,246,0.12)" : "rgba(245,158,11,0.12)",
+    color: isConcrete ? "#60a5fa" : "#f59e0b",
+    border: isConcrete ? "1px solid rgba(59,130,246,0.2)" : "1px solid rgba(245,158,11,0.2)",
+  };
+}
+
+const expandedCardLabelStyle: React.CSSProperties = {
+  flex: 1,
+  fontSize: 13,
+  color: "#e5e7eb",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const expandedCardDurStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#6b7280",
+  flexShrink: 0,
+  fontVariantNumeric: "tabular-nums",
 };
