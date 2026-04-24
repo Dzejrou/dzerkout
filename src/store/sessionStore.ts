@@ -17,6 +17,9 @@ interface SessionStore {
   setStartedAt: number | null;   // Unix ms
   pausedTotalSec: number;
   pausedAt: number | null;       // Unix ms; non-null = currently paused
+  // Snapshot of paused_total_sec at the moment the current exercise became active.
+  // Per-exercise paused time = pausedTotalSec - exercisePausedOffsetSec.
+  exercisePausedOffsetSec: number;
 
   load: (payload: ActiveSessionPayload) => void;
   clear: () => void;
@@ -33,10 +36,11 @@ export const useSessionStore = create<SessionStore>((set) => ({
   setStartedAt: null,
   pausedTotalSec: 0,
   pausedAt: null,
+  exercisePausedOffsetSec: 0,
 
   load: (payload) => {
     const { session, sets, exercises, current_set_id, current_exercise_id, timer_base } = payload;
-    set({
+    set((prev) => ({
       sessionId: session.id,
       sessionStatus: session.status,
       sets,
@@ -46,7 +50,13 @@ export const useSessionStore = create<SessionStore>((set) => ({
       setStartedAt: timer_base.set_started_at_ms,
       pausedTotalSec: timer_base.paused_total_sec,
       pausedAt: timer_base.paused_at_ms,
-    });
+      // When the active exercise changes, snapshot paused_total_sec as the new
+      // per-exercise offset. Per-exercise paused time = pausedTotalSec - exercisePausedOffsetSec.
+      exercisePausedOffsetSec:
+        current_exercise_id !== prev.currentExerciseId
+          ? timer_base.paused_total_sec
+          : prev.exercisePausedOffsetSec,
+    }));
   },
 
   clear: () =>
@@ -60,5 +70,6 @@ export const useSessionStore = create<SessionStore>((set) => ({
       setStartedAt: null,
       pausedTotalSec: 0,
       pausedAt: null,
+      exercisePausedOffsetSec: 0,
     }),
 }));

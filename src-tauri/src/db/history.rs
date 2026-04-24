@@ -57,7 +57,7 @@ pub async fn get_exercises_for_set(conn: &mut SqliteConnection, set_id: &str) ->
         WorkoutSessionExerciseRow,
         "SELECT id, workout_session_set_id, order_index, exercise_id, placeholder_tag,
                 display_name, duration_hint_sec, status, skipped, started_at, ended_at,
-                notes, created_at, updated_at
+                notes, paused_offset_sec, performed_duration_sec, created_at, updated_at
          FROM workout_session_exercises
          WHERE workout_session_set_id = ?
          ORDER BY order_index",

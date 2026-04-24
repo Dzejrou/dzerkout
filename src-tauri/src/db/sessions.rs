@@ -59,6 +59,7 @@ pub async fn find_exercises_for_session(
                 wse.exercise_id, wse.placeholder_tag, wse.display_name,
                 wse.duration_hint_sec, wse.status, wse.skipped,
                 wse.started_at, wse.ended_at, wse.notes,
+                wse.paused_offset_sec, wse.performed_duration_sec,
                 wse.created_at, wse.updated_at
          FROM workout_session_exercises wse
          JOIN workout_session_sets wss ON wss.id = wse.workout_session_set_id
@@ -99,6 +100,7 @@ pub async fn find_first_exercise(
                 exercise_id, placeholder_tag, display_name,
                 duration_hint_sec, status, skipped,
                 started_at, ended_at, notes,
+                paused_offset_sec, performed_duration_sec,
                 created_at, updated_at
          FROM workout_session_exercises
          WHERE workout_session_set_id = ?
@@ -121,6 +123,7 @@ pub async fn find_active_exercise(
                 wse.exercise_id, wse.placeholder_tag, wse.display_name,
                 wse.duration_hint_sec, wse.status, wse.skipped,
                 wse.started_at, wse.ended_at, wse.notes,
+                wse.paused_offset_sec, wse.performed_duration_sec,
                 wse.created_at, wse.updated_at
          FROM workout_session_exercises wse
          JOIN workout_session_sets wss ON wss.id = wse.workout_session_set_id
@@ -159,6 +162,7 @@ pub async fn find_next_exercise_in_set(
                 exercise_id, placeholder_tag, display_name,
                 duration_hint_sec, status, skipped,
                 started_at, ended_at, notes,
+                paused_offset_sec, performed_duration_sec,
                 created_at, updated_at
          FROM workout_session_exercises
          WHERE workout_session_set_id = ? AND order_index > ?
@@ -203,6 +207,7 @@ pub async fn find_prev_exercise_in_set(
                 exercise_id, placeholder_tag, display_name,
                 duration_hint_sec, status, skipped,
                 started_at, ended_at, notes,
+                paused_offset_sec, performed_duration_sec,
                 created_at, updated_at
          FROM workout_session_exercises
          WHERE workout_session_set_id = ? AND order_index < ?
@@ -246,6 +251,7 @@ pub async fn find_last_exercise_in_set(
                 exercise_id, placeholder_tag, display_name,
                 duration_hint_sec, status, skipped,
                 started_at, ended_at, notes,
+                paused_offset_sec, performed_duration_sec,
                 created_at, updated_at
          FROM workout_session_exercises
          WHERE workout_session_set_id = ?
@@ -345,6 +351,7 @@ pub async fn insert_session_exercise(
                    exercise_id, placeholder_tag, display_name,
                    duration_hint_sec, status, skipped,
                    started_at, ended_at, notes,
+                   paused_offset_sec, performed_duration_sec,
                    created_at, updated_at",
         id,
         set_id,
@@ -399,12 +406,24 @@ pub async fn activate_exercise(
     conn: &mut SqliteConnection,
     exercise_id: &str,
 ) -> Result<(), sqlx::Error> {
+    // Snapshot the parent set's paused_total_sec as paused_offset_sec so we can
+    // later compute per-exercise paused time = set.paused_total_sec - paused_offset_sec.
     sqlx::query!(
         "UPDATE workout_session_exercises
-         SET status     = 'active',
-             started_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         SET status           = 'active',
+             started_at       = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+             paused_offset_sec = (
+                 SELECT COALESCE(wss.paused_total_sec, 0)
+                 FROM workout_session_sets wss
+                 WHERE wss.id = (
+                     SELECT workout_session_set_id
+                     FROM workout_session_exercises
+                     WHERE id = ?
+                 )
+             )
          WHERE id = ?",
-        exercise_id
+        exercise_id,
+        exercise_id,
     )
     .execute(conn)
     .await?;
@@ -453,12 +472,27 @@ pub async fn complete_exercise(
     conn: &mut SqliteConnection,
     exercise_id: &str,
 ) -> Result<(), sqlx::Error> {
+    // performed_duration_sec = wall time elapsed - paused time during this exercise.
+    // paused time during this exercise = set.paused_total_sec - exercise.paused_offset_sec.
+    // Implicit resume has already fired before this call, so paused_total_sec is current.
     sqlx::query!(
         "UPDATE workout_session_exercises
-         SET status   = 'completed',
-             ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         SET status                = 'completed',
+             ended_at              = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+             performed_duration_sec = (
+                 SELECT CASE
+                     WHEN e.started_at IS NOT NULL THEN
+                         MAX(0, unixepoch('now') - unixepoch(e.started_at)
+                             - (COALESCE(s.paused_total_sec, 0) - e.paused_offset_sec))
+                     ELSE NULL
+                 END
+                 FROM workout_session_exercises e
+                 JOIN workout_session_sets s ON s.id = e.workout_session_set_id
+                 WHERE e.id = ?
+             )
          WHERE id = ?",
-        exercise_id
+        exercise_id,
+        exercise_id,
     )
     .execute(conn)
     .await?;
@@ -473,10 +507,12 @@ pub async fn pend_exercise(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "UPDATE workout_session_exercises
-         SET status     = 'pending',
-             started_at = NULL,
-             ended_at   = NULL,
-             skipped    = 0
+         SET status                 = 'pending',
+             started_at             = NULL,
+             ended_at               = NULL,
+             skipped                = 0,
+             paused_offset_sec      = 0,
+             performed_duration_sec = NULL
          WHERE id = ?",
         exercise_id
     )
@@ -491,14 +527,27 @@ pub async fn reactivate_exercise(
     conn: &mut SqliteConnection,
     exercise_id: &str,
 ) -> Result<(), sqlx::Error> {
+    // Re-snapshot paused_offset_sec from the parent set (which was just restarted
+    // by restart_prev_set or left unchanged for same-set Prev).
     sqlx::query!(
         "UPDATE workout_session_exercises
-         SET status     = 'active',
-             started_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-             ended_at   = NULL,
-             skipped    = 0
+         SET status                 = 'active',
+             started_at             = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+             ended_at               = NULL,
+             skipped                = 0,
+             performed_duration_sec = NULL,
+             paused_offset_sec      = (
+                 SELECT COALESCE(wss.paused_total_sec, 0)
+                 FROM workout_session_sets wss
+                 WHERE wss.id = (
+                     SELECT workout_session_set_id
+                     FROM workout_session_exercises
+                     WHERE id = ?
+                 )
+             )
          WHERE id = ?",
-        exercise_id
+        exercise_id,
+        exercise_id,
     )
     .execute(conn)
     .await?;
@@ -511,11 +560,23 @@ pub async fn mark_exercise_skipped(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "UPDATE workout_session_exercises
-         SET skipped  = 1,
-             status   = 'skipped',
-             ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         SET skipped                = 1,
+             status                 = 'skipped',
+             ended_at               = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+             performed_duration_sec = (
+                 SELECT CASE
+                     WHEN e.started_at IS NOT NULL THEN
+                         MAX(0, unixepoch('now') - unixepoch(e.started_at)
+                             - (COALESCE(s.paused_total_sec, 0) - e.paused_offset_sec))
+                     ELSE NULL
+                 END
+                 FROM workout_session_exercises e
+                 JOIN workout_session_sets s ON s.id = e.workout_session_set_id
+                 WHERE e.id = ?
+             )
          WHERE id = ?",
-        exercise_id
+        exercise_id,
+        exercise_id,
     )
     .execute(conn)
     .await?;
@@ -528,9 +589,21 @@ pub async fn end_exercise_if_open(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "UPDATE workout_session_exercises
-         SET ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         SET ended_at               = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+             performed_duration_sec = (
+                 SELECT CASE
+                     WHEN e.started_at IS NOT NULL THEN
+                         MAX(0, unixepoch('now') - unixepoch(e.started_at)
+                             - (COALESCE(s.paused_total_sec, 0) - e.paused_offset_sec))
+                     ELSE NULL
+                 END
+                 FROM workout_session_exercises e
+                 JOIN workout_session_sets s ON s.id = e.workout_session_set_id
+                 WHERE e.id = ?
+             )
          WHERE id = ? AND ended_at IS NULL",
-        exercise_id
+        exercise_id,
+        exercise_id,
     )
     .execute(conn)
     .await?;

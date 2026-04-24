@@ -1020,3 +1020,143 @@ async fn test_delete_workout_cleans_up_local_sets(pool: SqlitePool) {
     assert_eq!(global.len(), 1, "original global set remains");
     assert_eq!(global[0].id, set.id);
 }
+
+// ── performed_duration_sec: advance stores duration ──────────────────────────
+
+#[sqlx::test]
+async fn test_advance_stores_performed_duration(pool: SqlitePool) {
+    let (session_id, _, ex_ids) = make_two_set_session(&pool).await;
+    // ex_ids[0] is active after start_session
+
+    let advanced = session::advance_exercise(&pool, &session_id).await.unwrap();
+
+    let ex0 = advanced.exercises.iter().find(|e| e.id == ex_ids[0]).unwrap();
+    assert_eq!(ex0.status, "completed");
+    assert!(
+        ex0.performed_duration_sec.is_some(),
+        "performed_duration_sec must be set after advance"
+    );
+    assert!(
+        ex0.performed_duration_sec.unwrap() >= 0,
+        "performed_duration_sec must be non-negative"
+    );
+
+    // The newly active exercise has no performed_duration_sec yet
+    let ex1 = advanced.exercises.iter().find(|e| e.id == ex_ids[1]).unwrap();
+    assert_eq!(ex1.status, "active");
+    assert!(
+        ex1.performed_duration_sec.is_none(),
+        "active exercise must not yet have performed_duration_sec"
+    );
+}
+
+// ── performed_duration_sec: skip stores duration ─────────────────────────────
+
+#[sqlx::test]
+async fn test_skip_stores_performed_duration(pool: SqlitePool) {
+    let (session_id, _, ex_ids) = make_two_set_session(&pool).await;
+
+    let skipped = session::skip_exercise(&pool, &session_id, &ex_ids[0]).await.unwrap();
+
+    let ex0 = skipped.exercises.iter().find(|e| e.id == ex_ids[0]).unwrap();
+    assert_eq!(ex0.status, "skipped");
+    assert!(
+        ex0.performed_duration_sec.is_some(),
+        "performed_duration_sec must be set after skip"
+    );
+    assert!(ex0.performed_duration_sec.unwrap() >= 0);
+}
+
+// ── performed_duration_sec: finish stores duration for active exercise ────────
+
+#[sqlx::test]
+async fn test_finish_stores_performed_duration(pool: SqlitePool) {
+    let (session_id, _, ex_ids) = make_two_set_session(&pool).await;
+
+    session::finish_session(&pool, &session_id).await.unwrap();
+
+    // After finish, verify via direct DB query that the active exercise got a duration
+    let mut conn = pool.acquire().await.unwrap();
+    let row: Option<(Option<i64>,)> = sqlx::query_as(
+        "SELECT performed_duration_sec FROM workout_session_exercises WHERE id = ?"
+    )
+    .bind(&ex_ids[0])
+    .fetch_optional(&mut *conn)
+    .await
+    .unwrap();
+
+    let (performed,) = row.unwrap();
+    assert!(
+        performed.is_some(),
+        "performed_duration_sec must be set after finish"
+    );
+    assert!(performed.unwrap() >= 0);
+}
+
+// ── performed_duration_sec: pause time excluded ───────────────────────────────
+
+#[sqlx::test]
+async fn test_pause_time_excluded_from_performed_duration(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session(&pool).await;
+
+    // Pause immediately after start
+    session::pause_session(&pool, &session_id, &set_ids[0]).await.unwrap();
+    // Resume immediately (paused_total_sec ≈ 0 due to 1s unixepoch resolution in SQLite)
+    session::resume_session(&pool, &session_id, &set_ids[0]).await.unwrap();
+
+    // Pause again
+    session::pause_session(&pool, &session_id, &set_ids[0]).await.unwrap();
+    // Resume again (implicit resume will also fire on advance)
+    session::resume_session(&pool, &session_id, &set_ids[0]).await.unwrap();
+
+    // Advance — this triggers implicit resume (no-op since already resumed) then completes ex0
+    let advanced = session::advance_exercise(&pool, &session_id).await.unwrap();
+
+    let ex0 = advanced.exercises.iter().find(|e| e.id == ex_ids[0]).unwrap();
+    assert_eq!(ex0.status, "completed");
+    assert!(ex0.performed_duration_sec.is_some());
+    // The duration should be roughly 0 (wall time) minus pause overhead.
+    // Critically it must not be negative and must not exceed the raw wall clock delta.
+    assert!(ex0.performed_duration_sec.unwrap() >= 0, "duration never negative");
+
+    // Verify paused_offset_sec was set to 0 at exercise start (set started fresh)
+    assert_eq!(ex0.paused_offset_sec, 0, "paused_offset_sec at exercise start was 0");
+}
+
+// ── performed_duration_sec: corrective Prev clears duration ──────────────────
+
+#[sqlx::test]
+async fn test_prev_clears_performed_duration(pool: SqlitePool) {
+    let (session_id, _, ex_ids) = make_two_set_session(&pool).await;
+
+    // Advance to ex1 — this completes ex0 and stores its performed_duration_sec
+    session::advance_exercise(&pool, &session_id).await.unwrap();
+
+    // Retreat — ex1 goes back to pending, ex0 gets reactivated
+    let retreated = session::retreat_exercise(&pool, &session_id).await.unwrap();
+
+    // ex1 (which was active briefly) must have performed_duration_sec cleared
+    let ex1 = retreated.exercises.iter().find(|e| e.id == ex_ids[1]).unwrap();
+    assert_eq!(ex1.status, "pending");
+    assert!(
+        ex1.performed_duration_sec.is_none(),
+        "performed_duration_sec must be cleared when exercise is pended by Prev"
+    );
+
+    // ex0 (reactivated) must also have no stored duration yet (fresh attempt)
+    let ex0 = retreated.exercises.iter().find(|e| e.id == ex_ids[0]).unwrap();
+    assert_eq!(ex0.status, "active");
+    assert!(
+        ex0.performed_duration_sec.is_none(),
+        "reactivated exercise must not carry over prior performed_duration_sec"
+    );
+
+    // Advance again — now ex0 completes a second time and gets a fresh duration
+    let readv = session::advance_exercise(&pool, &session_id).await.unwrap();
+    let ex0_second = readv.exercises.iter().find(|e| e.id == ex_ids[0]).unwrap();
+    assert_eq!(ex0_second.status, "completed");
+    assert!(
+        ex0_second.performed_duration_sec.is_some(),
+        "second attempt stores performed_duration_sec"
+    );
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE workout_session_exercises\n         SET status           = 'active',\n             started_at       = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),\n             paused_offset_sec = (\n                 SELECT COALESCE(wss.paused_total_sec, 0)\n                 FROM workout_session_sets wss\n                 WHERE wss.id = (\n                     SELECT workout_session_set_id\n                     FROM workout_session_exercises\n                     WHERE id = ?\n                 )\n             )\n         WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "ab932854273d645c30e3e69bbc7510b034335557c2ec1176ca823a30ee26936e"
+}

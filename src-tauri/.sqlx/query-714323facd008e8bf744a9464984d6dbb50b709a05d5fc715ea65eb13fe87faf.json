@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO workout_session_exercises\n             (id, workout_session_set_id, order_index,\n              exercise_id, placeholder_tag, display_name,\n              duration_hint_sec, notes,\n              status, skipped)\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0)\n         RETURNING id, workout_session_set_id, order_index,\n                   exercise_id, placeholder_tag, display_name,\n                   duration_hint_sec, status, skipped,\n                   started_at, ended_at, notes,\n                   created_at, updated_at",
+  "query": "SELECT id, workout_session_set_id, order_index,\n                exercise_id, placeholder_tag, display_name,\n                duration_hint_sec, status, skipped,\n                started_at, ended_at, notes,\n                paused_offset_sec, performed_duration_sec,\n                created_at, updated_at\n         FROM workout_session_exercises\n         WHERE workout_session_set_id = ?\n         ORDER BY order_index\n         LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -64,18 +64,28 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "paused_offset_sec",
         "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "performed_duration_sec",
+        "ordinal": 13,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 14,
         "type_info": "Text"
       },
       {
         "name": "updated_at",
-        "ordinal": 13,
+        "ordinal": 15,
         "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 8
+      "Right": 1
     },
     "nullable": [
       false,
@@ -91,8 +101,10 @@
       true,
       true,
       false,
+      true,
+      false,
       false
     ]
   },
-  "hash": "7a18b4f4521d14baa0d5a8bb094df70620d2ac2cf13ba2dea443e1cbd76a5b7b"
+  "hash": "714323facd008e8bf744a9464984d6dbb50b709a05d5fc715ea65eb13fe87faf"
 }

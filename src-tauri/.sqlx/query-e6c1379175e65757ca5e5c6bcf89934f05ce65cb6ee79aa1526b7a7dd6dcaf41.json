@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT wse.id, wse.workout_session_set_id, wse.order_index,\n                wse.exercise_id, wse.placeholder_tag, wse.display_name,\n                wse.duration_hint_sec, wse.status, wse.skipped,\n                wse.started_at, wse.ended_at, wse.notes,\n                wse.created_at, wse.updated_at\n         FROM workout_session_exercises wse\n         JOIN workout_session_sets wss ON wss.id = wse.workout_session_set_id\n         WHERE wss.workout_session_id = ?\n         ORDER BY wss.order_index, wse.order_index",
+  "query": "SELECT wse.id, wse.workout_session_set_id, wse.order_index,\n                wse.exercise_id, wse.placeholder_tag, wse.display_name,\n                wse.duration_hint_sec, wse.status, wse.skipped,\n                wse.started_at, wse.ended_at, wse.notes,\n                wse.paused_offset_sec, wse.performed_duration_sec,\n                wse.created_at, wse.updated_at\n         FROM workout_session_exercises wse\n         JOIN workout_session_sets wss ON wss.id = wse.workout_session_set_id\n         WHERE wss.workout_session_id = ? AND wse.status = 'active'\n         LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -64,13 +64,23 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "paused_offset_sec",
         "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "performed_duration_sec",
+        "ordinal": 13,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 14,
         "type_info": "Text"
       },
       {
         "name": "updated_at",
-        "ordinal": 13,
+        "ordinal": 15,
         "type_info": "Text"
       }
     ],
@@ -91,8 +101,10 @@
       true,
       true,
       false,
+      true,
+      false,
       false
     ]
   },
-  "hash": "3fab2d990a2a8eb1831c97c818e2a1d859eab8085a0211cd4fbe34a3ab96f362"
+  "hash": "e6c1379175e65757ca5e5c6bcf89934f05ce65cb6ee79aa1526b7a7dd6dcaf41"
 }

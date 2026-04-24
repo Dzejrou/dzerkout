@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, workout_session_set_id, order_index, exercise_id, placeholder_tag,\n                display_name, duration_hint_sec, status, skipped, started_at, ended_at,\n                notes, created_at, updated_at\n         FROM workout_session_exercises\n         WHERE workout_session_set_id = ?\n         ORDER BY order_index",
+  "query": "SELECT id, workout_session_set_id, order_index, exercise_id, placeholder_tag,\n                display_name, duration_hint_sec, status, skipped, started_at, ended_at,\n                notes, paused_offset_sec, performed_duration_sec, created_at, updated_at\n         FROM workout_session_exercises\n         WHERE workout_session_set_id = ?\n         ORDER BY order_index",
   "describe": {
     "columns": [
       {
@@ -64,13 +64,23 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "paused_offset_sec",
         "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "performed_duration_sec",
+        "ordinal": 13,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 14,
         "type_info": "Text"
       },
       {
         "name": "updated_at",
-        "ordinal": 13,
+        "ordinal": 15,
         "type_info": "Text"
       }
     ],
@@ -91,8 +101,10 @@
       true,
       true,
       false,
+      true,
+      false,
       false
     ]
   },
-  "hash": "209ad2d93b29d7d76364b3f5c2afb769da9acad93b2927a685359cf08c1afd27"
+  "hash": "a45448d25e9675528252e7af352645b68cb99d6bb4e07df7eee4a6359232ac1b"
 }

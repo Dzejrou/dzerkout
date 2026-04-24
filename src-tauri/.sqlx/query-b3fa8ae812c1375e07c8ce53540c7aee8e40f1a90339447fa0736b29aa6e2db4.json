@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, workout_session_set_id, order_index,\n                exercise_id, placeholder_tag, display_name,\n                duration_hint_sec, status, skipped,\n                started_at, ended_at, notes,\n                created_at, updated_at\n         FROM workout_session_exercises\n         WHERE workout_session_set_id = ? AND order_index > ?\n         ORDER BY order_index\n         LIMIT 1",
+  "query": "SELECT wse.id, wse.workout_session_set_id, wse.order_index,\n                wse.exercise_id, wse.placeholder_tag, wse.display_name,\n                wse.duration_hint_sec, wse.status, wse.skipped,\n                wse.started_at, wse.ended_at, wse.notes,\n                wse.paused_offset_sec, wse.performed_duration_sec,\n                wse.created_at, wse.updated_at\n         FROM workout_session_exercises wse\n         JOIN workout_session_sets wss ON wss.id = wse.workout_session_set_id\n         WHERE wss.workout_session_id = ?\n         ORDER BY wss.order_index, wse.order_index",
   "describe": {
     "columns": [
       {
@@ -64,18 +64,28 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "paused_offset_sec",
         "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "performed_duration_sec",
+        "ordinal": 13,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 14,
         "type_info": "Text"
       },
       {
         "name": "updated_at",
-        "ordinal": 13,
+        "ordinal": 15,
         "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 1
     },
     "nullable": [
       false,
@@ -91,8 +101,10 @@
       true,
       true,
       false,
+      true,
+      false,
       false
     ]
   },
-  "hash": "9e7f13a95c1271441d91e5be6290c91be3a66a39aadb0a7094a8512dde3584f3"
+  "hash": "b3fa8ae812c1375e07c8ce53540c7aee8e40f1a90339447fa0736b29aa6e2db4"
 }

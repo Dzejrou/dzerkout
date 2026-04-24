@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, workout_session_set_id, order_index,\n                exercise_id, placeholder_tag, display_name,\n                duration_hint_sec, status, skipped,\n                started_at, ended_at, notes,\n                created_at, updated_at\n         FROM workout_session_exercises\n         WHERE workout_session_set_id = ? AND order_index < ?\n         ORDER BY order_index DESC\n         LIMIT 1",
+  "query": "INSERT INTO workout_session_exercises\n             (id, workout_session_set_id, order_index,\n              exercise_id, placeholder_tag, display_name,\n              duration_hint_sec, notes,\n              status, skipped)\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0)\n         RETURNING id, workout_session_set_id, order_index,\n                   exercise_id, placeholder_tag, display_name,\n                   duration_hint_sec, status, skipped,\n                   started_at, ended_at, notes,\n                   paused_offset_sec, performed_duration_sec,\n                   created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -64,18 +64,28 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "paused_offset_sec",
         "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "performed_duration_sec",
+        "ordinal": 13,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 14,
         "type_info": "Text"
       },
       {
         "name": "updated_at",
-        "ordinal": 13,
+        "ordinal": 15,
         "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 8
     },
     "nullable": [
       false,
@@ -91,8 +101,10 @@
       true,
       true,
       false,
+      true,
+      false,
       false
     ]
   },
-  "hash": "0fd6404d374dc109a5b52e5a43db3bb1f737f91ee291d016a2fc31369149c1db"
+  "hash": "c506c2daac319b87cdc52b64cd6f76f2f10cc292bc716748849df245c702b784"
 }

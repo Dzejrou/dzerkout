@@ -44,8 +44,8 @@ function DetailView({ id, onBack }: { id: string; onBack: () => void }) {
               <span style={{ flex: 1, textDecoration: e.status === "skipped" ? "line-through" : "none", fontSize: 14 }}>
                 {e.display_name}
               </span>
-              {e.duration_hint_sec != null && (
-                <span style={{ fontSize: 12, color: "#9ca3af" }}>{e.duration_hint_sec}s</span>
+              {e.performed_duration_sec != null && (
+                <span style={{ fontSize: 12, color: "#6b7280" }}>{e.performed_duration_sec}s</span>
               )}
               <span style={{ fontSize: 12, color: "#9ca3af", marginLeft: 8 }}>
                 {e.status === "completed" ? "✓" : e.status === "skipped" ? "skip" : e.status === "active" ? "▶" : ""}

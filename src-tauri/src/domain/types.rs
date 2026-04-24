@@ -225,6 +225,12 @@ pub struct WorkoutSessionExerciseRow {
     pub started_at: Option<String>,
     pub ended_at: Option<String>,
     pub notes: Option<String>,
+    /// paused_total_sec of the parent set at the moment this exercise became active.
+    /// Per-exercise paused time = (set.paused_total_sec when ended) - paused_offset_sec.
+    pub paused_offset_sec: i64,
+    /// Active wall-time seconds for this exercise. NULL until the exercise ends.
+    /// Cleared back to NULL by corrective Prev.
+    pub performed_duration_sec: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }

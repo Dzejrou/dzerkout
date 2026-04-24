@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE workout_session_exercises\n         SET status                = 'completed',\n             ended_at              = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),\n             performed_duration_sec = (\n                 SELECT CASE\n                     WHEN e.started_at IS NOT NULL THEN\n                         MAX(0, unixepoch('now') - unixepoch(e.started_at)\n                             - (COALESCE(s.paused_total_sec, 0) - e.paused_offset_sec))\n                     ELSE NULL\n                 END\n                 FROM workout_session_exercises e\n                 JOIN workout_session_sets s ON s.id = e.workout_session_set_id\n                 WHERE e.id = ?\n             )\n         WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "96d17fcfd602ac6d1100fe0c5f07389b2fca63e1bf0e166975fdb4f3818f04bc"
+}

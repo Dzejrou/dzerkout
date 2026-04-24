@@ -40,6 +40,8 @@ export interface WorkoutSessionExerciseRow {
   started_at: string | null;
   ended_at: string | null;
   notes: string | null;
+  paused_offset_sec: number;
+  performed_duration_sec: number | null;
   created_at: string;
   updated_at: string;
 }

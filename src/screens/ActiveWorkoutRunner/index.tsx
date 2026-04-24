@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { sessionsApi } from "../../api/sessions";
 import { useSessionStore } from "../../store/sessionStore";
 import { useUiStore } from "../../store/uiStore";
-import { useElapsedMs } from "../../hooks/useTimer";
+import { useElapsedMs, useExerciseElapsedMs } from "../../hooks/useTimer";
 
 function formatTime(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -31,6 +31,7 @@ export default function ActiveWorkoutRunner() {
   } = useSessionStore();
 
   const elapsedMs = useElapsedMs();
+  const { elapsedMs: exerciseElapsedMs, durationHintSec } = useExerciseElapsedMs();
   const [pending, setPending] = useState<string | null>(null); // which action is pending
   const [error, setError] = useState<string | null>(null);
 
@@ -293,9 +294,9 @@ export default function ActiveWorkoutRunner() {
         <h2 style={{ ...headingStyle, fontSize: 24, marginBottom: 4 }}>
           {currentExercise?.display_name ?? "—"}
         </h2>
-        {currentExercise?.duration_hint_sec != null && (
-          <p style={{ color: "#6b7280", margin: "0 0 4px", fontSize: 14 }}>
-            {currentExercise.duration_hint_sec}s hint
+        {durationHintSec != null && (
+          <p style={exerciseTimerStyle}>
+            {Math.floor(exerciseElapsedMs / 1000)} / {durationHintSec}
           </p>
         )}
         {currentExercise?.notes && (
@@ -504,3 +505,11 @@ const queueRowStyle: React.CSSProperties = {
   marginBottom: 4,
 };
 const errorStyle: React.CSSProperties = { color: "#dc2626", fontSize: 13 };
+const exerciseTimerStyle: React.CSSProperties = {
+  fontVariantNumeric: "tabular-nums",
+  fontSize: 22,
+  fontWeight: 600,
+  color: "#1d4ed8",
+  margin: "0 0 4px",
+  letterSpacing: "0.03em",
+};
