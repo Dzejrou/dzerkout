@@ -237,7 +237,7 @@ export default function ActiveWorkoutRunner() {
           {/* Set timer */}
           <div style={timerPanelStyle}>
             <span style={panelLabelStyle}>SET TIME</span>
-            <span style={bigClockStyle}>{formatTime(elapsedMs)}</span>
+            <span style={bigClockStyle}>{formatTime(exerciseElapsedMs)}</span>
             {isPaused
               ? <span style={pausedBadgeStyle}>● PAUSED</span>
               : <span style={setIndexStyle}>Set {setIndex + 1} of {sets.length}</span>
@@ -250,12 +250,12 @@ export default function ActiveWorkoutRunner() {
             <span style={panelLabelStyle}>EXERCISE TIME</span>
             {durationHintSec != null ? (
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={exClockCurrentStyle}>{formatTime(exerciseElapsedMs)}</span>
-                <span style={{ color: "#4b5563", fontSize: 28, fontWeight: 300, lineHeight: 1 }}>/</span>
+                <span style={exClockCurrentStyle}>{formatTime(elapsedMs)}</span>
+                <span style={{ color: "#4b5563", fontSize: "clamp(22px, 3.5vw, 56px)", fontWeight: 300, lineHeight: 1 }}>/</span>
                 <span style={exClockTargetStyle}>{formatTime(durationHintSec * 1000)}</span>
               </div>
             ) : (
-              <span style={exClockCurrentStyle}>{formatTime(exerciseElapsedMs)}</span>
+              <span style={exClockCurrentStyle}>{formatTime(elapsedMs)}</span>
             )}
             <span style={exNameStyle}>{currentExercise?.display_name ?? "—"}</span>
           </div>
@@ -298,7 +298,7 @@ export default function ActiveWorkoutRunner() {
                     <span style={{ ...queueNumStyle, fontWeight: isCurrent ? 600 : 400 }}>
                       {idx + 1}
                     </span>
-                    <span style={{ ...queueNameStyle, fontWeight: isCurrent ? 700 : 400, fontSize: isCurrent ? 15 : 14 }}>
+                    <span style={{ ...queueNameStyle, fontWeight: isCurrent ? 700 : 400, fontSize: isCurrent ? 80 : 66 }}>
                       {ex.display_name}
                     </span>
                     {ex.duration_hint_sec != null && (
@@ -419,8 +419,9 @@ const timerPanelStyle: React.CSSProperties = {
   padding: "16px 20px",
   display: "flex",
   flexDirection: "column",
-  gap: 2,
+  gap: 4,
   flex: 1,
+  justifyContent: "center",
 };
 
 const panelLabelStyle: React.CSSProperties = {
@@ -433,7 +434,7 @@ const panelLabelStyle: React.CSSProperties = {
 };
 
 const bigClockStyle: React.CSSProperties = {
-  fontSize: 64,
+  fontSize: "clamp(72px, 13vw, 200px)",
   fontWeight: 700,
   fontVariantNumeric: "tabular-nums",
   letterSpacing: "0.01em",
@@ -456,7 +457,7 @@ const setIndexStyle: React.CSSProperties = {
 };
 
 const exClockCurrentStyle: React.CSSProperties = {
-  fontSize: 42,
+  fontSize: "clamp(56px, 9vw, 160px)",
   fontWeight: 700,
   fontVariantNumeric: "tabular-nums",
   color: "#f2f2f7",
@@ -465,7 +466,7 @@ const exClockCurrentStyle: React.CSSProperties = {
 };
 
 const exClockTargetStyle: React.CSSProperties = {
-  fontSize: 32,
+  fontSize: "clamp(40px, 7vw, 120px)",
   fontWeight: 300,
   fontVariantNumeric: "tabular-nums",
   color: "#6b7280",
@@ -505,7 +506,7 @@ const queueCardBaseStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 10,
-  padding: "11px 14px",
+  padding: "16px 18px",
   borderRadius: 10,
   position: "relative",
   flexShrink: 0,
@@ -522,16 +523,16 @@ const queueCurrentArrowStyle: React.CSSProperties = {
 };
 
 const queueNumStyle: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: 16,
   color: "#8e8e93",
-  minWidth: 20,
+  minWidth: 24,
   textAlign: "right",
   flexShrink: 0,
 };
 
 const queueNameStyle: React.CSSProperties = {
   flex: 1,
-  fontSize: 14,
+  fontSize: 17,
   color: "#f2f2f7",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -539,7 +540,7 @@ const queueNameStyle: React.CSSProperties = {
 };
 
 const queueDurStyle: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: 16,
   color: "#6b7280",
   fontVariantNumeric: "tabular-nums",
   flexShrink: 0,
@@ -573,7 +574,11 @@ const secondaryCtrlsStyle: React.CSSProperties = {
 function navBtnStyle(disabled: boolean): React.CSSProperties {
   return {
     flex: 1,
-    padding: "11px 6px",
+    height: 44,
+    padding: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 10,
     border: "1px solid rgba(255,255,255,0.1)",
     background: disabled ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.07)",
@@ -586,7 +591,11 @@ function navBtnStyle(disabled: boolean): React.CSSProperties {
 
 const pauseBtnStyle: React.CSSProperties = {
   flex: 1.5,
-  padding: "11px 6px",
+  height: 44,
+  padding: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   borderRadius: 10,
   border: "1px solid rgba(255,255,255,0.14)",
   background: "#3a3a3c",
