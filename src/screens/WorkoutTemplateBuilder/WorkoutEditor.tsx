@@ -93,7 +93,6 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
     onSuccess: (newRef) => {
       qc.invalidateQueries({ queryKey: ["workout-template", workoutId] });
       qc.invalidateQueries({ queryKey: ["set-templates"] });
-      // Update expanded state to the new ref ID so the expand view stays coherent.
       setExpandedRefId((prev) => (prev != null ? newRef.id : null));
     },
   });
@@ -171,21 +170,19 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
   if (isLoading || !workout) {
     return (
       <div style={pageStyle}>
-        <button onClick={onBack} style={backBtnStyle}>← Back</button>
-        <p style={{ color: "#6b7280" }}>Loading…</p>
+        <button onClick={onBack} style={backBtnStyle}>← Workouts</button>
+        <p style={{ color: "#8e8e93" }}>Loading…</p>
       </div>
     );
   }
 
   function cardLabel(card: SetTemplateCard, assignment: WorkoutTemplateCardAssignment | undefined): string {
     if (assignment?.display_label) return assignment.display_label;
-    // Concrete card: look up exercise name
     const exId = assignment?.exercise_id ?? card.exercise_id;
     if (exId) {
       const ex = exerciseMap.get(exId);
       if (ex) return ex.name;
     }
-    // Placeholder fallback
     return card.placeholder_label ?? card.placeholder_tag ?? "Unknown";
   }
 
@@ -205,7 +202,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
       <button onClick={onBack} style={backBtnStyle}>← Workouts</button>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#f2f2f7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {workout.name}
           </h2>
           <button
@@ -234,15 +231,15 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
           </button>
         </div>
       </div>
-      <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6b7280" }}>
+      <p style={{ margin: "0 0 4px", fontSize: 12, color: "#8e8e93" }}>
         Default duration: {workout.default_exercise_duration_sec}s
         {workout.rest_between_sets_sec != null ? ` · Rest: ${workout.rest_between_sets_sec}s` : ""}
       </p>
       {startError && (
-        <p style={{ color: "#dc2626", fontSize: 12, margin: "4px 0 8px" }}>{startError}</p>
+        <p style={{ color: "#ef4444", fontSize: 12, margin: "4px 0 8px" }}>{startError}</p>
       )}
 
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 14 }}>
         <SortableList
           items={workout.set_refs}
           onReorder={(newOrder) => reorderMut.mutate(newOrder.map((r) => r.id))}
@@ -262,7 +259,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                     {isExpanded ? "▾" : "▸"}
                   </button>
                   <span
-                    style={{ flex: 1, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                    style={{ flex: 1, fontWeight: 500, color: "#e5e7eb", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
                     onClick={() => setExpandedRefId(isExpanded ? null : ref.id)}
                   >
                     {ref.set_name}
@@ -282,7 +279,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                         </button>
                         <button
                           onClick={() => { setExportName(""); setModal({ type: "export", setId: ref.set_template_id }); }}
-                          style={{ ...iconBtnStyle, color: "#7c3aed" }}
+                          style={{ ...iconBtnStyle, color: "#a78bfa" }}
                           title="Export as a reusable set in the library"
                         >
                           Export
@@ -300,7 +297,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                     )}
                     <button
                       onClick={() => setModal({ type: "remove-set", ref })}
-                      style={{ ...iconBtnStyle, color: "#dc2626" }}
+                      style={{ ...iconBtnStyle, color: "#f87171" }}
                     >
                       ✕
                     </button>
@@ -310,7 +307,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                 {isExpanded && (
                   <div style={{ marginTop: 8, paddingLeft: 24 }}>
                     {cards.length === 0 && (
-                      <p style={{ fontSize: 12, color: "#9ca3af" }}>No cards</p>
+                      <p style={{ fontSize: 12, color: "#6b7280" }}>No cards</p>
                     )}
                     {cards.map((card) => {
                       const assignment = getAssignment(ref.id, card.id);
@@ -323,18 +320,18 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                           <span
                             style={{
                               fontSize: 11, padding: "1px 5px", borderRadius: 3,
-                              background: card.card_type === "concrete" ? "#dbeafe" : "#fef3c7",
-                              color: card.card_type === "concrete" ? "#1d4ed8" : "#92400e",
+                              background: card.card_type === "concrete" ? "rgba(59,130,246,0.2)" : "rgba(245,158,11,0.2)",
+                              color: card.card_type === "concrete" ? "#93c5fd" : "#fcd34d",
                               marginRight: 6, flexShrink: 0,
                             }}
                           >
                             {card.card_type}
                           </span>
-                          <span style={{ fontSize: 13, flex: 1 }}>
+                          <span style={{ fontSize: 13, flex: 1, color: "#d1d5db" }}>
                             {cardLabel(card, assignment)}
                           </span>
                           {assignment && (
-                            <span style={{ marginLeft: 6, fontSize: 11, color: "#7c3aed", fontWeight: 600, flexShrink: 0 }}>
+                            <span style={{ marginLeft: 6, fontSize: 11, color: "#a78bfa", fontWeight: 600, flexShrink: 0 }}>
                               overridden
                             </span>
                           )}
@@ -356,7 +353,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
       </div>
 
       {workout.set_refs.length === 0 && (
-        <p style={{ color: "#9ca3af", textAlign: "center", padding: "24px 0" }}>
+        <p style={{ color: "#6b7280", textAlign: "center", padding: "24px 0" }}>
           No sets added yet
         </p>
       )}
@@ -365,7 +362,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
       {modal?.type === "add-set" && (
         <div style={overlayStyle}>
           <div style={sheetStyle}>
-            <h3 style={{ margin: "0 0 12px" }}>Add set to workout</h3>
+            <h3 style={sheetTitleStyle}>Add set to workout</h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 360, overflow: "auto" }}>
               {allSets.map((s) => (
                 <button
@@ -374,12 +371,12 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                   onClick={() => addSetRefMut.mutate(s.id)}
                   disabled={addSetRefMut.isPending}
                 >
-                  <span style={{ fontWeight: 500 }}>{s.name}</span>
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>{s.card_count} cards</span>
+                  <span style={{ fontWeight: 500, color: "#e5e7eb" }}>{s.name}</span>
+                  <span style={{ fontSize: 12, color: "#8e8e93" }}>{s.card_count} cards</span>
                 </button>
               ))}
               {allSets.length === 0 && (
-                <p style={{ color: "#9ca3af", textAlign: "center" }}>No set templates yet</p>
+                <p style={{ color: "#6b7280", textAlign: "center" }}>No set templates yet</p>
               )}
             </div>
             <button onClick={() => setModal(null)} style={{ ...cancelBtnStyle, marginTop: 12, width: "100%" }}>
@@ -406,7 +403,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
       {assignmentModal && (
         <div style={overlayStyle}>
           <div style={sheetStyle}>
-            <h3 style={{ margin: "0 0 16px" }}>Card override</h3>
+            <h3 style={sheetTitleStyle}>Card override</h3>
             <AssignmentEditor
               card={assignmentModal.card}
               assignment={assignmentForCard}
@@ -433,8 +430,8 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
       {modal?.type === "export" && (
         <div style={overlayStyle}>
           <div style={sheetStyle}>
-            <h3 style={{ margin: "0 0 12px" }}>Export to library</h3>
-            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>
+            <h3 style={sheetTitleStyle}>Export to library</h3>
+            <p style={{ fontSize: 13, color: "#8e8e93", marginBottom: 12 }}>
               Creates a new reusable set in the global library. The workout-local fork is unchanged.
             </p>
             <input
@@ -479,7 +476,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
       {modal?.type === "edit-meta" && (
         <div style={overlayStyle}>
           <div style={sheetStyle}>
-            <h3 style={{ margin: "0 0 16px" }}>Edit workout details</h3>
+            <h3 style={sheetTitleStyle}>Edit workout details</h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
                 <label style={metaLabelStyle}>Name</label>
@@ -526,7 +523,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button
                   onClick={() => setModal(null)}
-                  style={metaCancelBtnStyle}
+                  style={cancelBtnStyle}
                   disabled={updateMetaMut.isPending}
                 >
                   Cancel
@@ -540,7 +537,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                     const restSec = metaRestSec.trim() ? parseInt(metaRestSec, 10) : null;
                     updateMetaMut.mutate({ name, notes: metaNotes.trim() || null, defaultDurationSec: defaultDuration, restSec });
                   }}
-                  style={metaSaveBtnStyle}
+                  style={saveBtnStyle}
                   disabled={!metaName.trim() || !metaDefaultDuration || updateMetaMut.isPending}
                 >
                   {updateMetaMut.isPending ? "Saving…" : "Save"}
@@ -554,76 +551,206 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
   );
 }
 
-const pageStyle: React.CSSProperties = { padding: 16, maxWidth: 600, margin: "0 auto" };
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const pageStyle: React.CSSProperties = {
+  padding: 20,
+  maxWidth: 680,
+  margin: "0 auto",
+  minHeight: "100%",
+  background: "#1c1c1e",
+  color: "#f2f2f7",
+  boxSizing: "border-box",
+};
+
 const backBtnStyle: React.CSSProperties = {
-  background: "none", border: "none", cursor: "pointer",
-  color: "#2563eb", fontWeight: 500, fontSize: 14, padding: "0 0 12px", display: "block",
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  color: "#8e8e93",
+  fontWeight: 500,
+  fontSize: 13,
+  padding: "0 0 14px",
+  display: "block",
 };
+
 const addBtnStyle: React.CSSProperties = {
-  padding: "6px 14px", borderRadius: 6, border: "none",
-  background: "#2563eb", color: "#fff", cursor: "pointer", fontWeight: 600,
+  padding: "6px 14px",
+  borderRadius: 7,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "#3a3a3c",
+  color: "#f2f2f7",
+  cursor: "pointer",
+  fontWeight: 600,
+  fontSize: 13,
 };
+
 const startBtnStyle: React.CSSProperties = {
-  padding: "6px 14px", borderRadius: 6, border: "none",
-  background: "#16a34a", color: "#fff", cursor: "pointer", fontWeight: 600,
+  padding: "6px 14px",
+  borderRadius: 7,
+  border: "none",
+  background: "#2d6a3f",
+  color: "#d1fae5",
+  cursor: "pointer",
+  fontWeight: 600,
+  fontSize: 13,
 };
+
 const setRefStyle: React.CSSProperties = {
-  padding: "10px 12px", background: "#fff", border: "1px solid #e5e7eb",
-  borderRadius: 8, marginBottom: 4,
+  padding: "10px 12px",
+  background: "#2c2c2e",
+  border: "1px solid rgba(255,255,255,0.07)",
+  borderRadius: 8,
+  marginBottom: 4,
 };
+
 const expandBtnStyle: React.CSSProperties = {
-  background: "none", border: "none", cursor: "pointer",
-  fontSize: 14, color: "#6b7280", padding: "0 8px 0 0",
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  fontSize: 14,
+  color: "#8e8e93",
+  padding: "0 8px 0 0",
 };
+
 const iconBtnStyle: React.CSSProperties = {
-  padding: "4px 10px", borderRadius: 5, border: "1px solid #e5e7eb",
-  background: "#f9fafb", cursor: "pointer", fontSize: 12,
+  padding: "3px 9px",
+  borderRadius: 5,
+  border: "1px solid rgba(255,255,255,0.1)",
+  background: "rgba(255,255,255,0.04)",
+  color: "#9ca3af",
+  cursor: "pointer",
+  fontSize: 12,
 };
+
 const cardItemStyle: React.CSSProperties = {
-  padding: "6px 10px", borderRadius: 6, marginBottom: 2,
-  background: "#f8fafc", border: "1px solid #e5e7eb",
-  cursor: "pointer", display: "flex", alignItems: "center",
+  padding: "6px 10px",
+  borderRadius: 6,
+  marginBottom: 2,
+  background: "#1c1c1e",
+  border: "1px solid rgba(255,255,255,0.06)",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
 };
+
 const overlayStyle: React.CSSProperties = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-  display: "flex", alignItems: "flex-end", zIndex: 100,
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.65)",
+  display: "flex",
+  alignItems: "flex-end",
+  zIndex: 100,
 };
+
 const sheetStyle: React.CSSProperties = {
-  width: "100%", background: "#fff", borderRadius: "16px 16px 0 0",
-  padding: "24px 20px", boxShadow: "0 -4px 24px rgba(0,0,0,0.12)", maxHeight: "90vh", overflow: "auto",
+  width: "100%",
+  maxWidth: 560,
+  margin: "0 auto",
+  background: "#2c2c2e",
+  borderRadius: "16px 16px 0 0",
+  padding: "24px 22px 32px",
+  boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
+  maxHeight: "90vh",
+  overflow: "auto",
+  boxSizing: "border-box",
 };
+
+const sheetTitleStyle: React.CSSProperties = {
+  margin: "0 0 16px",
+  fontSize: 17,
+  fontWeight: 700,
+  color: "#f2f2f7",
+};
+
 const setPickerRowStyle: React.CSSProperties = {
-  display: "flex", justifyContent: "space-between", alignItems: "center",
-  padding: "10px 12px", background: "#f9fafb", border: "1px solid #e5e7eb",
-  borderRadius: 8, cursor: "pointer", fontSize: 14,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "10px 12px",
+  background: "#1c1c1e",
+  border: "1px solid rgba(255,255,255,0.07)",
+  borderRadius: 8,
+  cursor: "pointer",
+  fontSize: 14,
+  width: "100%",
+  color: "#e5e7eb",
 };
+
 const cancelBtnStyle: React.CSSProperties = {
-  padding: "8px 14px", borderRadius: 6, border: "1px solid #d1d5db",
-  background: "#f9fafb", cursor: "pointer", fontSize: 14,
+  padding: "8px 16px",
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "transparent",
+  color: "#9ca3af",
+  cursor: "pointer",
+  fontSize: 14,
 };
+
+const saveBtnStyle: React.CSSProperties = {
+  padding: "8px 18px",
+  borderRadius: 8,
+  border: "none",
+  background: "#f2f2f7",
+  color: "#1c1c1e",
+  cursor: "pointer",
+  fontSize: 14,
+  fontWeight: 700,
+};
+
 const forkedBadgeStyle: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-  background: "#f0fdf4", color: "#15803d", border: "1px solid #86efac",
-  letterSpacing: "0.03em", flexShrink: 0,
+  fontSize: 10,
+  fontWeight: 700,
+  padding: "2px 6px",
+  borderRadius: 4,
+  background: "rgba(16,185,129,0.15)",
+  color: "#6ee7b7",
+  border: "1px solid rgba(16,185,129,0.3)",
+  letterSpacing: "0.03em",
+  flexShrink: 0,
 };
+
 const exportInputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db",
-  fontSize: 14, boxSizing: "border-box",
+  width: "100%",
+  padding: "9px 12px",
+  borderRadius: 7,
+  border: "1px solid rgba(255,255,255,0.1)",
+  background: "#1c1c1e",
+  color: "#f2f2f7",
+  fontSize: 14,
+  boxSizing: "border-box",
+  outline: "none",
 };
+
 const editMetaBtnStyle: React.CSSProperties = {
-  padding: "2px 8px", borderRadius: 5, border: "1px solid #d1d5db",
-  background: "#f9fafb", cursor: "pointer", fontSize: 12, color: "#374151", flexShrink: 0,
+  padding: "2px 8px",
+  borderRadius: 5,
+  border: "1px solid rgba(255,255,255,0.1)",
+  background: "rgba(255,255,255,0.05)",
+  cursor: "pointer",
+  fontSize: 12,
+  color: "#9ca3af",
+  flexShrink: 0,
 };
-const metaLabelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4 };
+
+const metaLabelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#8e8e93",
+  letterSpacing: "0.05em",
+  textTransform: "uppercase",
+  marginBottom: 5,
+};
+
 const metaInputStyle: React.CSSProperties = {
-  width: "100%", boxSizing: "border-box", padding: "8px 10px",
-  border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14,
-};
-const metaCancelBtnStyle: React.CSSProperties = {
-  padding: "7px 14px", borderRadius: 6, border: "1px solid #d1d5db",
-  background: "#f9fafb", cursor: "pointer", fontSize: 14,
-};
-const metaSaveBtnStyle: React.CSSProperties = {
-  padding: "7px 14px", borderRadius: 6, border: "none",
-  background: "#2563eb", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "9px 11px",
+  background: "#1c1c1e",
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: 8,
+  color: "#f2f2f7",
+  fontSize: 14,
+  outline: "none",
 };

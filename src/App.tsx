@@ -16,11 +16,11 @@ function AppShell() {
   const confirmModal = useUiStore((s) => s.confirmModal);
   const closeConfirmModal = useUiStore((s) => s.closeConfirmModal);
   const location = useLocation();
-  const isRunner = location.pathname === "/runner";
+  const noScroll = location.pathname === "/runner" || location.pathname === "/workouts";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <main style={{ flex: 1, minHeight: 0, overflow: isRunner ? "hidden" : "auto" }}>
+      <main style={{ flex: 1, minHeight: 0, overflow: noScroll ? "hidden" : "auto" }}>
         <Routes>
           <Route path="/" element={<MainMenu />} />
           <Route path="/exercises" element={<ExerciseLibrary />} />
