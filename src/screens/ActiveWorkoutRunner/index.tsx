@@ -19,26 +19,17 @@ export default function ActiveWorkoutRunner() {
   const showConfirm = useUiStore((s) => s.showConfirmModal);
   const isAndroid = useUiStore((s) => s.isAndroid);
   const {
-    sessionId,
-    sessionStatus,
-    sets,
-    exercises,
-    currentSetId,
-    currentExerciseId,
-    pausedAt,
-    load,
-    clear,
+    sessionId, sessionStatus, sets, exercises,
+    currentSetId, currentExerciseId, pausedAt, load, clear,
   } = useSessionStore();
 
   const elapsedMs = useElapsedMs();
   const { elapsedMs: exerciseElapsedMs, durationHintSec } = useExerciseElapsedMs();
-  const [pending, setPending] = useState<string | null>(null); // which action is pending
+  const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Keyboard shortcut handler ref — updated each render so the stable listener
-  // always calls the latest closure without stale captures.
   const keyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
-  keyHandlerRef.current = null; // reset; overwritten below when in-progress
+  keyHandlerRef.current = null;
 
   useEffect(() => {
     if (isAndroid) return;
@@ -50,11 +41,13 @@ export default function ActiveWorkoutRunner() {
   // ── No session ──────────────────────────────────────────────────────────────
   if (!sessionId) {
     return (
-      <div style={centeredStyle}>
-        <p style={{ color: "#6b7280" }}>No active session.</p>
-        <button onClick={() => navigate("/workouts")} style={secondaryBtnStyle}>
-          ← Workouts
-        </button>
+      <div style={runnerRootStyle}>
+        <div style={topBarStyle}>
+          <button onClick={() => navigate("/workouts")} style={backBtnStyle}>← Back</button>
+        </div>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <p style={{ color: "#8e8e93" }}>No active session.</p>
+        </div>
       </div>
     );
   }
@@ -65,16 +58,14 @@ export default function ActiveWorkoutRunner() {
   const isPaused = pausedAt !== null;
 
   const isAtFirstExercise =
-    currentExercise !== null &&
-    currentSet !== null &&
+    currentExercise !== null && currentSet !== null &&
     sets.indexOf(currentSet) === 0 &&
     exercises.filter((e) => e.workout_session_set_id === currentSet.id).indexOf(currentExercise) === 0;
 
   const isAtLastExercise = (() => {
     if (!currentExercise || !currentSet) return false;
     const setExs = exercises.filter((e) => e.workout_session_set_id === currentSet.id);
-    const isLastInSet = setExs[setExs.length - 1]?.id === currentExercise.id;
-    if (!isLastInSet) return false;
+    if (setExs[setExs.length - 1]?.id !== currentExercise.id) return false;
     return sets[sets.length - 1]?.id === currentSet.id;
   })();
 
@@ -82,14 +73,9 @@ export default function ActiveWorkoutRunner() {
     if (pending) return null;
     setError(null);
     setPending(key);
-    try {
-      return await fn();
-    } catch (e) {
-      setError(String(e));
-      return null;
-    } finally {
-      setPending(null);
-    }
+    try { return await fn(); }
+    catch (e) { setError(String(e)); return null; }
+    finally { setPending(null); }
   }
 
   // ── Draft view ──────────────────────────────────────────────────────────────
@@ -114,119 +100,95 @@ export default function ActiveWorkoutRunner() {
     }
 
     return (
-      <div style={pageStyle}>
-        <h2 style={headingStyle}>Ready to start?</h2>
-        <p style={{ color: "#6b7280", marginBottom: 16 }}>
-          {sets.length} set{sets.length !== 1 ? "s" : ""} · {exercises.length} exercise
-          {exercises.length !== 1 ? "s" : ""}
-        </p>
-
-        <div style={{ maxWidth: 360, margin: "0 auto 20px" }}>
-          {sets.map((s, i) => {
-            const setExs = exercises.filter((e) => e.workout_session_set_id === s.id);
-            return (
-              <div key={s.id} style={setCardStyle}>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px" }}>Set {i + 1}</p>
-                {setExs.map((e) => (
-                  <div key={e.id} style={{ fontSize: 14, color: "#111827", padding: "2px 0" }}>
-                    {e.display_name}
-                    {e.duration_hint_sec != null && (
-                      <span style={{ color: "#9ca3af", fontSize: 12 }}> · {e.duration_hint_sec}s</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            );
-          })}
+      <div style={runnerRootStyle}>
+        <div style={topBarStyle}>
+          <button onClick={() => navigate("/workouts")} style={backBtnStyle}>← Back</button>
         </div>
-
-        {error && <p style={errorStyle}>{error}</p>}
-        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-          <button onClick={handleDiscard} disabled={!!pending} style={secondaryBtnStyle}>
-            Discard
-          </button>
-          <button onClick={handleStart} disabled={!!pending} style={startBtnStyle}>
-            {pending === "start" ? "Starting…" : "▶ Start Workout"}
-          </button>
+        <div style={{ flex: 1, padding: "24px 32px", overflowY: "auto" }}>
+          <h2 style={{ color: "#f2f2f7", fontSize: 24, fontWeight: 700, margin: "0 0 8px" }}>
+            Ready to start?
+          </h2>
+          <p style={{ color: "#8e8e93", marginBottom: 24 }}>
+            {sets.length} set{sets.length !== 1 ? "s" : ""} · {exercises.length} exercise
+            {exercises.length !== 1 ? "s" : ""}
+          </p>
+          <div style={{ maxWidth: 420, marginBottom: 28 }}>
+            {sets.map((s, i) => {
+              const setExs = exercises.filter((e) => e.workout_session_set_id === s.id);
+              return (
+                <div key={s.id} style={draftSetCardStyle}>
+                  <p style={{ fontSize: 11, color: "#8e8e93", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                    Set {i + 1}
+                  </p>
+                  {setExs.map((e) => (
+                    <div key={e.id} style={{ fontSize: 14, color: "#d1d5db", padding: "3px 0", display: "flex", justifyContent: "space-between" }}>
+                      <span>{e.display_name}</span>
+                      {e.duration_hint_sec != null && (
+                        <span style={{ color: "#6b7280", fontVariantNumeric: "tabular-nums" }}>
+                          {formatTime(e.duration_hint_sec * 1000)}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+          {error && <p style={errorStyle}>{error}</p>}
+          <div style={{ display: "flex", gap: 12 }}>
+            <button onClick={handleDiscard} disabled={!!pending} style={draftSecBtnStyle}>Discard</button>
+            <button onClick={handleStart} disabled={!!pending} style={draftStartBtnStyle}>
+              {pending === "start" ? "Starting…" : "▶ Start Workout"}
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  // ── In-progress controls ─────────────────────────────────────────────────────
-
+  // ── In-progress controls ──────────────────────────────────────────────────
   async function handlePause() {
     if (!currentSetId) return;
-    const payload = await run("pause", () =>
-      sessionsApi.pause(sessionId!, currentSetId)
-    );
+    const payload = await run("pause", () => sessionsApi.pause(sessionId!, currentSetId));
     if (payload) load(payload);
   }
-
   async function handleResume() {
     if (!currentSetId) return;
-    const payload = await run("resume", () =>
-      sessionsApi.resume(sessionId!, currentSetId)
-    );
+    const payload = await run("resume", () => sessionsApi.resume(sessionId!, currentSetId));
     if (payload) load(payload);
   }
-
   async function handleNext() {
     if (!currentExerciseId) return;
     if (isAtLastExercise) {
-      showConfirm({
-        message: "That was the last exercise. Finish workout?",
-        confirmLabel: "Finish",
-        onConfirm: doFinish,
-        onCancel: () => {},
-      });
+      showConfirm({ message: "That was the last exercise. Finish workout?", confirmLabel: "Finish", onConfirm: doFinish, onCancel: () => {} });
       return;
     }
     const payload = await run("next", () => sessionsApi.advance(sessionId!));
     if (payload) load(payload);
   }
-
   async function handlePrev() {
     if (isAtFirstExercise) return;
     const payload = await run("prev", () => sessionsApi.retreat(sessionId!));
     if (payload) load(payload);
   }
-
   async function handleSkip() {
     if (!currentExerciseId) return;
     const payload = await run("skip", () => sessionsApi.skip(sessionId!, currentExerciseId));
     if (payload) {
       load(payload);
-      // If there's no current exercise after skip, last was skipped — offer finish
       if (!payload.current_exercise_id) {
-        showConfirm({
-          message: "All remaining exercises skipped. Finish workout?",
-          confirmLabel: "Finish",
-          onConfirm: doFinish,
-          onCancel: () => {},
-        });
+        showConfirm({ message: "All remaining exercises skipped. Finish workout?", confirmLabel: "Finish", onConfirm: doFinish, onCancel: () => {} });
       }
     }
   }
-
   function doFinish() {
     run("finish", () => sessionsApi.finish(sessionId!)).then((session) => {
-      if (session) {
-        clear();
-        navigate("/history");
-      }
+      if (session) { clear(); navigate("/history"); }
     });
   }
-
   function handleFinish() {
-    showConfirm({
-      message: "Finish this workout session?",
-      confirmLabel: "Finish",
-      onConfirm: doFinish,
-      onCancel: () => {},
-    });
+    showConfirm({ message: "Finish this workout session?", confirmLabel: "Finish", onConfirm: doFinish, onCancel: () => {} });
   }
-
   function handleAbandon() {
     showConfirm({
       message: "Abandon this session? It will not appear in your history.",
@@ -235,15 +197,9 @@ export default function ActiveWorkoutRunner() {
         if (pending) return;
         setError(null);
         setPending("abandon");
-        try {
-          await sessionsApi.abandon(sessionId!);
-          clear();
-          navigate("/workouts");
-        } catch (e) {
-          setError(String(e));
-        } finally {
-          setPending(null);
-        }
+        try { await sessionsApi.abandon(sessionId!); clear(); navigate("/workouts"); }
+        catch (e) { setError(String(e)); }
+        finally { setPending(null); }
       },
       onCancel: () => {},
     });
@@ -252,141 +208,156 @@ export default function ActiveWorkoutRunner() {
   // ── Keyboard shortcuts (desktop only) ───────────────────────────────────────
   keyHandlerRef.current = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
-    if (
-      target.tagName === "INPUT" ||
-      target.tagName === "TEXTAREA" ||
-      target.tagName === "SELECT" ||
-      target.isContentEditable
-    ) return;
+    if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" || target.isContentEditable) return;
     if (e.repeat) return;
     if (e.key === "ArrowRight") { e.preventDefault(); void handleNext(); }
     if (e.key === "ArrowLeft")  { e.preventDefault(); void handlePrev(); }
     if (e.key === " ")          { e.preventDefault(); void (isPaused ? handleResume() : handlePause()); }
   };
 
-  // ── In-progress layout ───────────────────────────────────────────────────────
+  // ── Flat exercise list for queue ──────────────────────────────────────────
+  const allExercises = sets.flatMap((s) =>
+    exercises.filter((e) => e.workout_session_set_id === s.id)
+  );
+  const currentGlobalIdx = allExercises.findIndex((e) => e.id === currentExerciseId);
 
+  // ── In-progress layout ────────────────────────────────────────────────────
   return (
-    <div style={pageStyle}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <span style={{ fontSize: 12, color: "#6b7280" }}>
-          Set {setIndex + 1} of {sets.length}
-        </span>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={handleFinish} disabled={!!pending} style={finishBtnStyle}>
-            Finish
-          </button>
-          <button onClick={handleAbandon} disabled={!!pending} style={abandonBtnStyle}>
-            Abandon
-          </button>
+    <div style={runnerRootStyle}>
+      {/* Top bar */}
+      <div style={topBarStyle}>
+        <button onClick={() => navigate("/workouts")} style={backBtnStyle}>← Back</button>
+      </div>
+
+      {/* Main content: left timers + right queue */}
+      <div style={mainAreaStyle}>
+        {/* Left: timer panels */}
+        <div style={leftColStyle}>
+          {/* Set timer */}
+          <div style={timerPanelStyle}>
+            <span style={panelLabelStyle}>SET TIME</span>
+            <span style={bigClockStyle}>{formatTime(elapsedMs)}</span>
+            {isPaused
+              ? <span style={pausedBadgeStyle}>● PAUSED</span>
+              : <span style={setIndexStyle}>Set {setIndex + 1} of {sets.length}</span>
+            }
+            {isPaused && <span style={setIndexStyle}>Set {setIndex + 1} of {sets.length}</span>}
+          </div>
+
+          {/* Exercise timer */}
+          <div style={timerPanelStyle}>
+            <span style={panelLabelStyle}>EXERCISE TIME</span>
+            {durationHintSec != null ? (
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={exClockCurrentStyle}>{formatTime(exerciseElapsedMs)}</span>
+                <span style={{ color: "#4b5563", fontSize: 28, fontWeight: 300, lineHeight: 1 }}>/</span>
+                <span style={exClockTargetStyle}>{formatTime(durationHintSec * 1000)}</span>
+              </div>
+            ) : (
+              <span style={exClockCurrentStyle}>{formatTime(exerciseElapsedMs)}</span>
+            )}
+            <span style={exNameStyle}>{currentExercise?.display_name ?? "—"}</span>
+          </div>
+
+          {error && <p style={errorStyle}>{error}</p>}
+        </div>
+
+        {/* Right: exercise queue */}
+        <div style={queueColStyle}>
+          <div style={chevronStyle}>∧</div>
+
+          {([-2, -1, 0, 1, 2] as const).map((offset) => {
+            const idx = currentGlobalIdx + offset;
+            const ex = idx >= 0 && idx < allExercises.length ? allExercises[idx] : null;
+            const isCurrent = offset === 0;
+            const dist = Math.abs(offset);
+            const opacity = dist === 2 ? 0.25 : dist === 1 ? 0.58 : 1;
+            const scale = dist === 2 ? 0.9 : dist === 1 ? 0.952 : 1;
+
+            return (
+              <div
+                key={offset}
+                style={{
+                  ...queueCardBaseStyle,
+                  opacity,
+                  transform: `scale(${scale})`,
+                  border: isCurrent
+                    ? "1.5px solid rgba(255,255,255,0.75)"
+                    : "1px solid rgba(255,255,255,0.07)",
+                  background: isCurrent
+                    ? "rgba(255,255,255,0.07)"
+                    : "rgba(255,255,255,0.02)",
+                }}
+              >
+                {isCurrent && (
+                  <span style={queueCurrentArrowStyle}>◄</span>
+                )}
+                {ex ? (
+                  <>
+                    <span style={{ ...queueNumStyle, fontWeight: isCurrent ? 600 : 400 }}>
+                      {idx + 1}
+                    </span>
+                    <span style={{ ...queueNameStyle, fontWeight: isCurrent ? 700 : 400, fontSize: isCurrent ? 15 : 14 }}>
+                      {ex.display_name}
+                    </span>
+                    {ex.duration_hint_sec != null && (
+                      <span style={queueDurStyle}>{formatTime(ex.duration_hint_sec * 1000)}</span>
+                    )}
+                  </>
+                ) : (
+                  <span style={{ color: "rgba(255,255,255,0.12)", fontSize: 13, flex: 1, textAlign: "center" }}>·</span>
+                )}
+              </div>
+            );
+          })}
+
+          <div style={chevronStyle}>∨</div>
         </div>
       </div>
 
-      {/* Main timer */}
-      <div style={timerBoxStyle}>
-        <span style={timerTextStyle}>{formatTime(elapsedMs)}</span>
-        {isPaused && <span style={{ fontSize: 13, color: "#f59e0b", marginTop: 2 }}>Paused</span>}
-      </div>
+      {/* Bottom controls */}
+      <div style={bottomBarStyle}>
+        <div style={primaryCtrlsStyle}>
+          <button
+            onClick={handlePrev}
+            disabled={!!pending || isAtFirstExercise}
+            style={navBtnStyle(isAtFirstExercise || !!pending)}
+          >
+            ← Prev
+          </button>
+          <button
+            onClick={isPaused ? handleResume : handlePause}
+            disabled={!!pending || !currentSetId}
+            style={pauseBtnStyle}
+          >
+            {pending === "pause" || pending === "resume"
+              ? "…"
+              : isPaused ? "▶ Resume" : "⏸ Pause"}
+          </button>
+          <button
+            onClick={handleNext}
+            disabled={!!pending || !currentExerciseId}
+            style={navBtnStyle(!currentExerciseId || !!pending)}
+          >
+            Next →
+          </button>
+        </div>
 
-      {/* Current exercise */}
-      <div style={{ marginBottom: 16, textAlign: "center" }}>
-        <h2 style={{ ...headingStyle, fontSize: 24, marginBottom: 4 }}>
-          {currentExercise?.display_name ?? "—"}
-        </h2>
-        {durationHintSec != null && (
-          <p style={exerciseTimerStyle}>
-            {Math.floor(exerciseElapsedMs / 1000)} / {durationHintSec}
-          </p>
-        )}
-        {currentExercise?.notes && (
-          <p style={{ fontSize: 13, color: "#374151", margin: 0 }}>{currentExercise.notes}</p>
-        )}
-      </div>
-
-      {/* Controls */}
-      <div style={controlsStyle}>
-        <button
-          onClick={handlePrev}
-          disabled={!!pending || isAtFirstExercise}
-          style={navBtnStyle}
-          title="Previous exercise"
-        >
-          ← Prev
-        </button>
-
-        <button
-          onClick={isPaused ? handleResume : handlePause}
-          disabled={!!pending || !currentSetId}
-          style={pauseBtnStyle}
-        >
-          {pending === "pause" || pending === "resume"
-            ? "…"
-            : isPaused
-            ? "▶ Resume"
-            : "⏸ Pause"}
-        </button>
-
-        <button
-          onClick={handleNext}
-          disabled={!!pending || !currentExerciseId}
-          style={navBtnStyle}
-          title={isAtLastExercise ? "Finish" : "Next exercise"}
-        >
-          {isAtLastExercise ? "Finish →" : "Next →"}
-        </button>
-      </div>
-
-      {/* Skip */}
-      <div style={{ textAlign: "center", marginTop: 8 }}>
-        <button
-          onClick={handleSkip}
-          disabled={!!pending || !currentExerciseId}
-          style={skipBtnStyle}
-        >
-          Skip
-        </button>
-      </div>
-
-      {error && <p style={{ ...errorStyle, textAlign: "center", marginTop: 8 }}>{error}</p>}
-
-      {/* Exercise queue */}
-      <div style={{ marginTop: 20 }}>
-        <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px" }}>Exercise queue</p>
-        {sets.map((s, si) => (
-          <div key={s.id} style={{ marginBottom: 10 }}>
-            {sets.length > 1 && (
-              <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 3px" }}>
-                — Set {si + 1} —
-              </p>
-            )}
-            {exercises
-              .filter((e) => e.workout_session_set_id === s.id)
-              .map((e) => {
-                const isCurrent = e.id === currentExerciseId;
-                const isDone = e.status === "completed";
-                const isSkipped = e.status === "skipped";
-                return (
-                  <div
-                    key={e.id}
-                    style={{
-                      ...queueRowStyle,
-                      background: isCurrent ? "#eff6ff" : isDone ? "#f0fdf4" : "#fafafa",
-                      borderColor: isCurrent ? "#3b82f6" : isDone ? "#86efac" : "#e5e7eb",
-                      opacity: isSkipped ? 0.45 : 1,
-                    }}
-                  >
-                    <span style={{ fontSize: 14, flex: 1, textDecoration: isSkipped ? "line-through" : "none" }}>
-                      {e.display_name}
-                    </span>
-                    <span style={{ fontSize: 12, color: "#9ca3af", marginLeft: 8 }}>
-                      {isDone ? "✓" : isCurrent ? "▶" : isSkipped ? "skip" : ""}
-                    </span>
-                  </div>
-                );
-              })}
-          </div>
-        ))}
+        <div style={secondaryCtrlsStyle}>
+          <button onClick={handleSkip} disabled={!!pending || !currentExerciseId} style={secBtnStyle(!!pending || !currentExerciseId)}>
+            <span style={secIconStyle}>⏭</span>
+            <span style={secLabelStyle}>Skip</span>
+          </button>
+          <button onClick={handleFinish} disabled={!!pending} style={secBtnStyle(!!pending)}>
+            <span style={secIconStyle}>⚑</span>
+            <span style={secLabelStyle}>Finish</span>
+          </button>
+          <button onClick={handleAbandon} disabled={!!pending} style={secBtnStyle(!!pending)}>
+            <span style={secIconStyle}>✕</span>
+            <span style={secLabelStyle}>Abandon</span>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -394,122 +365,300 @@ export default function ActiveWorkoutRunner() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const pageStyle: React.CSSProperties = {
-  padding: "12px 16px",
-  maxWidth: 560,
-  margin: "0 auto",
-};
-const centeredStyle: React.CSSProperties = { padding: 32, textAlign: "center" };
-const headingStyle: React.CSSProperties = { fontSize: 20, fontWeight: 700, margin: "0 0 8px" };
-const setCardStyle: React.CSSProperties = {
-  background: "#f8fafc",
-  border: "1px solid #e5e7eb",
-  borderRadius: 8,
-  padding: "10px 12px",
-  marginBottom: 8,
-};
-const timerBoxStyle: React.CSSProperties = {
-  textAlign: "center",
-  padding: "16px 0",
-  marginBottom: 8,
+const runnerRootStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  alignItems: "center",
+  height: "100%",
+  background: "#1c1c1e",
+  color: "#f2f2f7",
+  overflow: "hidden",
+  userSelect: "none",
 };
-const timerTextStyle: React.CSSProperties = {
-  fontSize: 52,
+
+const topBarStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  padding: "10px 16px",
+  flexShrink: 0,
+};
+
+const backBtnStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.09)",
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 8,
+  color: "#e5e7eb",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 500,
+  padding: "6px 14px",
+};
+
+const mainAreaStyle: React.CSSProperties = {
+  flex: 1,
+  display: "flex",
+  gap: 12,
+  padding: "4px 16px 8px",
+  overflow: "hidden",
+  minHeight: 0,
+};
+
+// ── Left column ───────────────────────────────────────────────────────────────
+
+const leftColStyle: React.CSSProperties = {
+  flex: "0 0 48%",
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+  overflow: "hidden",
+};
+
+const timerPanelStyle: React.CSSProperties = {
+  background: "#2c2c2e",
+  border: "1px solid rgba(255,255,255,0.06)",
+  borderRadius: 14,
+  padding: "16px 20px",
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+  flex: 1,
+};
+
+const panelLabelStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  color: "#6b7280",
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  marginBottom: 6,
+};
+
+const bigClockStyle: React.CSSProperties = {
+  fontSize: 64,
   fontWeight: 700,
   fontVariantNumeric: "tabular-nums",
-  letterSpacing: "0.02em",
-  color: "#111827",
+  letterSpacing: "0.01em",
+  color: "#f2f2f7",
+  lineHeight: 1,
 };
-const controlsStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 8,
-  justifyContent: "center",
-  alignItems: "center",
-  marginBottom: 4,
-};
-const navBtnStyle: React.CSSProperties = {
-  padding: "10px 18px",
-  borderRadius: 8,
-  border: "1px solid #d1d5db",
-  background: "#f9fafb",
-  cursor: "pointer",
-  fontSize: 14,
-  fontWeight: 600,
-};
-const pauseBtnStyle: React.CSSProperties = {
-  padding: "12px 24px",
-  borderRadius: 8,
-  border: "none",
-  background: "#1d4ed8",
-  color: "#fff",
-  cursor: "pointer",
+
+const pausedBadgeStyle: React.CSSProperties = {
+  fontSize: 11,
   fontWeight: 700,
-  fontSize: 16,
-  minWidth: 120,
+  color: "#f59e0b",
+  letterSpacing: "0.08em",
+  marginTop: 4,
 };
-const skipBtnStyle: React.CSSProperties = {
-  padding: "6px 18px",
-  borderRadius: 6,
-  border: "1px solid #e5e7eb",
-  background: "none",
-  cursor: "pointer",
+
+const setIndexStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: "#8e8e93",
+  marginTop: 4,
+};
+
+const exClockCurrentStyle: React.CSSProperties = {
+  fontSize: 42,
+  fontWeight: 700,
+  fontVariantNumeric: "tabular-nums",
+  color: "#f2f2f7",
+  letterSpacing: "0.01em",
+  lineHeight: 1,
+};
+
+const exClockTargetStyle: React.CSSProperties = {
+  fontSize: 32,
+  fontWeight: 300,
+  fontVariantNumeric: "tabular-nums",
+  color: "#6b7280",
+  letterSpacing: "0.01em",
+  lineHeight: 1,
+};
+
+const exNameStyle: React.CSSProperties = {
+  fontSize: 14,
+  color: "#9ca3af",
+  marginTop: 10,
+};
+
+// ── Queue column ──────────────────────────────────────────────────────────────
+
+const queueColStyle: React.CSSProperties = {
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  gap: 4,
+  paddingLeft: 18,
+  position: "relative",
+  overflow: "hidden",
+};
+
+const chevronStyle: React.CSSProperties = {
+  textAlign: "center",
+  color: "rgba(255,255,255,0.18)",
+  fontSize: 14,
+  padding: "2px 0",
+  flexShrink: 0,
+  letterSpacing: 2,
+};
+
+const queueCardBaseStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "11px 14px",
+  borderRadius: 10,
+  position: "relative",
+  flexShrink: 0,
+  transition: "opacity 0.12s ease, transform 0.12s ease",
+};
+
+const queueCurrentArrowStyle: React.CSSProperties = {
+  position: "absolute",
+  left: -16,
+  top: "50%",
+  transform: "translateY(-50%)",
+  color: "rgba(255,255,255,0.5)",
+  fontSize: 11,
+};
+
+const queueNumStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: "#8e8e93",
+  minWidth: 20,
+  textAlign: "right",
+  flexShrink: 0,
+};
+
+const queueNameStyle: React.CSSProperties = {
+  flex: 1,
+  fontSize: 14,
+  color: "#f2f2f7",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const queueDurStyle: React.CSSProperties = {
   fontSize: 13,
   color: "#6b7280",
+  fontVariantNumeric: "tabular-nums",
+  flexShrink: 0,
 };
-const startBtnStyle: React.CSSProperties = {
-  padding: "12px 28px",
-  borderRadius: 8,
-  border: "none",
-  background: "#16a34a",
-  color: "#fff",
+
+// ── Bottom bar ────────────────────────────────────────────────────────────────
+
+const bottomBarStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "stretch",
+  flexShrink: 0,
+  borderTop: "1px solid rgba(255,255,255,0.07)",
+};
+
+const primaryCtrlsStyle: React.CSSProperties = {
+  flex: 1,
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "12px 16px",
+};
+
+const secondaryCtrlsStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  borderLeft: "1px solid rgba(255,255,255,0.07)",
+  padding: "8px 10px",
+  gap: 2,
+};
+
+function navBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    flex: 1,
+    padding: "11px 6px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: disabled ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.07)",
+    color: disabled ? "#4b5563" : "#e5e7eb",
+    cursor: disabled ? "not-allowed" : "pointer",
+    fontSize: 14,
+    fontWeight: 600,
+  };
+}
+
+const pauseBtnStyle: React.CSSProperties = {
+  flex: 1.5,
+  padding: "11px 6px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "#3a3a3c",
+  color: "#f2f2f7",
   cursor: "pointer",
+  fontSize: 15,
   fontWeight: 700,
-  fontSize: 16,
 };
-const secondaryBtnStyle: React.CSSProperties = {
-  padding: "10px 16px",
+
+function secBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    background: "none",
+    border: "none",
+    cursor: disabled ? "not-allowed" : "pointer",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 3,
+    padding: "6px 12px",
+    borderRadius: 8,
+    color: disabled ? "#4b5563" : "#9ca3af",
+    minWidth: 52,
+  };
+}
+
+const secIconStyle: React.CSSProperties = {
+  fontSize: 18,
+  lineHeight: 1,
+};
+
+const secLabelStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 600,
+  letterSpacing: "0.05em",
+  textTransform: "uppercase",
+};
+
+// ── Draft styles ──────────────────────────────────────────────────────────────
+
+const draftSetCardStyle: React.CSSProperties = {
+  background: "#2c2c2e",
+  border: "1px solid rgba(255,255,255,0.06)",
+  borderRadius: 10,
+  padding: "12px 16px",
+  marginBottom: 10,
+};
+
+const draftSecBtnStyle: React.CSSProperties = {
+  padding: "10px 20px",
   borderRadius: 8,
-  border: "1px solid #d1d5db",
-  background: "#f9fafb",
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.06)",
+  color: "#f2f2f7",
   cursor: "pointer",
   fontSize: 14,
 };
-const finishBtnStyle: React.CSSProperties = {
-  padding: "6px 14px",
-  borderRadius: 6,
+
+const draftStartBtnStyle: React.CSSProperties = {
+  padding: "10px 24px",
+  borderRadius: 8,
   border: "none",
-  background: "#16a34a",
+  background: "#2d6a3f",
   color: "#fff",
   cursor: "pointer",
+  fontWeight: 700,
+  fontSize: 15,
+};
+
+// ── Shared ────────────────────────────────────────────────────────────────────
+
+const errorStyle: React.CSSProperties = {
+  color: "#ef4444",
   fontSize: 13,
-  fontWeight: 600,
-};
-const abandonBtnStyle: React.CSSProperties = {
-  padding: "6px 14px",
-  borderRadius: 6,
-  border: "1px solid #fca5a5",
-  background: "#fff",
-  color: "#dc2626",
-  cursor: "pointer",
-  fontSize: 13,
-};
-const queueRowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  padding: "6px 10px",
-  borderRadius: 6,
-  border: "1px solid #e5e7eb",
-  marginBottom: 4,
-};
-const errorStyle: React.CSSProperties = { color: "#dc2626", fontSize: 13 };
-const exerciseTimerStyle: React.CSSProperties = {
-  fontVariantNumeric: "tabular-nums",
-  fontSize: 22,
-  fontWeight: 600,
-  color: "#1d4ed8",
-  margin: "0 0 4px",
-  letterSpacing: "0.03em",
+  marginTop: 8,
 };

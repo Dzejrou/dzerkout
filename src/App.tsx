@@ -1,4 +1,4 @@
-import { HashRouter, NavLink, Route, Routes } from "react-router-dom";
+import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { usePlatform } from "./hooks/usePlatform";
 import { useSessionRecovery } from "./hooks/useSessionRecovery";
 import { useSessionStore } from "./store/sessionStore";
@@ -23,6 +23,8 @@ function AppShell() {
   const sessionId = useSessionStore((s) => s.sessionId);
   const confirmModal = useUiStore((s) => s.confirmModal);
   const closeConfirmModal = useUiStore((s) => s.closeConfirmModal);
+  const location = useLocation();
+  const isRunner = location.pathname === "/runner";
 
   const nav = sessionId
     ? [...BASE_NAV.slice(0, 3), { to: "/runner", label: "Runner" }, BASE_NAV[3]]
@@ -30,7 +32,7 @@ function AppShell() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <main style={{ flex: 1, overflow: "auto" }}>
+      <main style={{ flex: 1, minHeight: 0, overflow: isRunner ? "hidden" : "auto" }}>
         <Routes>
           <Route path="/" element={<ExerciseLibrary />} />
           <Route path="/exercises" element={<ExerciseLibrary />} />
@@ -43,13 +45,15 @@ function AppShell() {
         </Routes>
       </main>
 
-      <nav style={navStyle}>
-        {nav.map(({ to, label }) => (
-          <NavLink key={to} to={to} style={({ isActive }) => linkStyle(isActive)}>
-            {label}
-          </NavLink>
-        ))}
-      </nav>
+      {!isRunner && (
+        <nav style={navStyle}>
+          {nav.map(({ to, label }) => (
+            <NavLink key={to} to={to} style={({ isActive }) => linkStyle(isActive)}>
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+      )}
 
       {confirmModal && (
         <ConfirmModal
