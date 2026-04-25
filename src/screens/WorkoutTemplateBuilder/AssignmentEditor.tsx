@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { exercisesApi } from "../../api/exercises";
 import type { SetTemplateCard } from "../../types/setTemplate";
 import type { WorkoutTemplateCardAssignment } from "../../types/workoutTemplate";
+import { tokens } from "../../theme/tokens";
 
 interface FormValues {
   exercise_id: string;
@@ -60,7 +61,7 @@ export default function AssignmentEditor({ card, assignment, onSave, onDelete, o
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>
+      <p style={{ margin: 0, fontSize: 13, color: tokens.textMuted }}>
         {isPlaceholder
           ? `Assign an exercise to this placeholder (${card.placeholder_label ?? card.placeholder_tag})`
           : "Override exercise or settings for this workout"}
@@ -113,20 +114,23 @@ export default function AssignmentEditor({ card, assignment, onSave, onDelete, o
   );
 }
 
-const labelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4 };
+const labelStyle: React.CSSProperties = {
+  display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: tokens.textSecondary,
+};
 const inputStyle: React.CSSProperties = {
   width: "100%", boxSizing: "border-box", padding: "7px 10px",
-  border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14,
+  border: `1px solid ${tokens.borderMedium}`, borderRadius: 6, fontSize: 14,
+  background: tokens.bg, color: tokens.textPrimary, outline: "none",
 };
 const cancelBtnStyle: React.CSSProperties = {
-  padding: "7px 14px", borderRadius: 6, border: "1px solid #d1d5db",
-  background: "#f9fafb", cursor: "pointer", fontSize: 14,
+  padding: "7px 14px", borderRadius: 6, border: `1px solid ${tokens.borderMedium}`,
+  background: "transparent", cursor: "pointer", fontSize: 14, color: tokens.textSecondary,
 };
 const saveBtnStyle: React.CSSProperties = {
   padding: "7px 14px", borderRadius: 6, border: "none",
-  background: "#2563eb", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
+  background: tokens.green, color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
 };
 const deleteBtnStyle: React.CSSProperties = {
-  padding: "7px 14px", borderRadius: 6, border: "1px solid #fca5a5",
-  background: "#fff5f5", color: "#dc2626", cursor: "pointer", fontSize: 14,
+  padding: "7px 14px", borderRadius: 6, border: `1px solid ${tokens.redBorder}`,
+  background: tokens.redBg, color: tokens.red, cursor: "pointer", fontSize: 14,
 };

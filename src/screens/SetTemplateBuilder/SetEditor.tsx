@@ -7,6 +7,7 @@ import type { Exercise } from "../../types/exercise";
 import { SortableList } from "../../components/SortableList";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import CardEditor from "./CardEditor";
+import { tokens } from "../../theme/tokens";
 
 interface Props {
   setId: string;
@@ -112,7 +113,7 @@ export default function SetEditor({ setId, onBack }: Props) {
     return (
       <div style={pageStyle}>
         <button onClick={onBack} style={backBtnStyle}>← Back</button>
-        <p style={{ color: "#6b7280" }}>Loading…</p>
+        <p style={{ color: tokens.textMuted }}>Loading…</p>
       </div>
     );
   }
@@ -149,7 +150,7 @@ export default function SetEditor({ setId, onBack }: Props) {
       </div>
 
       {detail.notes && (
-        <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 12 }}>{detail.notes}</p>
+        <p style={{ color: tokens.textMuted, fontSize: 13, marginBottom: 12 }}>{detail.notes}</p>
       )}
 
       <SortableList
@@ -163,8 +164,8 @@ export default function SetEditor({ setId, onBack }: Props) {
               <span
                 style={{
                   fontSize: 11, fontWeight: 600, padding: "2px 6px", borderRadius: 4,
-                  background: card.card_type === "concrete" ? "#dbeafe" : "#fef3c7",
-                  color: card.card_type === "concrete" ? "#1d4ed8" : "#92400e",
+                  background: card.card_type === "concrete" ? tokens.blueBadgeBg : tokens.amberBadgeBg,
+                  color: card.card_type === "concrete" ? tokens.blue : tokens.amber,
                   marginRight: 8,
                 }}
               >
@@ -172,19 +173,19 @@ export default function SetEditor({ setId, onBack }: Props) {
               </span>
               <span style={{ fontWeight: 500 }}>{cardLabel(card)}</span>
               {card.duration_hint_sec != null && (
-                <span style={{ marginLeft: 8, fontSize: 12, color: "#6b7280" }}>
+                <span style={{ marginLeft: 8, fontSize: 12, color: tokens.textMuted }}>
                   {card.duration_hint_sec}s
                 </span>
               )}
               {card.notes && (
-                <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{card.notes}</div>
+                <div style={{ fontSize: 12, color: tokens.textFaint, marginTop: 2 }}>{card.notes}</div>
               )}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={() => setModal({ type: "edit", card })} style={iconBtnStyle}>Edit</button>
               <button
                 onClick={() => setModal({ type: "delete", card })}
-                style={{ ...iconBtnStyle, color: "#dc2626" }}
+                style={{ ...iconBtnStyle, color: tokens.red }}
               >
                 ✕
               </button>
@@ -200,7 +201,7 @@ export default function SetEditor({ setId, onBack }: Props) {
       />
 
       {detail.cards.length === 0 && (
-        <p style={{ color: "#9ca3af", textAlign: "center", padding: "24px 0" }}>
+        <p style={{ color: tokens.textFaint, textAlign: "center", padding: "24px 0" }}>
           No cards yet — add one above
         </p>
       )}
@@ -293,46 +294,52 @@ export default function SetEditor({ setId, onBack }: Props) {
   );
 }
 
-const pageStyle: React.CSSProperties = { padding: 16, maxWidth: 600, margin: "0 auto" };
+const pageStyle: React.CSSProperties = {
+  padding: 16, maxWidth: 600, margin: "0 auto",
+  background: tokens.bg, color: tokens.textPrimary, minHeight: "100%", boxSizing: "border-box",
+};
 const backBtnStyle: React.CSSProperties = {
   background: "none", border: "none", cursor: "pointer",
-  color: "#2563eb", fontWeight: 500, fontSize: 14, padding: "0 0 12px", display: "block",
+  color: tokens.textMuted, fontWeight: 500, fontSize: 14, padding: "0 0 12px", display: "block",
 };
 const addBtnStyle: React.CSSProperties = {
   padding: "6px 14px", borderRadius: 6, border: "none",
-  background: "#2563eb", color: "#fff", cursor: "pointer", fontWeight: 600,
+  background: tokens.green, color: "#fff", cursor: "pointer", fontWeight: 600,
 };
 const cardRowStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", padding: "10px 12px",
-  background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, marginBottom: 4,
+  background: tokens.card, border: `1px solid ${tokens.borderMedium}`, borderRadius: 8, marginBottom: 4,
   cursor: "grab",
 };
 const iconBtnStyle: React.CSSProperties = {
-  padding: "4px 10px", borderRadius: 5, border: "1px solid #e5e7eb",
-  background: "#f9fafb", cursor: "pointer", fontSize: 12,
+  padding: "4px 10px", borderRadius: 5, border: `1px solid ${tokens.borderMedium}`,
+  background: tokens.cardSubtle, cursor: "pointer", fontSize: 12, color: tokens.textSecondary,
 };
 const overlayStyle: React.CSSProperties = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+  position: "fixed", inset: 0, background: tokens.overlay,
   display: "flex", alignItems: "flex-end", zIndex: 100,
 };
 const sheetStyle: React.CSSProperties = {
-  width: "100%", background: "#fff", borderRadius: "16px 16px 0 0",
-  padding: "24px 20px", boxShadow: "0 -4px 24px rgba(0,0,0,0.12)", maxHeight: "90vh", overflow: "auto",
+  width: "100%", background: tokens.card, borderRadius: "16px 16px 0 0",
+  padding: "24px 20px", boxShadow: "0 -4px 24px rgba(0,0,0,0.5)", maxHeight: "90vh", overflow: "auto",
 };
 const editMetaBtnStyle: React.CSSProperties = {
-  padding: "2px 8px", borderRadius: 5, border: "1px solid #d1d5db",
-  background: "#f9fafb", cursor: "pointer", fontSize: 12, color: "#374151", flexShrink: 0,
+  padding: "2px 8px", borderRadius: 5, border: `1px solid ${tokens.borderMedium}`,
+  background: tokens.cardSubtle, cursor: "pointer", fontSize: 12, color: tokens.textSecondary, flexShrink: 0,
 };
-const metaLabelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4 };
+const metaLabelStyle: React.CSSProperties = {
+  display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: tokens.textSecondary,
+};
 const metaInputStyle: React.CSSProperties = {
   width: "100%", boxSizing: "border-box", padding: "8px 10px",
-  border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14,
+  border: `1px solid ${tokens.borderMedium}`, borderRadius: 6, fontSize: 14,
+  background: tokens.bg, color: tokens.textPrimary, outline: "none",
 };
 const metaCancelBtnStyle: React.CSSProperties = {
-  padding: "7px 14px", borderRadius: 6, border: "1px solid #d1d5db",
-  background: "#f9fafb", cursor: "pointer", fontSize: 14,
+  padding: "7px 14px", borderRadius: 6, border: `1px solid ${tokens.borderMedium}`,
+  background: "transparent", cursor: "pointer", fontSize: 14, color: tokens.textSecondary,
 };
 const metaSaveBtnStyle: React.CSSProperties = {
   padding: "7px 14px", borderRadius: 6, border: "none",
-  background: "#2563eb", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
+  background: tokens.green, color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
 };

@@ -1,3 +1,5 @@
+import { tokens } from "../theme/tokens";
+
 interface Props {
   title: string;
   message: string;
@@ -22,9 +24,9 @@ export function ConfirmModal({
   return (
     <div style={overlay}>
       <div style={box}>
-        <h3 style={{ margin: "0 0 8px", fontSize: 16 }}>{title}</h3>
-        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#374151" }}>{message}</p>
-        {error && <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</p>}
+        <h3 style={{ margin: "0 0 8px", fontSize: 16, color: tokens.textPrimary }}>{title}</h3>
+        <p style={{ margin: "0 0 16px", fontSize: 14, color: tokens.textSecondary }}>{message}</p>
+        {error && <p style={{ color: tokens.red, fontSize: 13, marginBottom: 12 }}>{error}</p>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button onClick={onCancel} style={cancelBtnStyle} disabled={loading}>
             Cancel
@@ -43,22 +45,28 @@ export function ConfirmModal({
 }
 
 const overlay: React.CSSProperties = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+  position: "fixed", inset: 0, background: tokens.overlay,
   display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
 };
 const box: React.CSSProperties = {
-  background: "#fff", borderRadius: 12, padding: "24px 20px",
-  minWidth: 280, maxWidth: 400, boxShadow: "0 8px 32px rgba(0,0,0,0.16)",
+  background: tokens.card, borderRadius: 12, padding: "24px 20px",
+  minWidth: 280, maxWidth: 400,
+  border: `1px solid ${tokens.borderMedium}`,
+  boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
 };
 const cancelBtnStyle: React.CSSProperties = {
-  padding: "8px 16px", borderRadius: 6, border: "1px solid #d1d5db",
-  background: "#f9fafb", cursor: "pointer", fontSize: 14,
+  padding: "8px 16px", borderRadius: 6,
+  border: `1px solid ${tokens.borderMedium}`,
+  background: tokens.cardSubtle, color: tokens.textFaint,
+  cursor: "pointer", fontSize: 14,
 };
 const confirmBtnStyle: React.CSSProperties = {
   padding: "8px 16px", borderRadius: 6, border: "none",
-  background: "#2563eb", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
+  background: tokens.green, color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
 };
 const deleteBtnStyle: React.CSSProperties = {
   ...confirmBtnStyle,
-  background: "#dc2626",
+  background: tokens.redBg,
+  border: `1px solid ${tokens.redBorder}`,
+  color: tokens.red,
 };

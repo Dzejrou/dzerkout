@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { tokens } from "../../theme/tokens";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { workoutTemplatesApi } from "../../api/workoutTemplates";
 import { setTemplatesApi } from "../../api/setTemplates";
@@ -60,7 +61,7 @@ function SetRefExpandedContent({
 
   if (isLoading || !setDetail) {
     return (
-      <p style={{ fontSize: 12, color: "#6b7280", padding: "8px 14px 10px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+      <p style={{ fontSize: 12, color: tokens.textMuted, padding: "8px 14px 10px", borderTop: `1px solid ${tokens.surfaceSelected}` }}>
         Loading…
       </p>
     );
@@ -68,14 +69,14 @@ function SetRefExpandedContent({
 
   if (setDetail.cards.length === 0) {
     return (
-      <p style={{ fontSize: 12, color: "#4b5563", padding: "8px 14px 10px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+      <p style={{ fontSize: 12, color: tokens.textDisabled, padding: "8px 14px 10px", borderTop: `1px solid ${tokens.surfaceSelected}` }}>
         Empty set
       </p>
     );
   }
 
   return (
-    <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+    <div style={{ borderTop: `1px solid ${tokens.surfaceSelected}` }}>
       {setDetail.cards.map((card, i) => {
         const assignment = refAssignments.find((a) => a.set_template_card_id === card.id);
         const label =
@@ -136,7 +137,7 @@ function PreviewPane({
   if (isLoading || !workout) {
     return (
       <div style={previewPaneStyle}>
-        <p style={{ color: "#8e8e93", padding: 8 }}>Loading…</p>
+        <p style={{ color: tokens.textSecondary, padding: 8 }}>Loading…</p>
       </div>
     );
   }
@@ -178,7 +179,7 @@ function PreviewPane({
       <h3 style={sectionTitleStyle}>Workout Structure</h3>
       <div style={setRefsListStyle}>
         {workout.set_refs.length === 0 ? (
-          <p style={{ color: "#6b7280", fontSize: 13, padding: "12px 0", textAlign: "center" }}>
+          <p style={{ color: tokens.textMuted, fontSize: 13, padding: "12px 0", textAlign: "center" }}>
             No sets added yet
           </p>
         ) : (
@@ -207,7 +208,7 @@ function PreviewPane({
         )}
       </div>
 
-      {startError && <p style={{ color: "#ef4444", fontSize: 12, marginTop: 8 }}>{startError}</p>}
+      {startError && <p style={{ color: tokens.red, fontSize: 12, marginTop: 8 }}>{startError}</p>}
 
       {/* Actions */}
       <div style={previewActionsStyle}>
@@ -245,10 +246,10 @@ function WorkoutListCard({
       onClick={onSelect}
       style={{
         ...listCardStyle,
-        background: isSelected ? "rgba(255,255,255,0.07)" : "#2c2c2e",
+        background: isSelected ? tokens.surfaceActive : tokens.card,
         border: isSelected
           ? "1px solid rgba(255,255,255,0.22)"
-          : "1px solid rgba(255,255,255,0.06)",
+          : `1px solid ${tokens.borderSubtle}`,
         boxShadow: isSelected ? "inset 3px 0 0 rgba(255,255,255,0.3)" : "none",
       }}
     >
@@ -374,7 +375,7 @@ export default function WorkoutTemplateBuilder() {
 
           {/* List */}
           <div style={cardListStyle}>
-            {isLoading && <p style={{ color: "#8e8e93", fontSize: 13, padding: "8px 0" }}>Loading…</p>}
+            {isLoading && <p style={{ color: tokens.textSecondary, fontSize: 13, padding: "8px 0" }}>Loading…</p>}
             {!isLoading && filtered.length === 0 && (
               <p style={emptyStyle}>{search ? "No matches." : "No workouts yet."}</p>
             )}
@@ -488,8 +489,8 @@ export default function WorkoutTemplateBuilder() {
 
 const rootStyle: React.CSSProperties = {
   height: "100%",
-  background: "#1c1c1e",
-  color: "#f2f2f7",
+  background: tokens.bg,
+  color: tokens.textPrimary,
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
@@ -504,10 +505,10 @@ const topBarStyle: React.CSSProperties = {
 };
 
 const backBtnStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.08)",
-  border: "1px solid rgba(255,255,255,0.12)",
+  background: tokens.border,
+  border: `1px solid ${tokens.borderMedium}`,
   borderRadius: 8,
-  color: "#9ca3af",
+  color: tokens.textFaint,
   cursor: "pointer",
   fontSize: 12,
   fontWeight: 600,
@@ -527,23 +528,23 @@ const pageTitleStyle: React.CSSProperties = {
   fontSize: 40,
   fontWeight: 800,
   margin: "0 0 4px",
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
   letterSpacing: "-0.02em",
   lineHeight: 1,
 };
 
 const pageSubtitleStyle: React.CSSProperties = {
   fontSize: 13,
-  color: "#8e8e93",
+  color: tokens.textSecondary,
   margin: 0,
 };
 
 const newBtnStyle: React.CSSProperties = {
   padding: "9px 18px",
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.15)",
-  background: "#3a3a3c",
-  color: "#f2f2f7",
+  border: `1px solid ${tokens.borderStrong}`,
+  background: tokens.cardSubtle,
+  color: tokens.textPrimary,
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 600,
@@ -568,7 +569,7 @@ const leftPanelStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   overflowY: "auto",
-  borderRight: "1px solid rgba(255,255,255,0.06)",
+  borderRight: `1px solid ${tokens.borderSubtle}`,
   padding: "0 16px 24px",
 };
 
@@ -583,7 +584,7 @@ const searchIconStyle: React.CSSProperties = {
   left: 12,
   top: "50%",
   transform: "translateY(-4px)",
-  color: "#6b7280",
+  color: tokens.textMuted,
   fontSize: 16,
   pointerEvents: "none",
   lineHeight: 1,
@@ -593,10 +594,10 @@ const searchInputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "9px 12px 9px 34px",
-  background: "#2c2c2e",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: tokens.card,
+  border: `1px solid ${tokens.border}`,
   borderRadius: 8,
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
   fontSize: 14,
   outline: "none",
 };
@@ -609,7 +610,7 @@ const cardListStyle: React.CSSProperties = {
 };
 
 const emptyStyle: React.CSSProperties = {
-  color: "#6b7280",
+  color: tokens.textMuted,
   fontSize: 13,
   padding: "24px 0",
   textAlign: "center",
@@ -618,7 +619,7 @@ const emptyStyle: React.CSSProperties = {
 const countLabelStyle: React.CSSProperties = {
   textAlign: "center",
   fontSize: 11,
-  color: "#4b5563",
+  color: tokens.textDisabled,
   marginTop: 14,
 };
 
@@ -637,18 +638,18 @@ const listCardStyle: React.CSSProperties = {
 const listCardNameStyle: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 700,
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
   lineHeight: 1.2,
 };
 
 const listCardMetaStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "#8e8e93",
+  color: tokens.textSecondary,
 };
 
 const listCardNotesStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "#6b7280",
+  color: tokens.textMuted,
   overflow: "hidden",
   display: "-webkit-box",
   WebkitLineClamp: 1,
@@ -671,7 +672,7 @@ const emptyPaneStyle: React.CSSProperties = {
 };
 
 const emptyPaneLabelStyle: React.CSSProperties = {
-  color: "#4b5563",
+  color: tokens.textDisabled,
   fontSize: 14,
 };
 
@@ -692,18 +693,18 @@ const previewNameStyle: React.CSSProperties = {
   fontSize: 26,
   fontWeight: 700,
   margin: "0 0 6px",
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
 };
 
 const previewDatesStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "#6b7280",
+  color: tokens.textMuted,
   margin: 0,
 };
 
 const previewNotesStyle: React.CSSProperties = {
   fontSize: 14,
-  color: "#9ca3af",
+  color: tokens.textFaint,
   margin: "12px 0 0",
   lineHeight: 1.5,
 };
@@ -716,8 +717,8 @@ const statRowStyle: React.CSSProperties = {
 };
 
 const statTileStyle: React.CSSProperties = {
-  background: "#2c2c2e",
-  border: "1px solid rgba(255,255,255,0.07)",
+  background: tokens.card,
+  border: `1px solid ${tokens.divider}`,
   borderRadius: 10,
   padding: "12px 16px",
   display: "flex",
@@ -729,28 +730,28 @@ const statTileStyle: React.CSSProperties = {
 const statValueStyle: React.CSSProperties = {
   fontSize: 22,
   fontWeight: 700,
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
   lineHeight: 1,
 };
 
 const statLabelStyle: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 600,
-  color: "#6b7280",
+  color: tokens.textMuted,
   letterSpacing: "0.08em",
   textTransform: "uppercase",
 };
 
 const dividerStyle: React.CSSProperties = {
   height: 1,
-  background: "rgba(255,255,255,0.07)",
+  background: tokens.divider,
   margin: "24px 0 20px",
 };
 
 const sectionTitleStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
-  color: "#8e8e93",
+  color: tokens.textSecondary,
   letterSpacing: "0.06em",
   textTransform: "uppercase",
   margin: "0 0 12px",
@@ -764,8 +765,8 @@ const setRefsListStyle: React.CSSProperties = {
 };
 
 const setRefContainerStyle: React.CSSProperties = {
-  background: "#2c2c2e",
-  border: "1px solid rgba(255,255,255,0.06)",
+  background: tokens.card,
+  border: `1px solid ${tokens.borderSubtle}`,
   borderRadius: 8,
   overflow: "hidden",
 };
@@ -780,7 +781,7 @@ const setRefRowStyle: React.CSSProperties = {
 
 const setRefNumStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "#6b7280",
+  color: tokens.textMuted,
   minWidth: 36,
   flexShrink: 0,
 };
@@ -788,7 +789,7 @@ const setRefNumStyle: React.CSSProperties = {
 const setRefNameStyle: React.CSSProperties = {
   flex: 1,
   fontSize: 14,
-  color: "#e5e7eb",
+  color: tokens.textLight,
 };
 
 const forkedBadgeStyle: React.CSSProperties = {
@@ -796,16 +797,16 @@ const forkedBadgeStyle: React.CSSProperties = {
   fontWeight: 700,
   padding: "2px 7px",
   borderRadius: 4,
-  background: "rgba(16,185,129,0.12)",
-  color: "#6ee7b7",
-  border: "1px solid rgba(16,185,129,0.25)",
+  background: tokens.greenBadgeBg,
+  color: tokens.greenText,
+  border: `1px solid ${tokens.greenBadgeBorder}`,
   letterSpacing: "0.04em",
   flexShrink: 0,
 };
 
 const setRefChevronStyle: React.CSSProperties = {
   fontSize: 16,
-  color: "#4b5563",
+  color: tokens.textDisabled,
   flexShrink: 0,
 };
 
@@ -820,8 +821,8 @@ const startActionBtnStyle: React.CSSProperties = {
   padding: "11px 0",
   borderRadius: 10,
   border: "none",
-  background: "#2d6a3f",
-  color: "#d1fae5",
+  background: tokens.green,
+  color: tokens.greenText,
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 700,
@@ -831,9 +832,9 @@ const editActionBtnStyle: React.CSSProperties = {
   flex: 1,
   padding: "11px 0",
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "#3a3a3c",
-  color: "#f2f2f7",
+  border: `1px solid ${tokens.borderMedium}`,
+  background: tokens.cardSubtle,
+  color: tokens.textPrimary,
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 600,
@@ -842,9 +843,9 @@ const editActionBtnStyle: React.CSSProperties = {
 const deleteActionBtnStyle: React.CSSProperties = {
   padding: "11px 16px",
   borderRadius: 10,
-  border: "1px solid rgba(248,113,113,0.3)",
-  background: "rgba(239,68,68,0.08)",
-  color: "#f87171",
+  border: `1px solid ${tokens.redBorder}`,
+  background: tokens.redBg,
+  color: tokens.red,
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 600,
@@ -855,7 +856,7 @@ const deleteActionBtnStyle: React.CSSProperties = {
 const overlayStyle: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.6)",
+  background: tokens.overlay,
   display: "flex",
   alignItems: "flex-end",
   zIndex: 100,
@@ -865,7 +866,7 @@ const sheetStyle: React.CSSProperties = {
   width: "100%",
   maxWidth: 520,
   margin: "0 auto",
-  background: "#2c2c2e",
+  background: tokens.card,
   borderRadius: "16px 16px 0 0",
   padding: "24px 22px 32px",
   boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
@@ -878,14 +879,14 @@ const sheetTitleStyle: React.CSSProperties = {
   margin: "0 0 18px",
   fontSize: 17,
   fontWeight: 700,
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
 };
 
 const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: 12,
   fontWeight: 600,
-  color: "#8e8e93",
+  color: tokens.textSecondary,
   letterSpacing: "0.05em",
   textTransform: "uppercase",
   marginBottom: 6,
@@ -895,10 +896,10 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "9px 11px",
-  background: "#1c1c1e",
-  border: "1px solid rgba(255,255,255,0.1)",
+  background: tokens.bg,
+  border: `1px solid ${tokens.borderMedium}`,
   borderRadius: 8,
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
   fontSize: 14,
   outline: "none",
 };
@@ -906,9 +907,9 @@ const inputStyle: React.CSSProperties = {
 const cancelBtnStyle: React.CSSProperties = {
   padding: "8px 16px",
   borderRadius: 8,
-  border: "1px solid rgba(255,255,255,0.12)",
+  border: `1px solid ${tokens.borderMedium}`,
   background: "transparent",
-  color: "#9ca3af",
+  color: tokens.textFaint,
   cursor: "pointer",
   fontSize: 14,
 };
@@ -917,15 +918,15 @@ const saveBtnStyle: React.CSSProperties = {
   padding: "8px 20px",
   borderRadius: 8,
   border: "none",
-  background: "#f2f2f7",
-  color: "#1c1c1e",
+  background: tokens.textPrimary,
+  color: tokens.bg,
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 700,
 };
 
 const fieldErrorStyle: React.CSSProperties = {
-  color: "#ef4444",
+  color: tokens.red,
   fontSize: 12,
   marginTop: 4,
 };
@@ -937,12 +938,12 @@ const expandedCardRowStyle: React.CSSProperties = {
   alignItems: "center",
   gap: 8,
   padding: "8px 14px",
-  borderTop: "1px solid rgba(255,255,255,0.04)",
+  borderTop: `1px solid ${tokens.surfaceSelected}`,
 };
 
 const expandedCardNumStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "#6b7280",
+  color: tokens.textMuted,
   minWidth: 18,
   textAlign: "right",
   flexShrink: 0,
@@ -957,16 +958,16 @@ function expandedCardBadgeStyle(type: "concrete" | "placeholder"): React.CSSProp
     borderRadius: 4,
     flexShrink: 0,
     letterSpacing: "0.04em",
-    background: isConcrete ? "rgba(59,130,246,0.12)" : "rgba(245,158,11,0.12)",
-    color: isConcrete ? "#60a5fa" : "#f59e0b",
-    border: isConcrete ? "1px solid rgba(59,130,246,0.2)" : "1px solid rgba(245,158,11,0.2)",
+    background: isConcrete ? tokens.blueBadgeBg : tokens.amberBadgeBg,
+    color: isConcrete ? tokens.blue : tokens.amber,
+    border: `1px solid ${isConcrete ? tokens.blueBadgeBorder : tokens.amberBadgeBorder}`,
   };
 }
 
 const expandedCardLabelStyle: React.CSSProperties = {
   flex: 1,
   fontSize: 13,
-  color: "#e5e7eb",
+  color: tokens.textLight,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
@@ -974,7 +975,7 @@ const expandedCardLabelStyle: React.CSSProperties = {
 
 const expandedCardDurStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "#6b7280",
+  color: tokens.textMuted,
   flexShrink: 0,
   fontVariantNumeric: "tabular-nums",
 };

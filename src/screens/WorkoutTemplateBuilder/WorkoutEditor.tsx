@@ -13,6 +13,7 @@ import { SortableList } from "../../components/SortableList";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import AssignmentEditor from "./AssignmentEditor";
 import SetEditor from "../SetTemplateBuilder/SetEditor";
+import { tokens } from "../../theme/tokens";
 
 interface Props {
   workoutId: string;
@@ -171,7 +172,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
     return (
       <div style={pageStyle}>
         <button onClick={onBack} style={backBtnStyle}>← Workouts</button>
-        <p style={{ color: "#8e8e93" }}>Loading…</p>
+        <p style={{ color: tokens.textMuted }}>Loading…</p>
       </div>
     );
   }
@@ -202,7 +203,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
       <button onClick={onBack} style={backBtnStyle}>← Workouts</button>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#f2f2f7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: tokens.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {workout.name}
           </h2>
           <button
@@ -231,12 +232,12 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
           </button>
         </div>
       </div>
-      <p style={{ margin: "0 0 4px", fontSize: 12, color: "#8e8e93" }}>
+      <p style={{ margin: "0 0 4px", fontSize: 12, color: tokens.textMuted }}>
         Default duration: {workout.default_exercise_duration_sec}s
         {workout.rest_between_sets_sec != null ? ` · Rest: ${workout.rest_between_sets_sec}s` : ""}
       </p>
       {startError && (
-        <p style={{ color: "#ef4444", fontSize: 12, margin: "4px 0 8px" }}>{startError}</p>
+        <p style={{ color: tokens.red, fontSize: 12, margin: "4px 0 8px" }}>{startError}</p>
       )}
 
       <div style={{ marginTop: 14 }}>
@@ -259,7 +260,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                     {isExpanded ? "▾" : "▸"}
                   </button>
                   <span
-                    style={{ flex: 1, fontWeight: 500, color: "#e5e7eb", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                    style={{ flex: 1, fontWeight: 500, color: tokens.textLight, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
                     onClick={() => setExpandedRefId(isExpanded ? null : ref.id)}
                   >
                     {ref.set_name}
@@ -279,7 +280,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                         </button>
                         <button
                           onClick={() => { setExportName(""); setModal({ type: "export", setId: ref.set_template_id }); }}
-                          style={{ ...iconBtnStyle, color: "#a78bfa" }}
+                          style={{ ...iconBtnStyle, color: tokens.purple }}
                           title="Export as a reusable set in the library"
                         >
                           Export
@@ -297,7 +298,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                     )}
                     <button
                       onClick={() => setModal({ type: "remove-set", ref })}
-                      style={{ ...iconBtnStyle, color: "#f87171" }}
+                      style={{ ...iconBtnStyle, color: tokens.red }}
                     >
                       ✕
                     </button>
@@ -307,7 +308,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                 {isExpanded && (
                   <div style={{ marginTop: 8, paddingLeft: 24 }}>
                     {cards.length === 0 && (
-                      <p style={{ fontSize: 12, color: "#6b7280" }}>No cards</p>
+                      <p style={{ fontSize: 12, color: tokens.textDisabled }}>No cards</p>
                     )}
                     {cards.map((card) => {
                       const assignment = getAssignment(ref.id, card.id);
@@ -320,18 +321,18 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                           <span
                             style={{
                               fontSize: 11, padding: "1px 5px", borderRadius: 3,
-                              background: card.card_type === "concrete" ? "rgba(59,130,246,0.2)" : "rgba(245,158,11,0.2)",
-                              color: card.card_type === "concrete" ? "#93c5fd" : "#fcd34d",
+                              background: card.card_type === "concrete" ? tokens.blueBadgeBg : tokens.amberBadgeBg,
+                              color: card.card_type === "concrete" ? tokens.blue : tokens.amber,
                               marginRight: 6, flexShrink: 0,
                             }}
                           >
                             {card.card_type}
                           </span>
-                          <span style={{ fontSize: 13, flex: 1, color: "#d1d5db" }}>
+                          <span style={{ fontSize: 13, flex: 1, color: tokens.textSecondary }}>
                             {cardLabel(card, assignment)}
                           </span>
                           {assignment && (
-                            <span style={{ marginLeft: 6, fontSize: 11, color: "#a78bfa", fontWeight: 600, flexShrink: 0 }}>
+                            <span style={{ marginLeft: 6, fontSize: 11, color: tokens.purple, fontWeight: 600, flexShrink: 0 }}>
                               overridden
                             </span>
                           )}
@@ -353,7 +354,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
       </div>
 
       {workout.set_refs.length === 0 && (
-        <p style={{ color: "#6b7280", textAlign: "center", padding: "24px 0" }}>
+        <p style={{ color: tokens.textDisabled, textAlign: "center", padding: "24px 0" }}>
           No sets added yet
         </p>
       )}
@@ -371,12 +372,12 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
                   onClick={() => addSetRefMut.mutate(s.id)}
                   disabled={addSetRefMut.isPending}
                 >
-                  <span style={{ fontWeight: 500, color: "#e5e7eb" }}>{s.name}</span>
-                  <span style={{ fontSize: 12, color: "#8e8e93" }}>{s.card_count} cards</span>
+                  <span style={{ fontWeight: 500, color: tokens.textLight }}>{s.name}</span>
+                  <span style={{ fontSize: 12, color: tokens.textMuted }}>{s.card_count} cards</span>
                 </button>
               ))}
               {allSets.length === 0 && (
-                <p style={{ color: "#6b7280", textAlign: "center" }}>No set templates yet</p>
+                <p style={{ color: tokens.textDisabled, textAlign: "center" }}>No set templates yet</p>
               )}
             </div>
             <button onClick={() => setModal(null)} style={{ ...cancelBtnStyle, marginTop: 12, width: "100%" }}>
@@ -431,7 +432,7 @@ export default function WorkoutEditor({ workoutId, onBack }: Props) {
         <div style={overlayStyle}>
           <div style={sheetStyle}>
             <h3 style={sheetTitleStyle}>Export to library</h3>
-            <p style={{ fontSize: 13, color: "#8e8e93", marginBottom: 12 }}>
+            <p style={{ fontSize: 13, color: tokens.textMuted, marginBottom: 12 }}>
               Creates a new reusable set in the global library. The workout-local fork is unchanged.
             </p>
             <input
@@ -558,8 +559,8 @@ const pageStyle: React.CSSProperties = {
   maxWidth: 680,
   margin: "0 auto",
   minHeight: "100%",
-  background: "#1c1c1e",
-  color: "#f2f2f7",
+  background: tokens.bg,
+  color: tokens.textPrimary,
   boxSizing: "border-box",
 };
 
@@ -567,7 +568,7 @@ const backBtnStyle: React.CSSProperties = {
   background: "none",
   border: "none",
   cursor: "pointer",
-  color: "#8e8e93",
+  color: tokens.textMuted,
   fontWeight: 500,
   fontSize: 13,
   padding: "0 0 14px",
@@ -577,9 +578,9 @@ const backBtnStyle: React.CSSProperties = {
 const addBtnStyle: React.CSSProperties = {
   padding: "6px 14px",
   borderRadius: 7,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "#3a3a3c",
-  color: "#f2f2f7",
+  border: `1px solid ${tokens.borderMedium}`,
+  background: tokens.cardSubtle,
+  color: tokens.textPrimary,
   cursor: "pointer",
   fontWeight: 600,
   fontSize: 13,
@@ -589,8 +590,8 @@ const startBtnStyle: React.CSSProperties = {
   padding: "6px 14px",
   borderRadius: 7,
   border: "none",
-  background: "#2d6a3f",
-  color: "#d1fae5",
+  background: tokens.green,
+  color: tokens.greenText,
   cursor: "pointer",
   fontWeight: 600,
   fontSize: 13,
@@ -598,8 +599,8 @@ const startBtnStyle: React.CSSProperties = {
 
 const setRefStyle: React.CSSProperties = {
   padding: "10px 12px",
-  background: "#2c2c2e",
-  border: "1px solid rgba(255,255,255,0.07)",
+  background: tokens.card,
+  border: `1px solid ${tokens.borderSubtle}`,
   borderRadius: 8,
   marginBottom: 4,
 };
@@ -609,16 +610,16 @@ const expandBtnStyle: React.CSSProperties = {
   border: "none",
   cursor: "pointer",
   fontSize: 14,
-  color: "#8e8e93",
+  color: tokens.textMuted,
   padding: "0 8px 0 0",
 };
 
 const iconBtnStyle: React.CSSProperties = {
   padding: "3px 9px",
   borderRadius: 5,
-  border: "1px solid rgba(255,255,255,0.1)",
-  background: "rgba(255,255,255,0.04)",
-  color: "#9ca3af",
+  border: `1px solid ${tokens.borderMedium}`,
+  background: tokens.surfaceSelected,
+  color: tokens.textSecondary,
   cursor: "pointer",
   fontSize: 12,
 };
@@ -627,8 +628,8 @@ const cardItemStyle: React.CSSProperties = {
   padding: "6px 10px",
   borderRadius: 6,
   marginBottom: 2,
-  background: "#1c1c1e",
-  border: "1px solid rgba(255,255,255,0.06)",
+  background: tokens.bg,
+  border: `1px solid ${tokens.borderSubtle}`,
   cursor: "pointer",
   display: "flex",
   alignItems: "center",
@@ -637,7 +638,7 @@ const cardItemStyle: React.CSSProperties = {
 const overlayStyle: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.65)",
+  background: tokens.overlay,
   display: "flex",
   alignItems: "flex-end",
   zIndex: 100,
@@ -647,7 +648,7 @@ const sheetStyle: React.CSSProperties = {
   width: "100%",
   maxWidth: 560,
   margin: "0 auto",
-  background: "#2c2c2e",
+  background: tokens.card,
   borderRadius: "16px 16px 0 0",
   padding: "24px 22px 32px",
   boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
@@ -660,7 +661,7 @@ const sheetTitleStyle: React.CSSProperties = {
   margin: "0 0 16px",
   fontSize: 17,
   fontWeight: 700,
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
 };
 
 const setPickerRowStyle: React.CSSProperties = {
@@ -668,21 +669,21 @@ const setPickerRowStyle: React.CSSProperties = {
   justifyContent: "space-between",
   alignItems: "center",
   padding: "10px 12px",
-  background: "#1c1c1e",
-  border: "1px solid rgba(255,255,255,0.07)",
+  background: tokens.bg,
+  border: `1px solid ${tokens.borderSubtle}`,
   borderRadius: 8,
   cursor: "pointer",
   fontSize: 14,
   width: "100%",
-  color: "#e5e7eb",
+  color: tokens.textLight,
 };
 
 const cancelBtnStyle: React.CSSProperties = {
   padding: "8px 16px",
   borderRadius: 8,
-  border: "1px solid rgba(255,255,255,0.12)",
+  border: `1px solid ${tokens.borderMedium}`,
   background: "transparent",
-  color: "#9ca3af",
+  color: tokens.textSecondary,
   cursor: "pointer",
   fontSize: 14,
 };
@@ -691,8 +692,8 @@ const saveBtnStyle: React.CSSProperties = {
   padding: "8px 18px",
   borderRadius: 8,
   border: "none",
-  background: "#f2f2f7",
-  color: "#1c1c1e",
+  background: tokens.textPrimary,
+  color: tokens.bg,
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 700,
@@ -703,9 +704,9 @@ const forkedBadgeStyle: React.CSSProperties = {
   fontWeight: 700,
   padding: "2px 6px",
   borderRadius: 4,
-  background: "rgba(16,185,129,0.15)",
-  color: "#6ee7b7",
-  border: "1px solid rgba(16,185,129,0.3)",
+  background: tokens.greenBadgeBg,
+  color: tokens.greenBadgeText,
+  border: `1px solid ${tokens.greenBadgeBorder}`,
   letterSpacing: "0.03em",
   flexShrink: 0,
 };
@@ -714,9 +715,9 @@ const exportInputStyle: React.CSSProperties = {
   width: "100%",
   padding: "9px 12px",
   borderRadius: 7,
-  border: "1px solid rgba(255,255,255,0.1)",
-  background: "#1c1c1e",
-  color: "#f2f2f7",
+  border: `1px solid ${tokens.borderMedium}`,
+  background: tokens.bg,
+  color: tokens.textPrimary,
   fontSize: 14,
   boxSizing: "border-box",
   outline: "none",
@@ -725,11 +726,11 @@ const exportInputStyle: React.CSSProperties = {
 const editMetaBtnStyle: React.CSSProperties = {
   padding: "2px 8px",
   borderRadius: 5,
-  border: "1px solid rgba(255,255,255,0.1)",
-  background: "rgba(255,255,255,0.05)",
+  border: `1px solid ${tokens.borderMedium}`,
+  background: tokens.surfaceSelected,
   cursor: "pointer",
   fontSize: 12,
-  color: "#9ca3af",
+  color: tokens.textSecondary,
   flexShrink: 0,
 };
 
@@ -737,7 +738,7 @@ const metaLabelStyle: React.CSSProperties = {
   display: "block",
   fontSize: 12,
   fontWeight: 600,
-  color: "#8e8e93",
+  color: tokens.textMuted,
   letterSpacing: "0.05em",
   textTransform: "uppercase",
   marginBottom: 5,
@@ -747,10 +748,10 @@ const metaInputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "9px 11px",
-  background: "#1c1c1e",
-  border: "1px solid rgba(255,255,255,0.1)",
+  background: tokens.bg,
+  border: `1px solid ${tokens.borderMedium}`,
   borderRadius: 8,
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
   fontSize: 14,
   outline: "none",
 };

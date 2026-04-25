@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import type { Exercise } from "../../types/exercise";
+import { tokens } from "../../theme/tokens";
 
 interface FormValues {
   name: string;
@@ -67,23 +68,23 @@ const labelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 500,
   marginBottom: 4,
-  color: "#8e8e93",
+  color: tokens.textMuted,
 };
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "8px 10px",
-  border: "1px solid rgba(255,255,255,0.12)",
+  border: `1px solid ${tokens.borderMedium}`,
   borderRadius: 8,
   fontSize: 14,
-  background: "#1c1c1e",
-  color: "#f2f2f7",
+  background: tokens.bg,
+  color: tokens.textPrimary,
   outline: "none",
 };
 
 const errorStyle: React.CSSProperties = {
-  color: "#f87171",
+  color: tokens.red,
   fontSize: 12,
   marginTop: 4,
 };
@@ -91,9 +92,9 @@ const errorStyle: React.CSSProperties = {
 const cancelBtnStyle: React.CSSProperties = {
   padding: "8px 16px",
   borderRadius: 8,
-  border: "1px solid rgba(255,255,255,0.12)",
+  border: `1px solid ${tokens.borderMedium}`,
   background: "transparent",
-  color: "#8e8e93",
+  color: tokens.textMuted,
   cursor: "pointer",
   fontSize: 14,
 };
@@ -102,7 +103,7 @@ const saveBtnStyle: React.CSSProperties = {
   padding: "8px 16px",
   borderRadius: 8,
   border: "none",
-  background: "#2d6a3f",
+  background: tokens.green,
   color: "#fff",
   cursor: "pointer",
   fontSize: 14,

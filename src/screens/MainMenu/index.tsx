@@ -154,7 +154,7 @@ const iconBoxStyle: React.CSSProperties = {
 
 const iconTextStyle: React.CSSProperties = {
   fontSize: 20,
-  color: "#d1d5db",
+  color: tokens.iconText,
   lineHeight: 1,
 };
 

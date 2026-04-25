@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { exercisesApi } from "../../api/exercises";
 import type { SetTemplateCard, CardType, PlaceholderTag } from "../../types/setTemplate";
+import { tokens } from "../../theme/tokens";
 
 const TAGS: PlaceholderTag[] = ["unspecified", "push", "pull", "legs", "core", "mobility"];
 
@@ -102,7 +103,7 @@ export default function CardEditor({ card, onSave, onCancel, saving }: Props) {
         ))}
       </div>
       {card && (
-        <p style={{ margin: "0", fontSize: 12, color: "#4b5563" }}>
+        <p style={{ margin: "0", fontSize: 12, color: tokens.textDisabled }}>
           Card type cannot be changed after creation.
         </p>
       )}
@@ -165,12 +166,12 @@ export default function CardEditor({ card, onSave, onCancel, saving }: Props) {
 
 const labelStyle: React.CSSProperties = {
   display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4,
-  color: "#8e8e93",
+  color: tokens.textMuted,
 };
 const inputStyle: React.CSSProperties = {
   width: "100%", boxSizing: "border-box", padding: "8px 10px",
-  border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, fontSize: 14,
-  background: "#1c1c1e", color: "#f2f2f7", outline: "none",
+  border: `1px solid ${tokens.borderMedium}`, borderRadius: 8, fontSize: 14,
+  background: tokens.bg, color: tokens.textPrimary, outline: "none",
 };
 const selectStyle: React.CSSProperties = {
   ...inputStyle,
@@ -183,10 +184,10 @@ const selectStyle: React.CSSProperties = {
 };
 const cancelBtnStyle: React.CSSProperties = {
   padding: "8px 16px", borderRadius: 8,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "transparent", color: "#8e8e93", cursor: "pointer", fontSize: 14,
+  border: `1px solid ${tokens.borderMedium}`,
+  background: "transparent", color: tokens.textMuted, cursor: "pointer", fontSize: 14,
 };
 const saveBtnStyle: React.CSSProperties = {
   padding: "8px 16px", borderRadius: 8, border: "none",
-  background: "#2d6a3f", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
+  background: tokens.green, color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
 };

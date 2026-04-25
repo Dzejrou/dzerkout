@@ -7,7 +7,7 @@ import ExerciseForm from "./ExerciseForm";
 import { ConfirmModal } from "../../components/ConfirmModal";
 
 import { tokens } from "../../theme/tokens";
-const { bg: BG, card: CARD, divider: DIVIDER, textPrimary: TEXT_PRIMARY, textSecondary: TEXT_SECONDARY, border: BORDER } = tokens;
+const { bg: BG, card: CARD, divider: DIVIDER, textPrimary: TEXT_PRIMARY, textSecondary: TEXT_SECONDARY, border: BORDER, bgElevated: BG_ELEVATED, surfaceSelected: SURFACE_SELECTED, surfaceActive: SURFACE_ACTIVE, borderStrong: BORDER_STRONG, textLight: TEXT_LIGHT } = tokens;
 
 type Modal =
   | { type: "create" }
@@ -196,8 +196,8 @@ export default function ExerciseLibrary() {
                 onClick={() => setSelectedId(ex.id)}
                 style={{
                   ...exerciseRowStyle,
-                  background: isSelected ? "rgba(255,255,255,0.04)" : "transparent",
-                  borderLeft: isSelected ? "2px solid #4ade80" : "2px solid transparent",
+                  background: isSelected ? SURFACE_SELECTED : "transparent",
+                  borderLeft: isSelected ? `2px solid ${tokens.greenBadgeText}` : "2px solid transparent",
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
@@ -297,10 +297,10 @@ const leftHeaderStyle: React.CSSProperties = {
 };
 
 const backBtnStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.09)",
-  border: "1px solid rgba(255,255,255,0.14)",
+  background: SURFACE_ACTIVE,
+  border: `1px solid ${BORDER_STRONG}`,
   borderRadius: 8,
-  color: "#e5e7eb",
+  color: TEXT_LIGHT,
   cursor: "pointer",
   fontSize: 13,
   fontWeight: 500,
@@ -360,7 +360,7 @@ const newBtnStyle: React.CSSProperties = {
   padding: "7px 14px",
   borderRadius: 8,
   border: "none",
-  background: "#2d6a3f",
+  background: tokens.green,
   color: "#fff",
   cursor: "pointer",
   fontSize: 13,
@@ -421,7 +421,7 @@ const listCountStyle: React.CSSProperties = {
 
 const rightPanelStyle: React.CSSProperties = {
   flex: 1,
-  background: "#242426",
+  background: BG_ELEVATED,
   overflowY: "auto",
 };
 
@@ -464,9 +464,9 @@ const deleteBtnStyle: React.CSSProperties = {
   alignItems: "center",
   padding: "7px 14px",
   borderRadius: 8,
-  border: "1px solid rgba(239,68,68,0.3)",
-  background: "rgba(239,68,68,0.08)",
-  color: "#f87171",
+  border: `1px solid ${tokens.redBorder}`,
+  background: tokens.redBg,
+  color: tokens.red,
   cursor: "pointer",
   fontSize: 13,
   fontWeight: 500,
@@ -548,7 +548,7 @@ const emptyDetailStyle: React.CSSProperties = {
 const overlayStyle: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.6)",
+  background: tokens.overlay,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

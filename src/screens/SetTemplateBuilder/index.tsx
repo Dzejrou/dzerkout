@@ -22,9 +22,9 @@ function formatDateShort(s: string): string {
 function SummaryTile({ icon, label, value }: { icon: string; label: string; value: number }) {
   return (
     <div style={summaryTileStyle}>
-      <span style={{ fontSize: 22, color: "#8e8e93" }}>{icon}</span>
-      <p style={{ margin: 0, fontSize: 26, fontWeight: 700, color: "#f2f2f7", lineHeight: 1 }}>{value}</p>
-      <p style={{ margin: "3px 0 0", fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{label}</p>
+      <span style={{ fontSize: 22, color: TEXT_SECONDARY }}>{icon}</span>
+      <p style={{ margin: 0, fontSize: 26, fontWeight: 700, color: TEXT_PRIMARY, lineHeight: 1 }}>{value}</p>
+      <p style={{ margin: "3px 0 0", fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{label}</p>
     </div>
   );
 }
@@ -39,7 +39,7 @@ function SetCard({ s, selected, onSelect }: { s: SetTemplateSummary; selected: b
         </p>
         {s.notes && <p style={setCardNotesStyle}>{s.notes}</p>}
       </div>
-      <span style={{ fontSize: 18, color: "#4b5563", marginLeft: 10, flexShrink: 0 }}>›</span>
+      <span style={{ fontSize: 18, color: TEXT_DISABLED, marginLeft: 10, flexShrink: 0 }}>›</span>
     </div>
   );
 }
@@ -140,7 +140,7 @@ function SetDetailPane({ setId, onDeleted }: { setId: string; onDeleted: () => v
   }
 
   if (isLoading || !detail) {
-    return <p style={{ color: "#6b7280", padding: 40 }}>Loading…</p>;
+    return <p style={{ color: TEXT_MUTED, padding: 40 }}>Loading…</p>;
   }
 
   const concreteCount = detail.cards.filter((c) => c.card_type === "concrete").length;
@@ -187,7 +187,7 @@ function SetDetailPane({ setId, onDeleted }: { setId: string; onDeleted: () => v
       </div>
 
       {detail.cards.length === 0 && (
-        <p style={{ color: "#4b5563", fontSize: 13, padding: "16px 0" }}>No cards yet — add one above.</p>
+        <p style={{ color: TEXT_DISABLED, fontSize: 13, padding: "16px 0" }}>No cards yet — add one above.</p>
       )}
 
       <SortableList
@@ -209,7 +209,7 @@ function SetDetailPane({ setId, onDeleted }: { setId: string; onDeleted: () => v
             )}
             <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
               <button onClick={() => setModal({ type: "edit-card", card })} style={cardActionBtnStyle}>Edit</button>
-              <button onClick={() => setModal({ type: "delete-card", card })} style={{ ...cardActionBtnStyle, color: "#f87171" }}>✕</button>
+              <button onClick={() => setModal({ type: "delete-card", card })} style={{ ...cardActionBtnStyle, color: tokens.red }}>✕</button>
             </div>
           </div>
         )}
@@ -357,7 +357,7 @@ export default function SetTemplateBuilder() {
           <p style={pageSubtitleStyle}>Create and manage your set templates.</p>
           <div style={searchRowStyle}>
             <div style={searchWrapStyle}>
-              <span style={{ fontSize: 16, color: "#6b7280", flexShrink: 0 }}>⌕</span>
+              <span style={{ fontSize: 16, color: TEXT_MUTED, flexShrink: 0 }}>⌕</span>
               <input
                 type="text"
                 placeholder="Search sets…"
@@ -371,9 +371,9 @@ export default function SetTemplateBuilder() {
         </div>
 
         <div style={listStyle}>
-          {isLoading && <p style={{ color: "#6b7280", padding: "16px 20px" }}>Loading…</p>}
+          {isLoading && <p style={{ color: TEXT_MUTED, padding: "16px 20px" }}>Loading…</p>}
           {!isLoading && filtered.length === 0 && (
-            <p style={{ color: "#6b7280", padding: "32px 20px", textAlign: "center" }}>
+            <p style={{ color: TEXT_MUTED, padding: "32px 20px", textAlign: "center" }}>
               {search ? "No matching sets." : "No sets yet."}
             </p>
           )}
@@ -392,7 +392,7 @@ export default function SetTemplateBuilder() {
           <SetDetailPane key={selectedId} setId={selectedId} onDeleted={() => setSelectedId(null)} />
         ) : (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <p style={{ color: "#4b5563", fontSize: 14 }}>Select a set to view details.</p>
+            <p style={{ color: TEXT_DISABLED, fontSize: 14 }}>Select a set to view details.</p>
           </div>
         )}
       </div>
@@ -433,6 +433,8 @@ export default function SetTemplateBuilder() {
 // Runner palette tokens
 import { tokens } from "../../theme/tokens";
 const { bg: BG, card: CARD, borderSubtle: CARD_BORDER, textPrimary: TEXT_PRIMARY, textSecondary: TEXT_SECONDARY, textMuted: TEXT_MUTED, divider: DIVIDER } = tokens;
+const { bgElevated: BG_ELEVATED, textDisabled: TEXT_DISABLED, textLight: TEXT_LIGHT, surfaceSelected: SURFACE_SELECTED, overlay: OVERLAY } = tokens;
+const { surfaceActive: SURFACE_ACTIVE, borderStrong: BORDER_STRONG, borderMedium: BORDER_MEDIUM, green: GREEN, red: RED, redBorder: RED_BORDER, blueBadgeBg: BLUE_BADGE_BG, blueBadgeBorder: BLUE_BADGE_BORDER, blue: BLUE, amberBadgeBg: AMBER_BADGE_BG, amberBadgeBorder: AMBER_BADGE_BORDER, amber: AMBER } = tokens;
 
 const rootStyle: React.CSSProperties = {
   display: "flex",
@@ -458,10 +460,10 @@ const leftHeaderStyle: React.CSSProperties = {
 };
 
 const backBtnStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.09)",
-  border: "1px solid rgba(255,255,255,0.14)",
+  background: SURFACE_ACTIVE,
+  border: `1px solid ${BORDER_STRONG}`,
   borderRadius: 8,
-  color: "#e5e7eb",
+  color: TEXT_LIGHT,
   cursor: "pointer",
   fontSize: 13,
   fontWeight: 500,
@@ -514,7 +516,7 @@ const newSetBtnStyle: React.CSSProperties = {
   padding: "8px 14px",
   borderRadius: 10,
   border: "none",
-  background: "#2d6a3f",
+  background: GREEN,
   color: "#fff",
   cursor: "pointer",
   fontWeight: 600,
@@ -531,7 +533,7 @@ const listStyle: React.CSSProperties = {
 const countStyle: React.CSSProperties = {
   textAlign: "center",
   fontSize: 12,
-  color: "#4b5563",
+  color: TEXT_DISABLED,
   padding: "12px 0 16px",
 };
 
@@ -541,7 +543,7 @@ function setCardStyle(selected: boolean): React.CSSProperties {
     alignItems: "center",
     padding: "14px 20px",
     cursor: "pointer",
-    background: selected ? "rgba(255,255,255,0.04)" : "transparent",
+    background: selected ? SURFACE_SELECTED : "transparent",
     boxShadow: selected ? "inset 3px 0 0 rgba(255,255,255,0.3)" : "none",
     borderBottom: `1px solid ${DIVIDER}`,
     transition: "background 0.1s",
@@ -567,7 +569,7 @@ const setCardMetaStyle: React.CSSProperties = {
 const setCardNotesStyle: React.CSSProperties = {
   margin: "4px 0 0",
   fontSize: 12,
-  color: "#4b5563",
+  color: TEXT_DISABLED,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
@@ -580,7 +582,7 @@ const rightPanelStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
-  background: "#242426",
+  background: BG_ELEVATED,
 };
 
 const detailScrollStyle: React.CSSProperties = {
@@ -603,7 +605,7 @@ const initialBoxStyle: React.CSSProperties = {
   height: 48,
   borderRadius: 12,
   background: CARD,
-  border: `1px solid rgba(255,255,255,0.1)`,
+  border: `1px solid ${BORDER_MEDIUM}`,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -624,7 +626,7 @@ const detailNameStyle: React.CSSProperties = {
 const editPillBtnStyle: React.CSSProperties = {
   padding: "4px 12px",
   borderRadius: 20,
-  border: `1px solid rgba(255,255,255,0.14)`,
+  border: `1px solid ${BORDER_STRONG}`,
   background: CARD,
   color: TEXT_SECONDARY,
   cursor: "pointer",
@@ -635,7 +637,7 @@ const editPillBtnStyle: React.CSSProperties = {
 const headerActionBtnStyle: React.CSSProperties = {
   padding: "6px 14px",
   borderRadius: 8,
-  border: `1px solid rgba(255,255,255,0.12)`,
+  border: `1px solid ${BORDER_MEDIUM}`,
   background: "transparent",
   color: TEXT_SECONDARY,
   cursor: "pointer",
@@ -644,8 +646,8 @@ const headerActionBtnStyle: React.CSSProperties = {
 };
 
 const deleteHeaderBtnStyle: React.CSSProperties = {
-  color: "#f87171",
-  borderColor: "rgba(248,113,113,0.25)",
+  color: RED,
+  borderColor: RED_BORDER,
 };
 
 const detailMetaStyle: React.CSSProperties = {
@@ -683,7 +685,7 @@ const sectionLabelStyle: React.CSSProperties = {
 const addCardBtnStyle: React.CSSProperties = {
   padding: "6px 14px",
   borderRadius: 8,
-  border: `1px solid rgba(255,255,255,0.12)`,
+  border: `1px solid ${BORDER_MEDIUM}`,
   background: CARD,
   color: TEXT_PRIMARY,
   cursor: "pointer",
@@ -707,7 +709,7 @@ const cardRowStyle: React.CSSProperties = {
 
 const dragHandleStyle: React.CSSProperties = {
   fontSize: 16,
-  color: "#4b5563",
+  color: TEXT_DISABLED,
   cursor: "grab",
   flexShrink: 0,
 };
@@ -729,9 +731,9 @@ function cardTypeBadgeStyle(type: "concrete" | "placeholder"): React.CSSProperti
     borderRadius: 5,
     flexShrink: 0,
     letterSpacing: "0.04em",
-    background: isConcrete ? "rgba(59,130,246,0.12)" : "rgba(245,158,11,0.12)",
-    color: isConcrete ? "#60a5fa" : "#f59e0b",
-    border: isConcrete ? "1px solid rgba(59,130,246,0.2)" : "1px solid rgba(245,158,11,0.2)",
+    background: isConcrete ? BLUE_BADGE_BG : AMBER_BADGE_BG,
+    color: isConcrete ? BLUE : AMBER,
+    border: isConcrete ? `1px solid ${BLUE_BADGE_BORDER}` : `1px solid ${AMBER_BADGE_BORDER}`,
   };
 }
 
@@ -758,7 +760,7 @@ const cardDurStyle: React.CSSProperties = {
 const cardActionBtnStyle: React.CSSProperties = {
   padding: "4px 10px",
   borderRadius: 6,
-  border: `1px solid rgba(255,255,255,0.1)`,
+  border: `1px solid ${BORDER_MEDIUM}`,
   background: "transparent",
   color: TEXT_SECONDARY,
   cursor: "pointer",
@@ -788,7 +790,7 @@ const summaryTileStyle: React.CSSProperties = {
 const footerNoteStyle: React.CSSProperties = {
   margin: "20px 0 0",
   fontSize: 12,
-  color: "#4b5563",
+  color: TEXT_DISABLED,
   fontStyle: "italic",
   textAlign: "center",
 };
@@ -798,7 +800,7 @@ const footerNoteStyle: React.CSSProperties = {
 const overlayStyle: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.65)",
+  background: OVERLAY,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -807,7 +809,7 @@ const overlayStyle: React.CSSProperties = {
 
 const modalStyle: React.CSSProperties = {
   background: CARD,
-  border: `1px solid rgba(255,255,255,0.1)`,
+  border: `1px solid ${BORDER_MEDIUM}`,
   borderRadius: 14,
   padding: "24px 24px 20px",
   width: "calc(100% - 64px)",
@@ -835,10 +837,10 @@ const modalInputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "8px 10px",
-  border: `1px solid rgba(255,255,255,0.12)`,
+  border: `1px solid ${BORDER_MEDIUM}`,
   borderRadius: 8,
   fontSize: 14,
-  background: "#1c1c1e",
+  background: BG,
   color: TEXT_PRIMARY,
   outline: "none",
 };
@@ -852,7 +854,7 @@ const modalFooterRow: React.CSSProperties = {
 const modalCancelBtnStyle: React.CSSProperties = {
   padding: "8px 16px",
   borderRadius: 8,
-  border: `1px solid rgba(255,255,255,0.12)`,
+  border: `1px solid ${BORDER_MEDIUM}`,
   background: "transparent",
   color: TEXT_SECONDARY,
   cursor: "pointer",
@@ -863,7 +865,7 @@ const modalSaveBtnStyle: React.CSSProperties = {
   padding: "8px 16px",
   borderRadius: 8,
   border: "none",
-  background: "#2d6a3f",
+  background: GREEN,
   color: "#fff",
   cursor: "pointer",
   fontSize: 14,

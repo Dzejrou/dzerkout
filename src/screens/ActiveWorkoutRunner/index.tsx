@@ -5,6 +5,7 @@ import { useSessionStore } from "../../store/sessionStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useElapsedMs, useExerciseElapsedMs } from "../../hooks/useTimer";
+import { tokens } from "../../theme/tokens";
 
 function formatTime(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -70,7 +71,7 @@ export default function ActiveWorkoutRunner() {
           <button onClick={() => navigate("/")} style={backBtnStyle}>← Back</button>
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <p style={{ color: "#8e8e93" }}>No active session.</p>
+          <p style={{ color: tokens.textSecondary }}>No active session.</p>
         </div>
       </div>
     );
@@ -129,10 +130,10 @@ export default function ActiveWorkoutRunner() {
           <button onClick={() => navigate("/")} style={backBtnStyle}>← Back</button>
         </div>
         <div style={{ flex: 1, padding: "24px 32px", overflowY: "auto" }}>
-          <h2 style={{ color: "#f2f2f7", fontSize: 24, fontWeight: 700, margin: "0 0 8px" }}>
+          <h2 style={{ color: tokens.textPrimary, fontSize: 24, fontWeight: 700, margin: "0 0 8px" }}>
             Ready to start?
           </h2>
-          <p style={{ color: "#8e8e93", marginBottom: 24 }}>
+          <p style={{ color: tokens.textSecondary, marginBottom: 24 }}>
             {sets.length} set{sets.length !== 1 ? "s" : ""} · {exercises.length} exercise
             {exercises.length !== 1 ? "s" : ""}
           </p>
@@ -141,14 +142,14 @@ export default function ActiveWorkoutRunner() {
               const setExs = exercises.filter((e) => e.workout_session_set_id === s.id);
               return (
                 <div key={s.id} style={draftSetCardStyle}>
-                  <p style={{ fontSize: 11, color: "#8e8e93", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                  <p style={{ fontSize: 11, color: tokens.textSecondary, margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.07em" }}>
                     Set {i + 1}
                   </p>
                   {setExs.map((e) => (
-                    <div key={e.id} style={{ fontSize: 14, color: "#d1d5db", padding: "3px 0", display: "flex", justifyContent: "space-between" }}>
+                    <div key={e.id} style={{ fontSize: 14, color: tokens.iconText, padding: "3px 0", display: "flex", justifyContent: "space-between" }}>
                       <span>{e.display_name}</span>
                       {e.duration_hint_sec != null && (
-                        <span style={{ color: "#6b7280", fontVariantNumeric: "tabular-nums" }}>
+                        <span style={{ color: tokens.textMuted, fontVariantNumeric: "tabular-nums" }}>
                           {formatTime(e.duration_hint_sec * 1000)}
                         </span>
                       )}
@@ -278,7 +279,7 @@ export default function ActiveWorkoutRunner() {
             {durationHintSec != null ? (
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                 <span style={exClockCurrentStyle}>{formatTime(exerciseElapsedMs)}</span>
-                <span style={{ color: "#4b5563", fontSize: "clamp(22px, 3.5vw, 56px)", fontWeight: 300, lineHeight: 1 }}>/</span>
+                <span style={{ color: tokens.textDisabled, fontSize: "clamp(22px, 3.5vw, 56px)", fontWeight: 300, lineHeight: 1 }}>/</span>
                 <span style={exClockTargetStyle}>{formatTime(durationHintSec * 1000)}</span>
               </div>
             ) : (
@@ -311,10 +312,10 @@ export default function ActiveWorkoutRunner() {
                   transform: `scale(${scale})`,
                   border: isCurrent
                     ? "1.5px solid rgba(255,255,255,0.75)"
-                    : "1px solid rgba(255,255,255,0.07)",
+                    : `1px solid ${tokens.divider}`,
                   background: isCurrent
-                    ? "rgba(255,255,255,0.07)"
-                    : "rgba(255,255,255,0.02)",
+                    ? tokens.surfaceActive
+                    : tokens.surfaceDisabled,
                 }}
               >
                 {isCurrent && (
@@ -333,7 +334,7 @@ export default function ActiveWorkoutRunner() {
                     )}
                   </>
                 ) : (
-                  <span style={{ color: "rgba(255,255,255,0.12)", fontSize: 13, flex: 1, textAlign: "center" }}>·</span>
+                  <span style={{ color: tokens.border, fontSize: 13, flex: 1, textAlign: "center" }}>·</span>
                 )}
               </div>
             );
@@ -396,8 +397,8 @@ const runnerRootStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   height: "100%",
-  background: "#1c1c1e",
-  color: "#f2f2f7",
+  background: tokens.bg,
+  color: tokens.textPrimary,
   overflow: "hidden",
   userSelect: "none",
 };
@@ -410,10 +411,10 @@ const topBarStyle: React.CSSProperties = {
 };
 
 const backBtnStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.09)",
-  border: "1px solid rgba(255,255,255,0.14)",
+  background: tokens.surfaceActive,
+  border: `1px solid ${tokens.borderStrong}`,
   borderRadius: 8,
-  color: "#e5e7eb",
+  color: tokens.textLight,
   cursor: "pointer",
   fontSize: 13,
   fontWeight: 500,
@@ -440,8 +441,8 @@ const leftColStyle: React.CSSProperties = {
 };
 
 const timerPanelStyle: React.CSSProperties = {
-  background: "#2c2c2e",
-  border: "1px solid rgba(255,255,255,0.06)",
+  background: tokens.card,
+  border: `1px solid ${tokens.borderSubtle}`,
   borderRadius: 14,
   padding: "16px 20px",
   display: "flex",
@@ -454,7 +455,7 @@ const timerPanelStyle: React.CSSProperties = {
 const panelLabelStyle: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 700,
-  color: "#6b7280",
+  color: tokens.textMuted,
   letterSpacing: "0.12em",
   textTransform: "uppercase",
   marginBottom: 6,
@@ -465,21 +466,21 @@ const bigClockStyle: React.CSSProperties = {
   fontWeight: 700,
   fontVariantNumeric: "tabular-nums",
   letterSpacing: "0.01em",
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
   lineHeight: 1,
 };
 
 const pausedBadgeStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
-  color: "#f59e0b",
+  color: tokens.amber,
   letterSpacing: "0.08em",
   marginTop: 4,
 };
 
 const setIndexStyle: React.CSSProperties = {
   fontSize: 13,
-  color: "#8e8e93",
+  color: tokens.textSecondary,
   marginTop: 4,
 };
 
@@ -487,7 +488,7 @@ const exClockCurrentStyle: React.CSSProperties = {
   fontSize: "clamp(56px, 9vw, 160px)",
   fontWeight: 700,
   fontVariantNumeric: "tabular-nums",
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
   letterSpacing: "0.01em",
   lineHeight: 1,
 };
@@ -496,14 +497,14 @@ const exClockTargetStyle: React.CSSProperties = {
   fontSize: "clamp(40px, 7vw, 120px)",
   fontWeight: 300,
   fontVariantNumeric: "tabular-nums",
-  color: "#6b7280",
+  color: tokens.textMuted,
   letterSpacing: "0.01em",
   lineHeight: 1,
 };
 
 const exNameStyle: React.CSSProperties = {
   fontSize: 14,
-  color: "#9ca3af",
+  color: tokens.textFaint,
   marginTop: 10,
 };
 
@@ -551,7 +552,7 @@ const queueCurrentArrowStyle: React.CSSProperties = {
 
 const queueNumStyle: React.CSSProperties = {
   fontSize: 16,
-  color: "#8e8e93",
+  color: tokens.textSecondary,
   minWidth: 24,
   textAlign: "right",
   flexShrink: 0,
@@ -560,7 +561,7 @@ const queueNumStyle: React.CSSProperties = {
 const queueNameStyle: React.CSSProperties = {
   flex: 1,
   fontSize: 17,
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
@@ -568,7 +569,7 @@ const queueNameStyle: React.CSSProperties = {
 
 const queueDurStyle: React.CSSProperties = {
   fontSize: 16,
-  color: "#6b7280",
+  color: tokens.textMuted,
   fontVariantNumeric: "tabular-nums",
   flexShrink: 0,
 };
@@ -579,7 +580,7 @@ const bottomBarStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "stretch",
   flexShrink: 0,
-  borderTop: "1px solid rgba(255,255,255,0.07)",
+  borderTop: `1px solid ${tokens.divider}`,
 };
 
 const primaryCtrlsStyle: React.CSSProperties = {
@@ -593,7 +594,7 @@ const primaryCtrlsStyle: React.CSSProperties = {
 const secondaryCtrlsStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  borderLeft: "1px solid rgba(255,255,255,0.07)",
+  borderLeft: `1px solid ${tokens.divider}`,
   padding: "8px 10px",
   gap: 2,
 };
@@ -607,9 +608,9 @@ function navBtnStyle(disabled: boolean): React.CSSProperties {
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.1)",
-    background: disabled ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.07)",
-    color: disabled ? "#4b5563" : "#e5e7eb",
+    border: `1px solid ${tokens.borderMedium}`,
+    background: disabled ? tokens.surfaceDisabled : tokens.surfaceActive,
+    color: disabled ? tokens.textDisabled : tokens.textLight,
     cursor: disabled ? "not-allowed" : "pointer",
     fontSize: 14,
     fontWeight: 600,
@@ -624,9 +625,9 @@ const pauseBtnStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "#3a3a3c",
-  color: "#f2f2f7",
+  border: `1px solid ${tokens.borderStrong}`,
+  background: tokens.cardSubtle,
+  color: tokens.textPrimary,
   cursor: "pointer",
   fontSize: 15,
   fontWeight: 700,
@@ -643,7 +644,7 @@ function secBtnStyle(disabled: boolean): React.CSSProperties {
     gap: 3,
     padding: "6px 12px",
     borderRadius: 8,
-    color: disabled ? "#4b5563" : "#9ca3af",
+    color: disabled ? tokens.textDisabled : tokens.textFaint,
     minWidth: 52,
   };
 }
@@ -663,8 +664,8 @@ const secLabelStyle: React.CSSProperties = {
 // ── Draft styles ──────────────────────────────────────────────────────────────
 
 const draftSetCardStyle: React.CSSProperties = {
-  background: "#2c2c2e",
-  border: "1px solid rgba(255,255,255,0.06)",
+  background: tokens.card,
+  border: `1px solid ${tokens.borderSubtle}`,
   borderRadius: 10,
   padding: "12px 16px",
   marginBottom: 10,
@@ -673,9 +674,9 @@ const draftSetCardStyle: React.CSSProperties = {
 const draftSecBtnStyle: React.CSSProperties = {
   padding: "10px 20px",
   borderRadius: 8,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "#f2f2f7",
+  border: `1px solid ${tokens.borderStrong}`,
+  background: tokens.surfaceActive,
+  color: tokens.textPrimary,
   cursor: "pointer",
   fontSize: 14,
 };
@@ -684,7 +685,7 @@ const draftStartBtnStyle: React.CSSProperties = {
   padding: "10px 24px",
   borderRadius: 8,
   border: "none",
-  background: "#2d6a3f",
+  background: tokens.green,
   color: "#fff",
   cursor: "pointer",
   fontWeight: 700,
@@ -694,7 +695,7 @@ const draftStartBtnStyle: React.CSSProperties = {
 // ── Shared ────────────────────────────────────────────────────────────────────
 
 const errorStyle: React.CSSProperties = {
-  color: "#ef4444",
+  color: tokens.red,
   fontSize: 13,
   marginTop: 8,
 };

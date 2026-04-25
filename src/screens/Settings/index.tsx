@@ -16,7 +16,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
         height: 26,
         borderRadius: 13,
         background: value ? tokens.green : tokens.cardSubtle,
-        border: `1px solid ${value ? "rgba(45,106,63,0.6)" : tokens.border}`,
+        border: `1px solid ${value ? tokens.greenBorder : tokens.border}`,
         cursor: "pointer",
         padding: 0,
         flexShrink: 0,
@@ -161,10 +161,10 @@ const contentStyle: React.CSSProperties = {
 };
 
 const backBtnStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.09)",
-  border: "1px solid rgba(255,255,255,0.14)",
+  background: tokens.surfaceActive,
+  border: `1px solid ${tokens.borderStrong}`,
   borderRadius: 8,
-  color: "#e5e7eb",
+  color: tokens.textLight,
   cursor: "pointer",
   fontSize: 13,
   fontWeight: 500,

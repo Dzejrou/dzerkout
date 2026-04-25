@@ -47,9 +47,9 @@ function StatusBadge({ status }: { status: string }) {
     status === "abandoned" ? "Abandoned" : status;
 
   const style: React.CSSProperties =
-    status === "completed"   ? { background: "rgba(34,197,94,0.12)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.2)" } :
-    status === "in_progress" ? { background: "rgba(245,158,11,0.12)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.2)" } :
-                               { background: "rgba(239,68,68,0.12)", color: "#f87171", border: "1px solid rgba(239,68,68,0.2)" };
+    status === "completed"   ? { background: tokens.greenBadgeBg, color: tokens.greenBadgeText, border: `1px solid ${tokens.greenBadgeBorder}` } :
+    status === "in_progress" ? { background: tokens.amberBadgeBg, color: tokens.amber,          border: `1px solid ${tokens.amberBadgeBorder}` } :
+                               { background: tokens.redBadgeBg,   color: tokens.red,             border: `1px solid ${tokens.redBadgeBorder}` };
 
   return (
     <span style={{ ...badgeBaseStyle, ...style }}>{label}</span>
@@ -112,7 +112,7 @@ function ExerciseRow({ ex, index }: { ex: WorkoutSessionExerciseRow; index: numb
       <span style={exDurStyle}>
         {ex.performed_duration_sec != null ? formatDurationSec(ex.performed_duration_sec) : "—"}
       </span>
-      <span style={{ fontSize: 14, color: isCompleted ? "#4ade80" : isSkipped ? "#6b7280" : "#3a3a3c", minWidth: 18, textAlign: "center" }}>
+      <span style={{ fontSize: 14, color: isCompleted ? tokens.greenBadgeText : isSkipped ? TEXT_MUTED : tokens.cardSubtle, minWidth: 18, textAlign: "center" }}>
         {isCompleted ? "✓" : isSkipped ? "—" : ""}
       </span>
     </div>
@@ -130,7 +130,7 @@ function SetBlock({ set, index }: { set: SessionDetailSet; index: number }) {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={setTitleSpan}>Set {index + 1}</span>
           {netSec !== null && (
-            <span style={{ fontSize: 13, color: "#6b7280" }}>• {formatDurationSec(netSec)}</span>
+            <span style={{ fontSize: 13, color: TEXT_MUTED }}>• {formatDurationSec(netSec)}</span>
           )}
         </div>
         {allDone && <StatusBadge status="completed" />}
@@ -150,7 +150,7 @@ function DetailPane({ id }: { id: string }) {
   });
 
   if (isLoading) return <p style={detailPlaceholderStyle}>Loading…</p>;
-  if (error || !data) return <p style={{ ...detailPlaceholderStyle, color: "#f87171" }}>Failed to load session.</p>;
+  if (error || !data) return <p style={{ ...detailPlaceholderStyle, color: tokens.red }}>Failed to load session.</p>;
 
   const d = data as SessionDetail;
   const totalSec = elapsedSec(d.started_at, d.ended_at);
@@ -195,7 +195,7 @@ function DetailPane({ id }: { id: string }) {
 function EmptyState() {
   return (
     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <p style={{ color: "#4b5563", fontSize: 14 }}>Select a session to view details.</p>
+      <p style={{ color: TEXT_DISABLED, fontSize: 14 }}>Select a session to view details.</p>
     </div>
   );
 }
@@ -248,10 +248,10 @@ export default function WorkoutHistory() {
         </div>
 
         <div style={listStyle}>
-          {isLoading && <p style={{ color: "#6b7280", padding: "16px 20px" }}>Loading…</p>}
-          {error && <p style={{ color: "#f87171", padding: "16px 20px" }}>Failed to load history.</p>}
+          {isLoading && <p style={{ color: TEXT_MUTED, padding: "16px 20px" }}>Loading…</p>}
+          {error && <p style={{ color: tokens.red, padding: "16px 20px" }}>Failed to load history.</p>}
           {!isLoading && !error && filtered.length === 0 && (
-            <p style={{ color: "#6b7280", padding: "32px 20px", textAlign: "center" }}>
+            <p style={{ color: TEXT_MUTED, padding: "32px 20px", textAlign: "center" }}>
               {search ? "No matching sessions." : "No workouts yet."}
             </p>
           )}
@@ -282,6 +282,7 @@ export default function WorkoutHistory() {
 // Runner palette tokens
 import { tokens } from "../../theme/tokens";
 const { bg: BG, card: CARD, borderSubtle: CARD_BORDER, textPrimary: TEXT_PRIMARY, textSecondary: TEXT_SECONDARY, textMuted: TEXT_MUTED, divider: DIVIDER } = tokens;
+const { bgElevated: BG_ELEVATED, textDisabled: TEXT_DISABLED, textLight: TEXT_LIGHT, surfaceSelected: SURFACE_SELECTED } = tokens;
 
 const rootStyle: React.CSSProperties = {
   display: "flex",
@@ -307,10 +308,10 @@ const leftHeaderStyle: React.CSSProperties = {
 };
 
 const backBtnStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.09)",
-  border: "1px solid rgba(255,255,255,0.14)",
+  background: tokens.surfaceActive,
+  border: `1px solid ${tokens.borderStrong}`,
   borderRadius: 8,
-  color: "#e5e7eb",
+  color: TEXT_LIGHT,
   cursor: "pointer",
   fontSize: 13,
   fontWeight: 500,
@@ -367,7 +368,7 @@ const listStyle: React.CSSProperties = {
 const sessionCountStyle: React.CSSProperties = {
   textAlign: "center",
   fontSize: 12,
-  color: "#4b5563",
+  color: TEXT_DISABLED,
   padding: "12px 0 16px",
 };
 
@@ -377,7 +378,7 @@ function sessionCardStyle(selected: boolean): React.CSSProperties {
     alignItems: "center",
     padding: "14px 20px",
     cursor: "pointer",
-    background: selected ? "rgba(255,255,255,0.04)" : "transparent",
+    background: selected ? SURFACE_SELECTED : "transparent",
     boxShadow: selected ? "inset 3px 0 0 rgba(255,255,255,0.3)" : "none",
     borderBottom: `1px solid ${DIVIDER}`,
     transition: "background 0.1s",
@@ -402,7 +403,7 @@ const cardMetaStyle: React.CSSProperties = {
 
 const cardChevronStyle: React.CSSProperties = {
   fontSize: 20,
-  color: "#4b5563",
+  color: TEXT_DISABLED,
   marginLeft: 12,
   flexShrink: 0,
 };
@@ -423,7 +424,7 @@ const rightPanelStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
-  background: "#242426",
+  background: BG_ELEVATED,
 };
 
 const detailScrollStyle: React.CSSProperties = {
@@ -528,7 +529,7 @@ const setHeaderRow: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "space-between",
   padding: "12px 16px",
-  borderBottom: `1px solid rgba(255,255,255,0.05)`,
+  borderBottom: `1px solid ${tokens.surfaceSelected}`,
 };
 
 const setTitleSpan: React.CSSProperties = {
@@ -547,7 +548,7 @@ function exRowStyle(skipped: boolean): React.CSSProperties {
     alignItems: "center",
     gap: 10,
     padding: "10px 16px",
-    borderBottom: `1px solid rgba(255,255,255,0.04)`,
+    borderBottom: `1px solid ${SURFACE_SELECTED}`,
     opacity: skipped ? 0.45 : 1,
   };
 }
@@ -580,9 +581,9 @@ function tagStyle(isConcrete: boolean): React.CSSProperties {
     padding: "2px 6px",
     borderRadius: 4,
     flexShrink: 0,
-    background: isConcrete ? "rgba(59,130,246,0.12)" : "rgba(139,92,246,0.12)",
-    color: isConcrete ? "#60a5fa" : "#a78bfa",
-    border: isConcrete ? "1px solid rgba(59,130,246,0.2)" : "1px solid rgba(139,92,246,0.2)",
+    background: isConcrete ? tokens.blueBadgeBg : tokens.purpleBg,
+    color: isConcrete ? tokens.blue : tokens.purple,
+    border: `1px solid ${isConcrete ? tokens.blueBadgeBorder : tokens.purpleBorder}`,
   };
 }
 
@@ -598,6 +599,6 @@ const exDurStyle: React.CSSProperties = {
 const footerNoteStyle: React.CSSProperties = {
   margin: "16px 0 0",
   fontSize: 12,
-  color: "#4b5563",
+  color: TEXT_DISABLED,
   fontStyle: "italic",
 };
