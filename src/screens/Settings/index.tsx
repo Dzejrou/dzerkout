@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { tokens } from "../../theme/tokens";
 import { useSettingsStore } from "../../store/settingsStore";
+import { fontPresets, FONT_PRESET_KEYS, type FontPresetKey } from "../../theme/fontPresets";
 
 // ── Toggle ────────────────────────────────────────────────────────────────────
 
@@ -76,6 +77,42 @@ function ComingSoonBadge() {
   return <span style={comingSoonStyle}>Coming soon</span>;
 }
 
+// ── Font selector ─────────────────────────────────────────────────────────────
+
+function FontSelector() {
+  const fontPreset = useSettingsStore((s) => s.fontPreset);
+  const setFontPreset = useSettingsStore((s) => s.setFontPreset);
+
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {FONT_PRESET_KEYS.map((key: FontPresetKey) => {
+        const active = fontPreset === key;
+        return (
+          <button
+            key={key}
+            onClick={() => setFontPreset(key)}
+            style={{
+              padding: "5px 13px",
+              borderRadius: 7,
+              border: `1px solid ${active ? tokens.green : tokens.border}`,
+              background: active ? tokens.green : tokens.cardSubtle,
+              color: active ? tokens.greenText : tokens.textPrimary,
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: active ? 600 : 400,
+              /* Each chip previews its own font so the user can see the difference */
+              fontFamily: fontPresets[key].stack,
+              transition: "background 0.12s, border-color 0.12s, color 0.12s",
+            }}
+          >
+            {fontPresets[key].label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -95,6 +132,12 @@ export default function Settings() {
             label="Theme"
             description="Color scheme used throughout the app."
             control={<div style={themeChipStyle}>Dark</div>}
+          />
+          <div style={rowDividerStyle} />
+          <SettingRow
+            label="Font"
+            description="UI typeface applied across the entire app."
+            control={<FontSelector />}
           />
           <div style={rowDividerStyle} />
           <SettingRow

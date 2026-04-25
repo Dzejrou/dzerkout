@@ -277,10 +277,9 @@ export default function ActiveWorkoutRunner() {
           <div style={timerPanelStyle}>
             <span style={panelLabelStyle}>EXERCISE TIME</span>
             {durationHintSec != null ? (
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={exClockCurrentStyle}>{formatTime(exerciseElapsedMs)}</span>
-                <span style={{ color: tokens.textDisabled, fontSize: "clamp(22px, 3.5vw, 56px)", fontWeight: 300, lineHeight: 1 }}>/</span>
-                <span style={exClockTargetStyle}>{formatTime(durationHintSec * 1000)}</span>
+                <span style={exClockTargetStyle}>of {formatTime(durationHintSec * 1000)}</span>
               </div>
             ) : (
               <span style={exClockCurrentStyle}>{formatTime(exerciseElapsedMs)}</span>
@@ -494,8 +493,8 @@ const exClockCurrentStyle: React.CSSProperties = {
 };
 
 const exClockTargetStyle: React.CSSProperties = {
-  fontSize: "clamp(40px, 7vw, 120px)",
-  fontWeight: 300,
+  fontSize: "clamp(18px, 2.8vw, 36px)",
+  fontWeight: 400,
   fontVariantNumeric: "tabular-nums",
   color: tokens.textMuted,
   letterSpacing: "0.01em",

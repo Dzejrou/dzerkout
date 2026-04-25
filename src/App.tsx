@@ -1,7 +1,10 @@
+import { useEffect } from "react";
 import { HashRouter, Route, Routes, useLocation } from "react-router-dom";
 import { usePlatform } from "./hooks/usePlatform";
 import { useSessionRecovery } from "./hooks/useSessionRecovery";
 import { useUiStore } from "./store/uiStore";
+import { useSettingsStore } from "./store/settingsStore";
+import { fontPresets } from "./theme/fontPresets";
 import { ConfirmModal } from "./components/ConfirmModal";
 import MainMenu from "./screens/MainMenu";
 import ExerciseLibrary from "./screens/ExerciseLibrary";
@@ -11,9 +14,22 @@ import ActiveWorkoutRunner from "./screens/ActiveWorkoutRunner";
 import WorkoutHistory from "./screens/WorkoutHistory";
 import Settings from "./screens/Settings";
 
+// Applies the stored font preset to the CSS variable on the document root.
+// Runs outside the router because font application needs no routing context.
+function useFontPreset() {
+  const fontPreset = useSettingsStore((s) => s.fontPreset);
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--font-family",
+      fontPresets[fontPreset].stack,
+    );
+  }, [fontPreset]);
+}
+
 // Rendered inside HashRouter so useNavigate (and useSessionRecovery) have router context.
 function AppShell() {
   useSessionRecovery();
+  useFontPreset();
   const confirmModal = useUiStore((s) => s.confirmModal);
   const closeConfirmModal = useUiStore((s) => s.closeConfirmModal);
   const location = useLocation();
