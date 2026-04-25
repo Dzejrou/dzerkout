@@ -110,7 +110,7 @@ export default function CardEditor({ card, onSave, onCancel, saving }: Props) {
       {cardType === "concrete" ? (
         <div>
           <label style={labelStyle}>Exercise</label>
-          <select {...register("exercise_id")} style={inputStyle}>
+          <select {...register("exercise_id")} style={selectStyle}>
             <option value="">— none —</option>
             {exercises.map((ex) => (
               <option key={ex.id} value={ex.id}>{ex.name}</option>
@@ -121,7 +121,7 @@ export default function CardEditor({ card, onSave, onCancel, saving }: Props) {
         <>
           <div>
             <label style={labelStyle}>Tag</label>
-            <select {...register("placeholder_tag")} style={inputStyle}>
+            <select {...register("placeholder_tag")} style={selectStyle}>
               {TAGS.map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
@@ -171,6 +171,15 @@ const inputStyle: React.CSSProperties = {
   width: "100%", boxSizing: "border-box", padding: "8px 10px",
   border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, fontSize: 14,
   background: "#1c1c1e", color: "#f2f2f7", outline: "none",
+};
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  appearance: "none",
+  WebkitAppearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238e8e93' d='M6 8L0 0h12z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 10px center",
+  paddingRight: 30,
 };
 const cancelBtnStyle: React.CSSProperties = {
   padding: "8px 16px", borderRadius: 8,
