@@ -147,91 +147,95 @@ function SetDetailPane({ setId, onDeleted }: { setId: string; onDeleted: () => v
   const placeholderCount = detail.cards.filter((c) => c.card_type === "placeholder").length;
 
   return (
-    <div style={detailScrollStyle}>
-      {/* Header */}
-      <div style={detailHeaderRow}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={initialBoxStyle}>{detail.name.charAt(0).toUpperCase()}</div>
-          <h2 style={detailNameStyle}>{detail.name}</h2>
-          <button
-            onClick={() => { setMetaName(detail.name); setMetaNotes(detail.notes ?? ""); setModal({ type: "edit-meta" }); }}
-            style={editPillBtnStyle}
-          >
-            ✏ Edit
-          </button>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => cloneMut.mutate()} disabled={cloneMut.isPending} style={headerActionBtnStyle}>
-            ⎘ Clone
-          </button>
-          <button onClick={() => setModal({ type: "delete-set" })} style={{ ...headerActionBtnStyle, ...deleteHeaderBtnStyle }}>
-            Delete
-          </button>
-        </div>
-      </div>
+    <div style={detailPaneStyle}>
 
-      {/* Meta */}
-      <p style={detailMetaStyle}>
-        {detail.cards.length} card{detail.cards.length !== 1 ? "s" : ""}
-        {" · "}Created {formatDateShort(detail.created_at)}
-        {" · "}Updated {formatDateShort(detail.updated_at)}
-      </p>
-      {detail.notes && <p style={detailNotesStyle}>{detail.notes}</p>}
-
-      <div style={dividerStyle} />
-
-      {/* Cards section */}
-      <div style={sectionHeaderRow}>
-        <p style={sectionLabelStyle}>Set Cards</p>
-        <button onClick={() => setModal({ type: "add-card" })} style={addCardBtnStyle}>+ Add Card</button>
-      </div>
-
-      {detail.cards.length === 0 && (
-        <p style={{ color: TEXT_DISABLED, fontSize: 13, padding: "16px 0" }}>No cards yet — add one above.</p>
-      )}
-
-      <SortableList
-        items={detail.cards}
-        onReorder={(newOrder) => reorderMut.mutate(newOrder.map((c) => c.id))}
-        renderItem={(card, i) => (
-          <div style={cardRowStyle}>
-            <span style={dragHandleStyle}>⠿</span>
-            <span style={cardNumStyle}>{i + 1}</span>
-            <span style={cardTypeBadgeStyle(card.card_type)}>
-              {card.card_type === "concrete" ? "CONCRETE" : "PLACEHOLDER"}
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={cardNameStyle}>{cardLabel(card)}</p>
-              {card.notes && <p style={cardNotesStyle}>{card.notes}</p>}
-            </div>
-            {card.duration_hint_sec != null && (
-              <span style={cardDurStyle}>{card.duration_hint_sec}s</span>
-            )}
-            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-              <button onClick={() => setModal({ type: "edit-card", card })} style={cardActionBtnStyle}>Edit</button>
-              <button onClick={() => setModal({ type: "delete-card", card })} style={{ ...cardActionBtnStyle, color: tokens.red }}>✕</button>
-            </div>
+      {/* ── Fixed top: header + meta + cards section header ── */}
+      <div style={detailFixedTopStyle}>
+        <div style={detailHeaderRow}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={initialBoxStyle}>{detail.name.charAt(0).toUpperCase()}</div>
+            <h2 style={detailNameStyle}>{detail.name}</h2>
+            <button
+              onClick={() => { setMetaName(detail.name); setMetaNotes(detail.notes ?? ""); setModal({ type: "edit-meta" }); }}
+              style={editPillBtnStyle}
+            >
+              ✏ Edit
+            </button>
           </div>
-        )}
-        renderFallbackControls={(_card, i, total, move) => (
-          <div style={{ display: "flex", gap: 4, padding: "4px 16px" }}>
-            <button disabled={i === 0} onClick={() => move(i, i - 1)} style={cardActionBtnStyle}>↑</button>
-            <button disabled={i === total - 1} onClick={() => move(i, i + 1)} style={cardActionBtnStyle}>↓</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => cloneMut.mutate()} disabled={cloneMut.isPending} style={headerActionBtnStyle}>
+              ⎘ Clone
+            </button>
+            <button onClick={() => setModal({ type: "delete-set" })} style={{ ...headerActionBtnStyle, ...deleteHeaderBtnStyle }}>
+              Delete
+            </button>
           </div>
-        )}
-      />
+        </div>
 
-      <div style={dividerStyle} />
+        <p style={detailMetaStyle}>
+          {detail.cards.length} card{detail.cards.length !== 1 ? "s" : ""}
+          {" · "}Created {formatDateShort(detail.created_at)}
+          {" · "}Updated {formatDateShort(detail.updated_at)}
+        </p>
+        {detail.notes && <p style={detailNotesStyle}>{detail.notes}</p>}
 
-      {/* Summary */}
-      <p style={sectionLabelStyle}>Set Summary</p>
-      <div style={summaryRowStyle}>
-        <SummaryTile icon="▣" label="Total cards" value={detail.cards.length} />
-        <SummaryTile icon="▦" label="Concrete cards" value={concreteCount} />
-        <SummaryTile icon="▨" label="Placeholders" value={placeholderCount} />
+        <div style={dividerStyle} />
+
+        <div style={sectionHeaderRow}>
+          <p style={sectionLabelStyle}>Set Cards</p>
+          <button onClick={() => setModal({ type: "add-card" })} style={addCardBtnStyle}>+ Add Card</button>
+        </div>
       </div>
 
-      <p style={footerNoteStyle}>Cards can be reordered using drag &amp; drop.</p>
+      {/* ── Scrollable middle: card list only ── */}
+      <div style={detailCardListStyle}>
+        {detail.cards.length === 0 && (
+          <p style={{ color: TEXT_DISABLED, fontSize: 13, padding: "16px 0" }}>No cards yet — add one above.</p>
+        )}
+
+        <SortableList
+          items={detail.cards}
+          onReorder={(newOrder) => reorderMut.mutate(newOrder.map((c) => c.id))}
+          renderItem={(card, i) => (
+            <div style={cardRowStyle}>
+              <span style={dragHandleStyle}>⠿</span>
+              <span style={cardNumStyle}>{i + 1}</span>
+              <span style={cardTypeBadgeStyle(card.card_type)}>
+                {card.card_type === "concrete" ? "CONCRETE" : "PLACEHOLDER"}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={cardNameStyle}>{cardLabel(card)}</p>
+                {card.notes && <p style={cardNotesStyle}>{card.notes}</p>}
+              </div>
+              {card.duration_hint_sec != null && (
+                <span style={cardDurStyle}>{card.duration_hint_sec}s</span>
+              )}
+              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                <button onClick={() => setModal({ type: "edit-card", card })} style={cardActionBtnStyle}>Edit</button>
+                <button onClick={() => setModal({ type: "delete-card", card })} style={{ ...cardActionBtnStyle, color: tokens.red }}>✕</button>
+              </div>
+            </div>
+          )}
+          renderFallbackControls={(_card, i, total, move) => (
+            <div style={{ display: "flex", gap: 4, padding: "4px 16px" }}>
+              <button disabled={i === 0} onClick={() => move(i, i - 1)} style={cardActionBtnStyle}>↑</button>
+              <button disabled={i === total - 1} onClick={() => move(i, i + 1)} style={cardActionBtnStyle}>↓</button>
+            </div>
+          )}
+        />
+      </div>
+
+      {/* ── Fixed bottom: summary ── */}
+      <div style={detailFixedBottomStyle}>
+        <div style={dividerStyle} />
+        <p style={sectionLabelStyle}>Set Summary</p>
+        <div style={summaryRowStyle}>
+          <SummaryTile icon="▣" label="Total cards" value={detail.cards.length} />
+          <SummaryTile icon="▦" label="Concrete cards" value={concreteCount} />
+          <SummaryTile icon="▨" label="Placeholders" value={placeholderCount} />
+        </div>
+        <p style={footerNoteStyle}>Cards can be reordered using drag &amp; drop.</p>
+      </div>
 
       {/* ── Modals ── */}
 
@@ -585,10 +589,30 @@ const rightPanelStyle: React.CSSProperties = {
   background: BG_ELEVATED,
 };
 
-const detailScrollStyle: React.CSSProperties = {
+// Right pane: three-section layout so only the card list scrolls.
+const detailPaneStyle: React.CSSProperties = {
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  minHeight: 0,
+};
+
+const detailFixedTopStyle: React.CSSProperties = {
+  flexShrink: 0,
+  padding: "28px 32px 0",
+};
+
+const detailCardListStyle: React.CSSProperties = {
   flex: 1,
   overflowY: "auto",
-  padding: "28px 32px 48px",
+  minHeight: 0,
+  padding: "4px 32px 8px",
+};
+
+const detailFixedBottomStyle: React.CSSProperties = {
+  flexShrink: 0,
+  padding: "0 32px 32px",
 };
 
 const detailHeaderRow: React.CSSProperties = {
