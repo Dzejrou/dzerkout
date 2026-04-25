@@ -6,6 +6,14 @@ use crate::{
 };
 
 #[tauri::command]
+pub async fn start_next_set(
+    pool: State<'_, SqlitePool>,
+    session_id: String,
+) -> Result<ActiveSessionPayload, AppError> {
+    session::start_next_set(&pool, &session_id).await
+}
+
+#[tauri::command]
 pub async fn get_active_session(
     pool: State<'_, SqlitePool>,
 ) -> Result<Option<ActiveSessionPayload>, AppError> {

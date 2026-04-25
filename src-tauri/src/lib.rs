@@ -60,6 +60,7 @@ pub fn run() {
             advance_exercise,
             retreat_exercise,
             skip_exercise,
+            start_next_set,
             finish_session,
             abandon_session,
             discard_session,

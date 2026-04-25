@@ -1093,6 +1093,213 @@ async fn test_finish_stores_performed_duration(pool: SqlitePool) {
     assert!(performed.unwrap() >= 0);
 }
 
+// ── Rest-between-sets helpers ─────────────────────────────────────────────────
+
+/// Like make_two_set_session, but the workout template has rest_between_sets_sec = 30.
+async fn make_two_set_session_with_rest(pool: &SqlitePool, rest_sec: i64) -> (String, Vec<String>, Vec<String>) {
+    let ex = exercise::create(pool, "Exercise", None).await.unwrap();
+
+    let set_a = set_template::create(pool, "Set A", None).await.unwrap();
+    let set_b = set_template::create(pool, "Set B", None).await.unwrap();
+
+    set_template::add_card(pool, &set_a.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(pool, &set_a.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(pool, &set_b.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(pool, &set_b.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let wt = workout_template::create(pool, "Rest Workout", None, 120, Some(rest_sec)).await.unwrap();
+    workout_template::add_set_ref(pool, &wt.id, &set_a.id).await.unwrap();
+    workout_template::add_set_ref(pool, &wt.id, &set_b.id).await.unwrap();
+
+    let draft = session::create_session_draft(pool, &wt.id).await.unwrap();
+    let started = session::start_session(pool, &draft.session.id).await.unwrap();
+
+    let session_id = started.session.id.clone();
+    let set_ids: Vec<String> = started.sets.iter().map(|s| s.id.clone()).collect();
+    let ex_ids: Vec<String> = started.exercises.iter().map(|e| e.id.clone()).collect();
+
+    (session_id, set_ids, ex_ids)
+}
+
+// ── Rest: same-set advance does NOT enter rest ────────────────────────────────
+
+#[sqlx::test]
+async fn test_advance_within_set_does_not_enter_rest(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session_with_rest(&pool, 30).await;
+    // ex_ids: [set1_ex0, set1_ex1, set2_ex0, set2_ex1]
+    // Started: set1_ex0 is active
+
+    // Advance within set 1 (set1_ex0 → set1_ex1)
+    let payload = session::advance_exercise(&pool, &session_id).await.unwrap();
+
+    // Must NOT enter rest (rest only happens between sets)
+    assert!(payload.rest_phase.is_none(), "same-set advance must not enter rest phase");
+    assert_eq!(payload.current_exercise_id.as_deref(), Some(ex_ids[1].as_str()), "set1_ex1 is now active");
+    assert_eq!(payload.current_set_id.as_deref(), Some(set_ids[0].as_str()), "still in set 1");
+
+    // set1_ex0 completed, set1_ex1 active
+    let ex0 = payload.exercises.iter().find(|e| e.id == ex_ids[0]).unwrap();
+    assert_eq!(ex0.status, "completed");
+    let ex1 = payload.exercises.iter().find(|e| e.id == ex_ids[1]).unwrap();
+    assert_eq!(ex1.status, "active");
+}
+
+// ── Rest: cross-set advance enters rest phase ─────────────────────────────────
+
+#[sqlx::test]
+async fn test_advance_enters_rest_phase(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session_with_rest(&pool, 30).await;
+    // ex_ids: [set1_ex0, set1_ex1, set2_ex0, set2_ex1]
+
+    // Advance within set 1
+    session::advance_exercise(&pool, &session_id).await.unwrap(); // → set1_ex1
+
+    // Advance across set boundary → should enter rest
+    let payload = session::advance_exercise(&pool, &session_id).await.unwrap();
+
+    // No active exercise during rest
+    assert!(payload.current_exercise_id.is_none(), "no active exercise during rest");
+    assert!(payload.current_set_id.is_none(), "no current_set_id during rest");
+
+    // rest_phase populated
+    let rp = payload.rest_phase.as_ref().expect("rest_phase must be Some");
+    assert_eq!(rp.next_set_id, set_ids[1], "next_set_id points to set 2");
+    assert_eq!(rp.rest_duration_sec, 30, "rest_duration_sec = 30");
+    assert!(rp.rest_started_at_ms > 0, "rest_started_at_ms is a real timestamp");
+
+    // set1_ex1 completed
+    let ex1 = payload.exercises.iter().find(|e| e.id == ex_ids[1]).unwrap();
+    assert_eq!(ex1.status, "completed");
+
+    // set1 ended, set2 not yet started
+    let s1 = payload.sets.iter().find(|s| s.id == set_ids[0]).unwrap();
+    assert!(s1.ended_at.is_some(), "set 1 ended");
+
+    let s2 = payload.sets.iter().find(|s| s.id == set_ids[1]).unwrap();
+    assert!(s2.started_at.is_none(), "set 2 not started during rest");
+    assert!(s2.rest_started_at.is_some(), "set 2 rest_started_at set");
+    assert_eq!(s2.rest_duration_sec, Some(30));
+}
+
+// ── Rest: start_next_set transitions to set 2 ────────────────────────────────
+
+#[sqlx::test]
+async fn test_start_next_set_after_rest(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session_with_rest(&pool, 30).await;
+
+    session::advance_exercise(&pool, &session_id).await.unwrap(); // → set1_ex1
+    session::advance_exercise(&pool, &session_id).await.unwrap(); // → rest phase
+
+    let payload = session::start_next_set(&pool, &session_id).await.unwrap();
+
+    // Rest phase cleared
+    assert!(payload.rest_phase.is_none(), "rest_phase cleared after start_next_set");
+
+    // set2_ex0 is now active
+    let ex2 = payload.exercises.iter().find(|e| e.id == ex_ids[2]).unwrap();
+    assert_eq!(ex2.status, "active", "set2_ex0 is active");
+    assert!(ex2.started_at.is_some(), "set2_ex0 has started_at");
+
+    // set2 has a fresh timer
+    let s2 = payload.sets.iter().find(|s| s.id == set_ids[1]).unwrap();
+    assert!(s2.started_at.is_some(), "set 2 started");
+    assert!(s2.rest_started_at.is_none(), "rest_started_at cleared");
+    assert!(s2.rest_duration_sec.is_none(), "rest_duration_sec cleared");
+    assert_eq!(s2.paused_total_sec, 0, "set 2 timer fresh");
+
+    assert_eq!(payload.current_set_id.as_deref(), Some(set_ids[1].as_str()));
+    assert_eq!(payload.current_exercise_id.as_deref(), Some(ex_ids[2].as_str()));
+}
+
+// ── Rest: no rest when rest_between_sets_sec = 0 ─────────────────────────────
+
+#[sqlx::test]
+async fn test_no_rest_when_zero(pool: SqlitePool) {
+    // make_two_set_session uses rest = None (treated as 0)
+    let (session_id, set_ids, ex_ids) = make_two_set_session(&pool).await;
+
+    session::advance_exercise(&pool, &session_id).await.unwrap(); // → set1_ex1
+    let payload = session::advance_exercise(&pool, &session_id).await.unwrap(); // → set2_ex0
+
+    // Should NOT enter rest phase
+    assert!(payload.rest_phase.is_none(), "no rest phase when rest = 0");
+
+    // set2_ex0 immediately active
+    let ex2 = payload.exercises.iter().find(|e| e.id == ex_ids[2]).unwrap();
+    assert_eq!(ex2.status, "active");
+    assert_eq!(payload.current_set_id.as_deref(), Some(set_ids[1].as_str()));
+}
+
+// ── Rest: skip at set boundary bypasses rest ──────────────────────────────────
+
+#[sqlx::test]
+async fn test_skip_at_set_boundary_bypasses_rest(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session_with_rest(&pool, 30).await;
+    // Skip both exercises in set 1 to reach set 2 without rest.
+
+    session::advance_exercise(&pool, &session_id).await.unwrap(); // → set1_ex1
+    // Now skip set1_ex1 (last in set1) → should bypass rest and activate set2_ex0
+    let payload = session::skip_exercise(&pool, &session_id, &ex_ids[1]).await.unwrap();
+
+    assert!(payload.rest_phase.is_none(), "skip at set boundary must bypass rest");
+    assert_eq!(payload.current_exercise_id.as_deref(), Some(ex_ids[2].as_str()), "set2_ex0 activated");
+    assert_eq!(payload.current_set_id.as_deref(), Some(set_ids[1].as_str()), "in set 2");
+
+    let s2 = payload.sets.iter().find(|s| s.id == set_ids[1]).unwrap();
+    assert!(s2.started_at.is_some(), "set 2 started immediately");
+    assert!(s2.rest_started_at.is_none(), "no rest on set 2");
+}
+
+// ── Rest: retreat during rest cancels rest and re-opens previous set ──────────
+
+#[sqlx::test]
+async fn test_retreat_during_rest_cancels_rest(pool: SqlitePool) {
+    let (session_id, set_ids, ex_ids) = make_two_set_session_with_rest(&pool, 30).await;
+
+    session::advance_exercise(&pool, &session_id).await.unwrap(); // → set1_ex1
+    session::advance_exercise(&pool, &session_id).await.unwrap(); // → rest phase
+
+    let payload = session::retreat_exercise(&pool, &session_id).await.unwrap();
+
+    // Rest phase cancelled
+    assert!(payload.rest_phase.is_none(), "rest phase cancelled by Prev");
+
+    // set2 rest cleared
+    let s2 = payload.sets.iter().find(|s| s.id == set_ids[1]).unwrap();
+    assert!(s2.rest_started_at.is_none(), "rest_started_at cleared");
+    assert!(s2.rest_duration_sec.is_none(), "rest_duration_sec cleared");
+    assert!(s2.started_at.is_none(), "set 2 not started");
+
+    // set1 restarted, set1_ex1 is active
+    let s1 = payload.sets.iter().find(|s| s.id == set_ids[0]).unwrap();
+    assert!(s1.started_at.is_some(), "set 1 restarted");
+    assert!(s1.ended_at.is_none(), "set 1 re-opened");
+
+    let ex1 = payload.exercises.iter().find(|e| e.id == ex_ids[1]).unwrap();
+    assert_eq!(ex1.status, "active", "set1_ex1 reactivated");
+    assert_eq!(payload.current_exercise_id.as_deref(), Some(ex_ids[1].as_str()));
+    assert_eq!(payload.current_set_id.as_deref(), Some(set_ids[0].as_str()));
+}
+
+// ── Rest: payload survives recovery (build_payload with rest in DB) ───────────
+
+#[sqlx::test]
+async fn test_rest_phase_survives_payload_rebuild(pool: SqlitePool) {
+    let (session_id, set_ids, _) = make_two_set_session_with_rest(&pool, 60).await;
+
+    session::advance_exercise(&pool, &session_id).await.unwrap();
+    session::advance_exercise(&pool, &session_id).await.unwrap(); // → rest
+
+    // Simulate app relaunch: call get_active_session which rebuilds payload from DB
+    let recovered = session::get_active_session(&pool).await.unwrap()
+        .expect("session must be found");
+
+    let rp = recovered.rest_phase.as_ref().expect("rest_phase must survive recovery");
+    assert_eq!(rp.next_set_id, set_ids[1]);
+    assert_eq!(rp.rest_duration_sec, 60);
+    assert!(rp.rest_started_at_ms > 0);
+}
+
 // ── performed_duration_sec: pause time excluded ───────────────────────────────
 
 #[sqlx::test]

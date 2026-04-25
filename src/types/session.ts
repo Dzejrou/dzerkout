@@ -23,8 +23,16 @@ export interface WorkoutSessionSetRow {
   ended_at: string | null;
   paused_total_sec: number;
   paused_at: string | null;
+  rest_duration_sec: number | null;
+  rest_started_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RestPhaseInfo {
+  next_set_id: string;
+  rest_duration_sec: number;
+  rest_started_at_ms: number;
 }
 
 export interface WorkoutSessionExerciseRow {
@@ -95,4 +103,5 @@ export interface ActiveSessionPayload {
   current_exercise_id: string | null;
   current_set_id: string | null;
   timer_base: TimerBase;
+  rest_phase: RestPhaseInfo | null;
 }

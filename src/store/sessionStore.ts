@@ -4,6 +4,7 @@ import type {
   WorkoutSessionSetRow,
   WorkoutSessionExerciseRow,
   SessionStatus,
+  RestPhaseInfo,
 } from "../types/session";
 
 interface SessionStore {
@@ -20,6 +21,8 @@ interface SessionStore {
   // Snapshot of paused_total_sec at the moment the current exercise became active.
   // Per-exercise paused time = pausedTotalSec - exercisePausedOffsetSec.
   exercisePausedOffsetSec: number;
+  // Non-null when the runner is in a between-set rest phase.
+  restPhase: RestPhaseInfo | null;
 
   load: (payload: ActiveSessionPayload) => void;
   clear: () => void;
@@ -37,9 +40,10 @@ export const useSessionStore = create<SessionStore>((set) => ({
   pausedTotalSec: 0,
   pausedAt: null,
   exercisePausedOffsetSec: 0,
+  restPhase: null,
 
   load: (payload) => {
-    const { session, sets, exercises, current_set_id, current_exercise_id, timer_base } = payload;
+    const { session, sets, exercises, current_set_id, current_exercise_id, timer_base, rest_phase } = payload;
     set((prev) => ({
       sessionId: session.id,
       sessionStatus: session.status,
@@ -60,6 +64,7 @@ export const useSessionStore = create<SessionStore>((set) => ({
           ? (exercises.find((e) => e.id === current_exercise_id)?.paused_offset_sec
               ?? timer_base.paused_total_sec)
           : prev.exercisePausedOffsetSec,
+      restPhase: rest_phase ?? null,
     }));
   },
 
@@ -75,5 +80,6 @@ export const useSessionStore = create<SessionStore>((set) => ({
       pausedTotalSec: 0,
       pausedAt: null,
       exercisePausedOffsetSec: 0,
+      restPhase: null,
     }),
 }));

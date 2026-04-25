@@ -2,7 +2,7 @@ use sqlx::{SqliteConnection, SqlitePool};
 use uuid::Uuid;
 use crate::{
     db::{exercises as exercises_db, sessions, set_templates, workout_templates},
-    domain::types::{ActiveSessionPayload, TimerBase, WorkoutSessionRow},
+    domain::types::{ActiveSessionPayload, RestPhaseInfo, TimerBase, WorkoutSessionRow},
     error::AppError,
 };
 
@@ -56,6 +56,23 @@ pub async fn build_payload(
         },
     };
 
+    // Detect rest phase: a set whose rest_started_at IS NOT NULL and started_at IS NULL.
+    let rest_phase = sets
+        .iter()
+        .find(|s| s.rest_started_at.is_some() && s.started_at.is_none())
+        .and_then(|s| {
+            let started_ms = s
+                .rest_started_at
+                .as_deref()
+                .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
+                .map(|dt| dt.timestamp_millis())?;
+            Some(RestPhaseInfo {
+                next_set_id: s.id.clone(),
+                rest_duration_sec: s.rest_duration_sec.unwrap_or(0),
+                rest_started_at_ms: started_ms,
+            })
+        });
+
     Ok(ActiveSessionPayload {
         session,
         sets,
@@ -63,6 +80,7 @@ pub async fn build_payload(
         current_exercise_id,
         current_set_id,
         timer_base,
+        rest_phase,
     })
 }
 
@@ -319,8 +337,15 @@ pub async fn advance_exercise(
 
         sessions::complete_exercise(&mut tx, &current_ex.id).await?;
         sessions::end_set(&mut tx, &current_set.id).await?;
-        sessions::start_fresh_set(&mut tx, &ns.id).await?;
-        sessions::activate_exercise(&mut tx, &next_ex.id).await?;
+
+        // Enter rest phase if the template has a rest duration configured.
+        let rest_sec = sessions::fetch_rest_between_sets_sec(&mut tx, session_id).await?;
+        if rest_sec.unwrap_or(0) > 0 {
+            sessions::begin_rest_on_set(&mut tx, &ns.id, rest_sec.unwrap()).await?;
+        } else {
+            sessions::start_fresh_set(&mut tx, &ns.id).await?;
+            sessions::activate_exercise(&mut tx, &next_ex.id).await?;
+        }
     }
 
     tx.commit().await?;
@@ -335,9 +360,34 @@ pub async fn retreat_exercise(
 ) -> Result<ActiveSessionPayload, AppError> {
     let mut tx = pool.begin().await?;
 
-    let current_ex = sessions::find_active_exercise(&mut tx, session_id)
-        .await?
-        .ok_or_else(|| AppError::Validation("no active exercise".into()))?;
+    let maybe_current_ex = sessions::find_active_exercise(&mut tx, session_id).await?;
+
+    // Handle rest phase: no active exercise but there is a set waiting in rest.
+    if maybe_current_ex.is_none() {
+        let rest_set = sessions::find_set_in_rest(&mut tx, session_id).await?;
+        if let Some(rs) = rest_set {
+            let prev_set = sessions::find_prev_set(&mut tx, session_id, rs.order_index).await?;
+            let Some(ps) = prev_set else {
+                return Err(AppError::Validation(
+                    "already at first exercise (rest phase — no previous set)".into(),
+                ));
+            };
+            let prev_ex = sessions::find_last_exercise_in_set(&mut tx, &ps.id)
+                .await?
+                .ok_or_else(|| AppError::Validation("previous set has no exercises".into()))?;
+
+            // Cancel rest on the waiting set and re-open the previous set.
+            sessions::clear_rest_on_set(&mut tx, &rs.id).await?;
+            sessions::restart_prev_set(&mut tx, &ps.id).await?;
+            sessions::reactivate_exercise(&mut tx, &prev_ex.id).await?;
+
+            tx.commit().await?;
+            return build_payload(pool, session_id).await;
+        }
+        return Err(AppError::Validation("no active exercise".into()));
+    }
+
+    let current_ex = maybe_current_ex.unwrap();
 
     let current_set = sessions::find_set_by_id(&mut tx, &current_ex.workout_session_set_id)
         .await?
@@ -427,6 +477,7 @@ pub async fn skip_exercise(
                 .ok_or_else(|| AppError::Validation("next set has no exercises".into()))?;
 
             sessions::end_set(&mut tx, &current_set.id).await?;
+            // Skip always bypasses rest — the user deliberately chose to move on immediately.
             sessions::start_fresh_set(&mut tx, &ns.id).await?;
             sessions::activate_exercise(&mut tx, &next_ex.id).await?;
         }
@@ -465,6 +516,30 @@ pub async fn finish_session(
     let session = sessions::finish_session_row(&mut tx, session_id).await?;
     tx.commit().await?;
     Ok(session)
+}
+
+// ── start_next_set (end rest → begin next set) ────────────────────────────────
+
+pub async fn start_next_set(
+    pool: &SqlitePool,
+    session_id: &str,
+) -> Result<ActiveSessionPayload, AppError> {
+    let mut tx = pool.begin().await?;
+
+    let rest_set = sessions::find_set_in_rest(&mut tx, session_id)
+        .await?
+        .ok_or_else(|| AppError::Validation("no rest phase is currently active".into()))?;
+
+    let next_ex = sessions::find_first_exercise(&mut tx, &rest_set.id)
+        .await?
+        .ok_or_else(|| AppError::Validation("rest set has no exercises".into()))?;
+
+    sessions::clear_rest_on_set(&mut tx, &rest_set.id).await?;
+    sessions::start_fresh_set(&mut tx, &rest_set.id).await?;
+    sessions::activate_exercise(&mut tx, &next_ex.id).await?;
+
+    tx.commit().await?;
+    build_payload(pool, session_id).await
 }
 
 // ── abandon_session ───────────────────────────────────────────────────────────

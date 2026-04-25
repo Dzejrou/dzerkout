@@ -39,6 +39,7 @@ pub async fn find_sets_for_session(
         WorkoutSessionSetRow,
         "SELECT id, workout_session_id, source_set_template_id, order_index,
                 started_at, ended_at, paused_total_sec, paused_at,
+                rest_duration_sec, rest_started_at,
                 created_at, updated_at
          FROM workout_session_sets
          WHERE workout_session_id = ?
@@ -79,6 +80,7 @@ pub async fn find_first_set(
         WorkoutSessionSetRow,
         "SELECT id, workout_session_id, source_set_template_id, order_index,
                 started_at, ended_at, paused_total_sec, paused_at,
+                rest_duration_sec, rest_started_at,
                 created_at, updated_at
          FROM workout_session_sets
          WHERE workout_session_id = ?
@@ -143,6 +145,7 @@ pub async fn find_set_by_id(
         WorkoutSessionSetRow,
         "SELECT id, workout_session_id, source_set_template_id, order_index,
                 started_at, ended_at, paused_total_sec, paused_at,
+                rest_duration_sec, rest_started_at,
                 created_at, updated_at
          FROM workout_session_sets WHERE id = ?",
         set_id
@@ -184,6 +187,7 @@ pub async fn find_next_set(
         WorkoutSessionSetRow,
         "SELECT id, workout_session_id, source_set_template_id, order_index,
                 started_at, ended_at, paused_total_sec, paused_at,
+                rest_duration_sec, rest_started_at,
                 created_at, updated_at
          FROM workout_session_sets
          WHERE workout_session_id = ? AND order_index > ?
@@ -229,6 +233,7 @@ pub async fn find_prev_set(
         WorkoutSessionSetRow,
         "SELECT id, workout_session_id, source_set_template_id, order_index,
                 started_at, ended_at, paused_total_sec, paused_at,
+                rest_duration_sec, rest_started_at,
                 created_at, updated_at
          FROM workout_session_sets
          WHERE workout_session_id = ? AND order_index < ?
@@ -318,6 +323,7 @@ pub async fn insert_session_set(
          VALUES (?, ?, ?, ?)
          RETURNING id, workout_session_id, source_set_template_id, order_index,
                    started_at, ended_at, paused_total_sec, paused_at,
+                   rest_duration_sec, rest_started_at,
                    created_at, updated_at",
         id,
         session_id,
@@ -744,4 +750,86 @@ pub async fn delete_session(
         .execute(conn)
         .await?;
     Ok(())
+}
+
+// ── Rest-phase helpers ────────────────────────────────────────────────────────
+
+/// Fetch the rest_between_sets_sec configured on the workout template that owns
+/// this session. Returns None when the session has no template or the template
+/// has no rest configured.
+pub async fn fetch_rest_between_sets_sec(
+    conn: &mut SqliteConnection,
+    session_id: &str,
+) -> Result<Option<i64>, sqlx::Error> {
+    let row = sqlx::query!(
+        "SELECT wt.rest_between_sets_sec
+         FROM workout_sessions ws
+         LEFT JOIN workout_templates wt ON wt.id = ws.workout_template_id
+         WHERE ws.id = ?",
+        session_id
+    )
+    .fetch_optional(conn)
+    .await?;
+    Ok(row.and_then(|r| r.rest_between_sets_sec))
+}
+
+/// Mark a set as "in rest" by recording when rest started and how long it lasts.
+/// The set must not yet have a started_at (i.e., it hasn't begun exercises).
+pub async fn begin_rest_on_set(
+    conn: &mut SqliteConnection,
+    set_id: &str,
+    duration_sec: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE workout_session_sets
+         SET rest_started_at   = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+             rest_duration_sec = ?
+         WHERE id = ?",
+        duration_sec,
+        set_id,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+/// Clear the rest-phase columns on a set (called when rest is cancelled or
+/// the user presses "Start Set" to begin exercises early / on time).
+pub async fn clear_rest_on_set(
+    conn: &mut SqliteConnection,
+    set_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE workout_session_sets
+         SET rest_started_at   = NULL,
+             rest_duration_sec = NULL
+         WHERE id = ?",
+        set_id,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+/// Find the set that is currently in rest phase for the given session
+/// (rest_started_at IS NOT NULL AND started_at IS NULL).
+pub async fn find_set_in_rest(
+    conn: &mut SqliteConnection,
+    session_id: &str,
+) -> Result<Option<WorkoutSessionSetRow>, sqlx::Error> {
+    sqlx::query_as!(
+        WorkoutSessionSetRow,
+        "SELECT id, workout_session_id, source_set_template_id, order_index,
+                started_at, ended_at, paused_total_sec, paused_at,
+                rest_duration_sec, rest_started_at,
+                created_at, updated_at
+         FROM workout_session_sets
+         WHERE workout_session_id = ?
+           AND rest_started_at IS NOT NULL
+           AND started_at IS NULL
+         LIMIT 1",
+        session_id,
+    )
+    .fetch_optional(conn)
+    .await
 }

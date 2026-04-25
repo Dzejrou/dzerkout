@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT wt.rest_between_sets_sec\n         FROM workout_sessions ws\n         LEFT JOIN workout_templates wt ON wt.id = ws.workout_template_id\n         WHERE ws.id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "rest_between_sets_sec",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "339f1f75be18e2554e4726608da111bea2cfb4c3670f60244a30bed721f534b2"
+}

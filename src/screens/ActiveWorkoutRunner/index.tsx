@@ -22,7 +22,7 @@ export default function ActiveWorkoutRunner() {
   const isAndroid = useUiStore((s) => s.isAndroid);
   const {
     sessionId, sessionStatus, sets, exercises,
-    currentSetId, currentExerciseId, pausedAt, load, clear,
+    currentSetId, currentExerciseId, pausedAt, restPhase, load, clear,
   } = useSessionStore();
 
   const elapsedMs = useElapsedMs();
@@ -53,6 +53,7 @@ export default function ActiveWorkoutRunner() {
     if (pausedAt !== null) return;
     if (sessionStatus !== "in_progress") return;
     if (!currentExerciseId) return;
+    if (restPhase) return; // do not auto-advance during rest
     if (durationHintSec == null) return;
     if (exerciseElapsedMs < durationHintSec * 1000) return;
     if (pending) return;
@@ -61,7 +62,23 @@ export default function ActiveWorkoutRunner() {
 
     autoAdvancedExerciseRef.current = currentExerciseId;
     nextHandlerRef.current();
-  }, [autoAdvance, pausedAt, sessionStatus, currentExerciseId, durationHintSec, exerciseElapsedMs, pending]);
+  }, [autoAdvance, pausedAt, sessionStatus, currentExerciseId, restPhase, durationHintSec, exerciseElapsedMs, pending]);
+
+  // ── Rest-phase elapsed timer ────────────────────────────────────────────────
+  // Tracks how many ms have passed since rest started (client-side, non-persisted).
+  const [restElapsedMs, setRestElapsedMs] = useState(0);
+  const restPhaseRef = useRef(restPhase);
+  restPhaseRef.current = restPhase;
+  useEffect(() => {
+    if (!restPhase) { setRestElapsedMs(0); return; }
+    const tick = () => {
+      const elapsed = Date.now() - restPhaseRef.current!.rest_started_at_ms;
+      setRestElapsedMs(Math.max(0, elapsed));
+    };
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [restPhase?.next_set_id]); // re-run only when a new rest phase begins
 
   // ── No session ──────────────────────────────────────────────────────────────
   if (!sessionId) {
@@ -192,8 +209,13 @@ export default function ActiveWorkoutRunner() {
     if (payload) load(payload);
   }
   async function handlePrev() {
-    if (isAtFirstExercise) return;
+    // During rest, Prev cancels rest and re-opens the previous set.
+    if (!restPhase && isAtFirstExercise) return;
     const payload = await run("prev", () => sessionsApi.retreat(sessionId!));
+    if (payload) load(payload);
+  }
+  async function handleStartNextSet() {
+    const payload = await run("startNextSet", () => sessionsApi.startNextSet(sessionId!));
     if (payload) load(payload);
   }
   async function handleSkip() {
@@ -201,7 +223,9 @@ export default function ActiveWorkoutRunner() {
     const payload = await run("skip", () => sessionsApi.skip(sessionId!, currentExerciseId));
     if (payload) {
       load(payload);
-      if (!payload.current_exercise_id) {
+      // Only offer Finish when there is genuinely no next exercise AND no rest phase.
+      // (rest_phase non-null means the runner is between sets, not at the end of the workout.)
+      if (!payload.current_exercise_id && !payload.rest_phase) {
         showConfirm({ message: "All remaining exercises skipped. Finish workout?", confirmLabel: "Finish", onConfirm: doFinish, onCancel: () => {} });
       }
     }
@@ -249,6 +273,102 @@ export default function ActiveWorkoutRunner() {
     exercises.filter((e) => e.workout_session_set_id === s.id)
   );
   const currentGlobalIdx = allExercises.findIndex((e) => e.id === currentExerciseId);
+
+  // ── Rest-phase view ───────────────────────────────────────────────────────
+  if (restPhase) {
+    const nextSet = sets.find((s) => s.id === restPhase.next_set_id);
+    const nextSetIndex = nextSet ? sets.indexOf(nextSet) : -1;
+    const nextSetExercises = nextSet
+      ? exercises.filter((e) => e.workout_session_set_id === nextSet.id)
+      : [];
+    const restRemainingSec = Math.max(
+      0,
+      restPhase.rest_duration_sec - Math.floor(restElapsedMs / 1000),
+    );
+    const restOverdue = restElapsedMs > restPhase.rest_duration_sec * 1000;
+
+    return (
+      <div style={runnerRootStyle}>
+        {/* Top bar */}
+        <div style={topBarStyle}>
+          <button onClick={() => navigate("/")} style={backBtnStyle}>← Back</button>
+        </div>
+
+        {/* Main content: rest timer + next-set preview */}
+        <div style={mainAreaStyle}>
+          {/* Left: rest timer */}
+          <div style={leftColStyle}>
+            <div style={timerPanelStyle}>
+              <span style={panelLabelStyle}>REST</span>
+              <span style={{ ...bigClockStyle, color: restOverdue ? tokens.amber : tokens.textPrimary }}>
+                {formatTime(restRemainingSec * 1000)}
+              </span>
+              {restOverdue && (
+                <span style={{ ...pausedBadgeStyle, color: tokens.amber }}>OVERDUE</span>
+              )}
+              <span style={setIndexStyle}>of {formatTime(restPhase.rest_duration_sec * 1000)}</span>
+            </div>
+
+            <div style={timerPanelStyle}>
+              <span style={panelLabelStyle}>UP NEXT</span>
+              <span style={{ fontSize: 14, color: tokens.textSecondary, marginBottom: 4 }}>
+                Set {nextSetIndex + 1} of {sets.length}
+              </span>
+              {nextSetExercises.map((e) => (
+                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "3px 0", fontSize: 14, color: tokens.iconText }}>
+                  <span>{e.display_name}</span>
+                  {e.duration_hint_sec != null && (
+                    <span style={{ color: tokens.textMuted, fontVariantNumeric: "tabular-nums" }}>
+                      {formatTime(e.duration_hint_sec * 1000)}
+                    </span>
+                  )}
+                </div>
+              ))}
+              {error && <p style={errorStyle}>{error}</p>}
+            </div>
+          </div>
+
+          {/* Right: placeholder */}
+          <div style={{ ...queueColStyle, justifyContent: "flex-start", paddingTop: 8 }}>
+            <div style={{ textAlign: "center", color: tokens.textMuted, fontSize: 13, padding: "12px 0" }}>
+              Rest between sets
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom controls */}
+        <div style={bottomBarStyle}>
+          <div style={primaryCtrlsStyle}>
+            <button
+              onClick={handlePrev}
+              disabled={!!pending}
+              style={navBtnStyle(!!pending)}
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={handleStartNextSet}
+              disabled={!!pending}
+              style={startSetBtnStyle}
+            >
+              {pending === "startNextSet" ? "…" : "▶ Start Set"}
+            </button>
+          </div>
+
+          <div style={secondaryCtrlsStyle}>
+            <button onClick={handleFinish} disabled={!!pending} style={secBtnStyle(!!pending)}>
+              <span style={secIconStyle}>⚑</span>
+              <span style={secLabelStyle}>Finish</span>
+            </button>
+            <button onClick={handleAbandon} disabled={!!pending} style={secBtnStyle(!!pending)}>
+              <span style={secIconStyle}>✕</span>
+              <span style={secLabelStyle}>Abandon</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── In-progress layout ────────────────────────────────────────────────────
   return (
@@ -658,6 +778,22 @@ const secLabelStyle: React.CSSProperties = {
   fontWeight: 600,
   letterSpacing: "0.05em",
   textTransform: "uppercase",
+};
+
+const startSetBtnStyle: React.CSSProperties = {
+  flex: 2,
+  height: 44,
+  padding: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 10,
+  border: "none",
+  background: tokens.green,
+  color: "#fff",
+  cursor: "pointer",
+  fontSize: 15,
+  fontWeight: 700,
 };
 
 // ── Draft styles ──────────────────────────────────────────────────────────────

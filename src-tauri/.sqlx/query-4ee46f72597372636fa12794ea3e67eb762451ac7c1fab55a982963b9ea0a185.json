@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, workout_session_id, source_set_template_id, order_index,\n                started_at, ended_at, paused_total_sec, paused_at,\n                created_at, updated_at\n         FROM workout_session_sets\n         WHERE workout_session_id = ?\n         ORDER BY order_index",
+  "query": "SELECT id, workout_session_id, source_set_template_id, order_index,\n                started_at, ended_at, paused_total_sec, paused_at,\n                rest_duration_sec, rest_started_at,\n                created_at, updated_at\n         FROM workout_session_sets\n         WHERE workout_session_id = ?\n         ORDER BY order_index",
   "describe": {
     "columns": [
       {
@@ -44,13 +44,23 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "rest_duration_sec",
         "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "rest_started_at",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 10,
         "type_info": "Text"
       },
       {
         "name": "updated_at",
-        "ordinal": 9,
+        "ordinal": 11,
         "type_info": "Text"
       }
     ],
@@ -66,9 +76,11 @@
       true,
       false,
       true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "17df7ace8ac56c32e2ee79975eb2e7c147234fc6480c5c31cffa7b13049afb07"
+  "hash": "4ee46f72597372636fa12794ea3e67eb762451ac7c1fab55a982963b9ea0a185"
 }

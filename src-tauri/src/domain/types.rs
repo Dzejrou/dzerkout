@@ -207,6 +207,9 @@ pub struct WorkoutSessionSetRow {
     pub ended_at: Option<String>,
     pub paused_total_sec: i64,
     pub paused_at: Option<String>,
+    /// Set when this set is in the "rest" phase (rest_started_at IS NOT NULL AND started_at IS NULL).
+    pub rest_duration_sec: Option<i64>,
+    pub rest_started_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -240,6 +243,18 @@ pub struct TimerBase {
     pub set_started_at_ms: Option<i64>,
     pub paused_total_sec: i64,
     pub paused_at_ms: Option<i64>,
+}
+
+/// Present in ActiveSessionPayload when the runner is in a between-set rest phase.
+/// The next set has been identified and cued but not yet started.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestPhaseInfo {
+    /// The workout_session_sets.id of the set that is waiting to start.
+    pub next_set_id: String,
+    /// Configured rest duration in seconds (from the workout template).
+    pub rest_duration_sec: i64,
+    /// Unix timestamp (milliseconds) of when rest began.
+    pub rest_started_at_ms: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -289,4 +304,6 @@ pub struct ActiveSessionPayload {
     pub current_exercise_id: Option<String>,
     pub current_set_id: Option<String>,
     pub timer_base: TimerBase,
+    /// Non-null when the runner is in a between-set rest phase (no active exercise).
+    pub rest_phase: Option<RestPhaseInfo>,
 }

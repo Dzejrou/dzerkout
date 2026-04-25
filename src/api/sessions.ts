@@ -28,6 +28,9 @@ export const sessionsApi = {
   skip: (sessionId: string, exerciseId: string) =>
     invoke<ActiveSessionPayload>("skip_exercise", { sessionId, exerciseId }),
 
+  startNextSet: (sessionId: string) =>
+    invoke<ActiveSessionPayload>("start_next_set", { sessionId }),
+
   finish: (sessionId: string) =>
     invoke<WorkoutSessionRow>("finish_session", { sessionId }),
 

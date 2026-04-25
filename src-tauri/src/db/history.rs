@@ -42,7 +42,9 @@ pub async fn get_session_sets(conn: &mut SqliteConnection, session_id: &str) -> 
     sqlx::query_as!(
         WorkoutSessionSetRow,
         "SELECT id, workout_session_id, source_set_template_id, order_index,
-                started_at, ended_at, paused_total_sec, paused_at, created_at, updated_at
+                started_at, ended_at, paused_total_sec, paused_at,
+                rest_duration_sec, rest_started_at,
+                created_at, updated_at
          FROM workout_session_sets
          WHERE workout_session_id = ?
          ORDER BY order_index",
