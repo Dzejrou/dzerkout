@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useSessionStore } from "../../store/sessionStore";
+import { tokens } from "../../theme/tokens";
 
 interface MenuItem {
   to: string;
@@ -25,7 +26,7 @@ export default function MainMenu() {
       {/* Options button */}
       <div style={topBarStyle}>
         <div style={{ flex: 1 }} />
-        <button style={optionsBtnStyle} disabled title="Settings (coming soon)">
+        <button style={optionsBtnStyle} onClick={() => navigate("/settings")}>
           ⚙ Options
         </button>
       </div>
@@ -70,8 +71,8 @@ export default function MainMenu() {
 
 const rootStyle: React.CSSProperties = {
   minHeight: "100%",
-  background: "#1c1c1e",
-  color: "#f2f2f7",
+  background: tokens.bg,
+  color: tokens.textPrimary,
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -87,11 +88,11 @@ const topBarStyle: React.CSSProperties = {
 };
 
 const optionsBtnStyle: React.CSSProperties = {
-  background: "#2c2c2e",
-  border: "1px solid rgba(255,255,255,0.1)",
+  background: tokens.card,
+  border: `1px solid ${tokens.divider}`,
   borderRadius: 8,
-  color: "#9ca3af",
-  cursor: "not-allowed",
+  color: tokens.textFaint,
+  cursor: "pointer",
   fontSize: 13,
   fontWeight: 500,
   padding: "6px 14px",
@@ -106,13 +107,13 @@ const logoStyle: React.CSSProperties = {
   fontSize: 48,
   fontWeight: 800,
   margin: 0,
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
   letterSpacing: "-0.02em",
 };
 
 const taglineStyle: React.CSSProperties = {
   fontSize: 15,
-  color: "#8e8e93",
+  color: tokens.textSecondary,
   margin: "8px 0 0",
 };
 
@@ -131,8 +132,8 @@ const itemStyle: React.CSSProperties = {
   alignItems: "center",
   gap: 16,
   padding: "14px 16px",
-  background: "#2c2c2e",
-  border: "1px solid rgba(255,255,255,0.07)",
+  background: tokens.card,
+  border: `1px solid ${tokens.divider}`,
   borderRadius: 14,
   cursor: "pointer",
   textAlign: "left",
@@ -144,7 +145,7 @@ const iconBoxStyle: React.CSSProperties = {
   width: 46,
   height: 46,
   borderRadius: 10,
-  background: "#3a3a3c",
+  background: tokens.cardSubtle,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -168,12 +169,12 @@ const itemBodyStyle: React.CSSProperties = {
 const itemLabelStyle: React.CSSProperties = {
   fontSize: 18,
   fontWeight: 600,
-  color: "#f2f2f7",
+  color: tokens.textPrimary,
 };
 
 const itemDescStyle: React.CSSProperties = {
   fontSize: 13,
-  color: "#8e8e93",
+  color: tokens.textSecondary,
 };
 
 const activeBadgeStyle: React.CSSProperties = {
@@ -182,14 +183,14 @@ const activeBadgeStyle: React.CSSProperties = {
   fontWeight: 700,
   letterSpacing: "0.06em",
   textTransform: "uppercase",
-  background: "#2d6a3f",
-  color: "#6ee7b7",
+  background: tokens.green,
+  color: tokens.greenText,
   padding: "2px 7px",
   borderRadius: 4,
 };
 
 const chevronStyle: React.CSSProperties = {
   fontSize: 22,
-  color: "#6b7280",
+  color: tokens.textMuted,
   flexShrink: 0,
 };

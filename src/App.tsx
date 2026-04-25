@@ -9,6 +9,7 @@ import SetTemplateBuilder from "./screens/SetTemplateBuilder";
 import WorkoutTemplateBuilder from "./screens/WorkoutTemplateBuilder";
 import ActiveWorkoutRunner from "./screens/ActiveWorkoutRunner";
 import WorkoutHistory from "./screens/WorkoutHistory";
+import Settings from "./screens/Settings";
 
 // Rendered inside HashRouter so useNavigate (and useSessionRecovery) have router context.
 function AppShell() {
@@ -30,6 +31,7 @@ function AppShell() {
           <Route path="/workouts/:id" element={<WorkoutTemplateBuilder />} />
           <Route path="/runner" element={<ActiveWorkoutRunner />} />
           <Route path="/history" element={<WorkoutHistory />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
 

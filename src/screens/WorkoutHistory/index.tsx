@@ -280,13 +280,8 @@ export default function WorkoutHistory() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // Runner palette tokens
-const BG = "#1c1c1e";
-const CARD = "#2c2c2e";
-const CARD_BORDER = "rgba(255,255,255,0.06)";
-const TEXT_PRIMARY = "#f2f2f7";
-const TEXT_SECONDARY = "#8e8e93";
-const TEXT_MUTED = "#6b7280";
-const DIVIDER = "rgba(255,255,255,0.07)";
+import { tokens } from "../../theme/tokens";
+const { bg: BG, card: CARD, borderSubtle: CARD_BORDER, textPrimary: TEXT_PRIMARY, textSecondary: TEXT_SECONDARY, textMuted: TEXT_MUTED, divider: DIVIDER } = tokens;
 
 const rootStyle: React.CSSProperties = {
   display: "flex",

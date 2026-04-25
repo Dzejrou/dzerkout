@@ -6,12 +6,8 @@ import type { Exercise } from "../../types/exercise";
 import ExerciseForm from "./ExerciseForm";
 import { ConfirmModal } from "../../components/ConfirmModal";
 
-const BG = "#1c1c1e";
-const CARD = "#2c2c2e";
-const DIVIDER = "rgba(255,255,255,0.07)";
-const TEXT_PRIMARY = "#f2f2f7";
-const TEXT_SECONDARY = "#8e8e93";
-const BORDER = "rgba(255,255,255,0.08)";
+import { tokens } from "../../theme/tokens";
+const { bg: BG, card: CARD, divider: DIVIDER, textPrimary: TEXT_PRIMARY, textSecondary: TEXT_SECONDARY, border: BORDER } = tokens;
 
 type Modal =
   | { type: "create" }
