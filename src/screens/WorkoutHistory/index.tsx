@@ -312,13 +312,16 @@ const leftHeaderStyle: React.CSSProperties = {
 };
 
 const backBtnStyle: React.CSSProperties = {
-  background: "none",
-  border: "none",
+  background: "rgba(255,255,255,0.09)",
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 8,
+  color: "#e5e7eb",
   cursor: "pointer",
   fontSize: 13,
-  color: TEXT_SECONDARY,
-  padding: "0 0 10px",
+  fontWeight: 500,
+  padding: "6px 14px",
   display: "block",
+  marginBottom: 10,
 };
 
 const pageTitleStyle: React.CSSProperties = {

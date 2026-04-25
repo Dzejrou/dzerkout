@@ -237,7 +237,7 @@ export default function ActiveWorkoutRunner() {
           {/* Set timer */}
           <div style={timerPanelStyle}>
             <span style={panelLabelStyle}>SET TIME</span>
-            <span style={bigClockStyle}>{formatTime(exerciseElapsedMs)}</span>
+            <span style={bigClockStyle}>{formatTime(elapsedMs)}</span>
             {isPaused
               ? <span style={pausedBadgeStyle}>● PAUSED</span>
               : <span style={setIndexStyle}>Set {setIndex + 1} of {sets.length}</span>
@@ -250,12 +250,12 @@ export default function ActiveWorkoutRunner() {
             <span style={panelLabelStyle}>EXERCISE TIME</span>
             {durationHintSec != null ? (
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={exClockCurrentStyle}>{formatTime(elapsedMs)}</span>
+                <span style={exClockCurrentStyle}>{formatTime(exerciseElapsedMs)}</span>
                 <span style={{ color: "#4b5563", fontSize: "clamp(22px, 3.5vw, 56px)", fontWeight: 300, lineHeight: 1 }}>/</span>
                 <span style={exClockTargetStyle}>{formatTime(durationHintSec * 1000)}</span>
               </div>
             ) : (
-              <span style={exClockCurrentStyle}>{formatTime(elapsedMs)}</span>
+              <span style={exClockCurrentStyle}>{formatTime(exerciseElapsedMs)}</span>
             )}
             <span style={exNameStyle}>{currentExercise?.display_name ?? "—"}</span>
           </div>

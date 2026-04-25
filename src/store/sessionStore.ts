@@ -50,11 +50,15 @@ export const useSessionStore = create<SessionStore>((set) => ({
       setStartedAt: timer_base.set_started_at_ms,
       pausedTotalSec: timer_base.paused_total_sec,
       pausedAt: timer_base.paused_at_ms,
-      // When the active exercise changes, snapshot paused_total_sec as the new
-      // per-exercise offset. Per-exercise paused time = pausedTotalSec - exercisePausedOffsetSec.
+      // Per-exercise paused time = pausedTotalSec - exercisePausedOffsetSec.
+      // Always derive from the exercise row's stored paused_offset_sec so that cold
+      // recovery after app relaunch uses the historically correct baseline rather than
+      // the current paused_total_sec (which would be too large if earlier pauses
+      // accumulated before this exercise started, causing the timer to jump forward).
       exercisePausedOffsetSec:
         current_exercise_id !== prev.currentExerciseId
-          ? timer_base.paused_total_sec
+          ? (exercises.find((e) => e.id === current_exercise_id)?.paused_offset_sec
+              ?? timer_base.paused_total_sec)
           : prev.exercisePausedOffsetSec,
     }));
   },
