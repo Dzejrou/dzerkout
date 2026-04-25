@@ -1,5 +1,46 @@
 import { useNavigate } from "react-router-dom";
 import { tokens } from "../../theme/tokens";
+import { useSettingsStore } from "../../store/settingsStore";
+
+// ── Toggle ────────────────────────────────────────────────────────────────────
+
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={value}
+      onClick={() => onChange(!value)}
+      style={{
+        position: "relative",
+        width: 44,
+        height: 26,
+        borderRadius: 13,
+        background: value ? tokens.green : tokens.cardSubtle,
+        border: `1px solid ${value ? "rgba(45,106,63,0.6)" : tokens.border}`,
+        cursor: "pointer",
+        padding: 0,
+        flexShrink: 0,
+        transition: "background 0.18s, border-color 0.18s",
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          top: 3,
+          left: value ? 21 : 3,
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
+          background: "#fff",
+          transition: "left 0.18s",
+          display: "block",
+        }}
+      />
+    </button>
+  );
+}
+
+// ── Setting row ───────────────────────────────────────────────────────────────
 
 interface SettingRowProps {
   label: string;
@@ -20,6 +61,8 @@ function SettingRow({ label, description, control, disabled }: SettingRowProps) 
   );
 }
 
+// ── Section card ──────────────────────────────────────────────────────────────
+
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={sectionStyle}>
@@ -30,13 +73,15 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 function ComingSoonBadge() {
-  return (
-    <span style={comingSoonStyle}>Coming soon</span>
-  );
+  return <span style={comingSoonStyle}>Coming soon</span>;
 }
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Settings() {
   const navigate = useNavigate();
+  const autoAdvance = useSettingsStore((s) => s.autoAdvance);
+  const setAutoAdvance = useSettingsStore((s) => s.setAutoAdvance);
 
   return (
     <div style={rootStyle}>
@@ -49,9 +94,7 @@ export default function Settings() {
           <SettingRow
             label="Theme"
             description="Color scheme used throughout the app."
-            control={
-              <div style={themeChipStyle}>Dark</div>
-            }
+            control={<div style={themeChipStyle}>Dark</div>}
           />
           <div style={rowDividerStyle} />
           <SettingRow
@@ -66,16 +109,10 @@ export default function Settings() {
         <SectionCard title="Workout Behavior">
           <SettingRow
             label="Auto-advance exercises"
-            description="Automatically move to the next exercise when duration elapses."
-            control={<ComingSoonBadge />}
-            disabled
-          />
-          <div style={rowDividerStyle} />
-          <SettingRow
-            label="Enforce duration hints"
-            description="Prevent advancing before a duration hint has elapsed."
-            control={<ComingSoonBadge />}
-            disabled
+            description="When an exercise has a duration target, automatically move to the next exercise when time is up."
+            control={
+              <Toggle value={autoAdvance} onChange={setAutoAdvance} />
+            }
           />
           <div style={rowDividerStyle} />
           <SettingRow

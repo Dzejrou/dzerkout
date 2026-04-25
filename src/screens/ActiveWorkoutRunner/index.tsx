@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { sessionsApi } from "../../api/sessions";
 import { useSessionStore } from "../../store/sessionStore";
 import { useUiStore } from "../../store/uiStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { useElapsedMs, useExerciseElapsedMs } from "../../hooks/useTimer";
 
 function formatTime(ms: number): string {
@@ -37,6 +38,29 @@ export default function ActiveWorkoutRunner() {
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
   }, [isAndroid]);
+
+  // ── Auto-advance ────────────────────────────────────────────────────────────
+  const autoAdvance = useSettingsStore((s) => s.autoAdvance);
+  // Filled in by the in-progress section each render; null during draft/no-session.
+  const nextHandlerRef = useRef<(() => void) | null>(null);
+  nextHandlerRef.current = null;
+  // Tracks which exercise was last auto-advanced to prevent repeated triggers.
+  const autoAdvancedExerciseRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!autoAdvance) return;
+    if (pausedAt !== null) return;
+    if (sessionStatus !== "in_progress") return;
+    if (!currentExerciseId) return;
+    if (durationHintSec == null) return;
+    if (exerciseElapsedMs < durationHintSec * 1000) return;
+    if (pending) return;
+    if (autoAdvancedExerciseRef.current === currentExerciseId) return;
+    if (!nextHandlerRef.current) return;
+
+    autoAdvancedExerciseRef.current = currentExerciseId;
+    nextHandlerRef.current();
+  }, [autoAdvance, pausedAt, sessionStatus, currentExerciseId, durationHintSec, exerciseElapsedMs, pending]);
 
   // ── No session ──────────────────────────────────────────────────────────────
   if (!sessionId) {
@@ -204,6 +228,9 @@ export default function ActiveWorkoutRunner() {
       onCancel: () => {},
     });
   }
+
+  // Expose handleNext to the auto-advance effect running above the early returns.
+  nextHandlerRef.current = handleNext;
 
   // ── Keyboard shortcuts (desktop only) ───────────────────────────────────────
   keyHandlerRef.current = (e: KeyboardEvent) => {
