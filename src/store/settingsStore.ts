@@ -12,6 +12,13 @@ interface SettingsStore {
   /** Play Web Audio countdown beeps during timed exercise and rest phases. Default: off. */
   soundCues: boolean;
   setSoundCues: (v: boolean) => void;
+
+  /**
+   * Scale multiplier for exercise queue cards in the runner.
+   * 1.0 = default appearance. Range: 0.5–2.0.
+   */
+  runnerCardSize: number;
+  setRunnerCardSize: (v: number) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -25,6 +32,9 @@ export const useSettingsStore = create<SettingsStore>()(
 
       soundCues: false,
       setSoundCues: (v) => set({ soundCues: v }),
+
+      runnerCardSize: 1.0,
+      setRunnerCardSize: (v) => set({ runnerCardSize: v }),
     }),
     { name: "dzerkout_settings" }
   )

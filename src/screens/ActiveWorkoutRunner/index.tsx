@@ -44,6 +44,7 @@ export default function ActiveWorkoutRunner() {
   // ── Auto-advance ────────────────────────────────────────────────────────────
   const autoAdvance = useSettingsStore((s) => s.autoAdvance);
   const soundCues = useSettingsStore((s) => s.soundCues);
+  const runnerCardSize = useSettingsStore((s) => s.runnerCardSize);
   // Filled in by the in-progress section each render; null during draft/no-session.
   const nextHandlerRef = useRef<(() => void) | null>(null);
   nextHandlerRef.current = null;
@@ -300,6 +301,19 @@ export default function ActiveWorkoutRunner() {
     if (e.key === " ")          { e.preventDefault(); void (isPaused ? handleResume() : handlePause()); }
   };
 
+  // ── Queue card scale ──────────────────────────────────────────────────────
+  // Clamped defensively in case an out-of-range value was stored.
+  const cardScale = Math.max(0.5, Math.min(2.0, runnerCardSize));
+  // Vertical padding (baseline 16 px) — drives card height.
+  const cardPadV = Math.round(16 * cardScale);
+  // Exercise name font sizes (baseline 80 px current / 66 px adjacent).
+  const cardFontCurrent = Math.round(80 * cardScale);
+  const cardFontOther   = Math.round(66 * cardScale);
+  // Number + duration label font size (baseline 16 px).
+  const cardFontSmall   = Math.round(16 * cardScale);
+  // Gap between cards in the queue column (baseline 4 px).
+  const cardGap         = Math.round(4  * cardScale);
+
   // ── Flat exercise list for queue ──────────────────────────────────────────
   const allExercises = sets.flatMap((s) =>
     exercises.filter((e) => e.workout_session_set_id === s.id)
@@ -443,7 +457,7 @@ export default function ActiveWorkoutRunner() {
         </div>
 
         {/* Right: exercise queue */}
-        <div style={queueColStyle}>
+        <div style={{ ...queueColStyle, gap: cardGap }}>
           <div style={chevronStyle}>∧</div>
 
           {([-2, -1, 0, 1, 2] as const).map((offset) => {
@@ -459,6 +473,7 @@ export default function ActiveWorkoutRunner() {
                 key={offset}
                 style={{
                   ...queueCardBaseStyle,
+                  padding: `${cardPadV}px 18px`,
                   opacity,
                   transform: `scale(${scale})`,
                   border: isCurrent
@@ -474,14 +489,14 @@ export default function ActiveWorkoutRunner() {
                 )}
                 {ex ? (
                   <>
-                    <span style={{ ...queueNumStyle, fontWeight: isCurrent ? 600 : 400 }}>
+                    <span style={{ ...queueNumStyle, fontWeight: isCurrent ? 600 : 400, fontSize: cardFontSmall }}>
                       {idx + 1}
                     </span>
-                    <span style={{ ...queueNameStyle, fontWeight: isCurrent ? 700 : 400, fontSize: isCurrent ? 80 : 66 }}>
+                    <span style={{ ...queueNameStyle, fontWeight: isCurrent ? 700 : 400, fontSize: isCurrent ? cardFontCurrent : cardFontOther }}>
                       {ex.display_name}
                     </span>
                     {ex.duration_hint_sec != null && (
-                      <span style={queueDurStyle}>{formatTime(ex.duration_hint_sec * 1000)}</span>
+                      <span style={{ ...queueDurStyle, fontSize: cardFontSmall }}>{formatTime(ex.duration_hint_sec * 1000)}</span>
                     )}
                   </>
                 ) : (

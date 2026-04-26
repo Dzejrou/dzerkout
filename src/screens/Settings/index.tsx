@@ -78,6 +78,35 @@ function ComingSoonBadge() {
   return <span style={comingSoonStyle}>Coming soon</span>;
 }
 
+// ── Slider control ────────────────────────────────────────────────────────────
+
+interface SliderControlProps {
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  step: number;
+  /** Format the current value for display, e.g. (v) => `${Math.round(v * 100)}%` */
+  format: (v: number) => string;
+}
+
+function SliderControl({ value, onChange, min, max, step, format }: SliderControlProps) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={sliderValueStyle}>{format(value)}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        style={{ width: 120, accentColor: tokens.green, cursor: "pointer" }}
+      />
+    </div>
+  );
+}
+
 // ── Font selector ─────────────────────────────────────────────────────────────
 
 function FontSelector() {
@@ -122,6 +151,8 @@ export default function Settings() {
   const setAutoAdvance = useSettingsStore((s) => s.setAutoAdvance);
   const soundCues = useSettingsStore((s) => s.soundCues);
   const setSoundCues = useSettingsStore((s) => s.setSoundCues);
+  const runnerCardSize = useSettingsStore((s) => s.runnerCardSize);
+  const setRunnerCardSize = useSettingsStore((s) => s.setRunnerCardSize);
 
   return (
     <div style={rootStyle}>
@@ -141,6 +172,21 @@ export default function Settings() {
             label="Font"
             description="UI typeface applied across the entire app."
             control={<FontSelector />}
+          />
+          <div style={rowDividerStyle} />
+          <SettingRow
+            label="Runner card size"
+            description="Height of exercise queue cards in the workout runner."
+            control={
+              <SliderControl
+                value={runnerCardSize}
+                onChange={setRunnerCardSize}
+                min={0.5}
+                max={2.0}
+                step={0.1}
+                format={(v) => `${Math.round(v * 100)}%`}
+              />
+            }
           />
           <div style={rowDividerStyle} />
           <SettingRow
@@ -306,6 +352,15 @@ const comingSoonStyle: React.CSSProperties = {
   border: `1px solid ${tokens.border}`,
   borderRadius: 5,
   padding: "3px 8px",
+};
+
+const sliderValueStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  fontVariantNumeric: "tabular-nums",
+  color: tokens.textSecondary,
+  minWidth: 38,
+  textAlign: "right",
 };
 
 const previewBtnStyle: React.CSSProperties = {
