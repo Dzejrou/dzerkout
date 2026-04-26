@@ -23,7 +23,7 @@ export default function ActiveWorkoutRunner() {
   const isAndroid = useUiStore((s) => s.isAndroid);
   const {
     sessionId, sessionStatus, sets, exercises,
-    currentSetId, currentExerciseId, pausedAt, restPhase, load, clear,
+    currentSetId, currentExerciseId, pausedAt, restPhase, restBetweenSetsSec, load, clear,
   } = useSessionStore();
 
   const elapsedMs = useElapsedMs();
@@ -342,11 +342,30 @@ export default function ActiveWorkoutRunner() {
   // Gap between cards in the queue column (baseline 4 px).
   const cardGap         = Math.round(4  * cardScale);
 
-  // ── Flat exercise list for queue ──────────────────────────────────────────
-  const allExercises = sets.flatMap((s) =>
-    exercises.filter((e) => e.workout_session_set_id === s.id)
+  // ── Virtual queue ────────────────────────────────────────────────────────
+  // The queue may contain exercise items, rest items (displayed between sets when
+  // rest_between_sets_sec > 0), and empty sentinel items for out-of-bounds slots.
+  type QueueItem =
+    | { kind: "exercise"; ex: (typeof exercises)[number]; num: number }
+    | { kind: "rest"; durationSec: number; nextSetIndex: number }
+    | { kind: "empty" };
+
+  const restSec = restBetweenSetsSec ?? 0;
+  const virtualQueue: QueueItem[] = [];
+  let exNum = 0;
+  for (let si = 0; si < sets.length; si++) {
+    const setExs = exercises.filter((e) => e.workout_session_set_id === sets[si].id);
+    for (const ex of setExs) {
+      virtualQueue.push({ kind: "exercise", ex, num: ++exNum });
+    }
+    // Insert a rest slot after each set except the last, only when rest > 0.
+    if (restSec > 0 && si < sets.length - 1) {
+      virtualQueue.push({ kind: "rest", durationSec: restSec, nextSetIndex: si + 1 });
+    }
+  }
+  const currentVirtualIdx = virtualQueue.findIndex(
+    (item) => item.kind === "exercise" && item.ex.id === currentExerciseId,
   );
-  const currentGlobalIdx = allExercises.findIndex((e) => e.id === currentExerciseId);
 
   // ── Rest-phase view ───────────────────────────────────────────────────────
   if (restPhase) {
@@ -489,47 +508,85 @@ export default function ActiveWorkoutRunner() {
           <div style={chevronStyle}>∧</div>
 
           {([-2, -1, 0, 1, 2] as const).map((offset) => {
-            const idx = currentGlobalIdx + offset;
-            const ex = idx >= 0 && idx < allExercises.length ? allExercises[idx] : null;
+            const vIdx = currentVirtualIdx + offset;
+            const item: QueueItem =
+              vIdx >= 0 && vIdx < virtualQueue.length
+                ? virtualQueue[vIdx]
+                : { kind: "empty" };
             const isCurrent = offset === 0;
             const dist = Math.abs(offset);
             const opacity = dist === 2 ? 0.25 : dist === 1 ? 0.58 : 1;
-            const scale = dist === 2 ? 0.9 : dist === 1 ? 0.952 : 1;
+            const cardTransform = dist === 2 ? 0.9 : dist === 1 ? 0.952 : 1;
+            const baseCardStyle: React.CSSProperties = {
+              ...queueCardBaseStyle,
+              padding: `${cardPadV}px 18px`,
+              opacity,
+              transform: `scale(${cardTransform})`,
+            };
 
+            if (item.kind === "exercise") {
+              return (
+                <div
+                  key={offset}
+                  style={{
+                    ...baseCardStyle,
+                    border: isCurrent
+                      ? "1.5px solid rgba(255,255,255,0.75)"
+                      : `1px solid ${tokens.divider}`,
+                    background: isCurrent ? tokens.surfaceActive : tokens.surfaceDisabled,
+                  }}
+                >
+                  {isCurrent && <span style={queueCurrentArrowStyle}>◄</span>}
+                  <span style={{ ...queueNumStyle, fontWeight: isCurrent ? 600 : 400, fontSize: cardFontSmall }}>
+                    {item.num}
+                  </span>
+                  <span style={{ ...queueNameStyle, fontWeight: isCurrent ? 700 : 400, fontSize: isCurrent ? cardFontCurrent : cardFontOther }}>
+                    {item.ex.display_name}
+                  </span>
+                  {item.ex.duration_hint_sec != null && (
+                    <span style={{ ...queueDurStyle, fontSize: cardFontSmall }}>
+                      {formatTime(item.ex.duration_hint_sec * 1000)}
+                    </span>
+                  )}
+                </div>
+              );
+            }
+
+            if (item.kind === "rest") {
+              return (
+                <div
+                  key={offset}
+                  style={{
+                    ...baseCardStyle,
+                    border: `1px solid ${tokens.divider}`,
+                    background: tokens.surfaceDisabled,
+                  }}
+                >
+                  {/* Amber pause glyph in the number slot */}
+                  <span style={{ ...queueNumStyle, fontSize: cardFontSmall, color: tokens.amber }}>
+                    ⏸
+                  </span>
+                  <span style={{ ...queueNameStyle, fontWeight: 400, fontSize: cardFontOther, color: tokens.textMuted }}>
+                    Rest
+                  </span>
+                  <span style={{ ...queueDurStyle, fontSize: cardFontSmall, color: tokens.textFaint }}>
+                    {formatTime(item.durationSec * 1000)}
+                  </span>
+                </div>
+              );
+            }
+
+            // kind === "empty"
             return (
               <div
                 key={offset}
                 style={{
-                  ...queueCardBaseStyle,
-                  padding: `${cardPadV}px 18px`,
-                  opacity,
-                  transform: `scale(${scale})`,
-                  border: isCurrent
-                    ? "1.5px solid rgba(255,255,255,0.75)"
-                    : `1px solid ${tokens.divider}`,
-                  background: isCurrent
-                    ? tokens.surfaceActive
-                    : tokens.surfaceDisabled,
+                  ...baseCardStyle,
+                  border: `1px solid ${tokens.divider}`,
+                  background: tokens.surfaceDisabled,
                 }}
               >
-                {isCurrent && (
-                  <span style={queueCurrentArrowStyle}>◄</span>
-                )}
-                {ex ? (
-                  <>
-                    <span style={{ ...queueNumStyle, fontWeight: isCurrent ? 600 : 400, fontSize: cardFontSmall }}>
-                      {idx + 1}
-                    </span>
-                    <span style={{ ...queueNameStyle, fontWeight: isCurrent ? 700 : 400, fontSize: isCurrent ? cardFontCurrent : cardFontOther }}>
-                      {ex.display_name}
-                    </span>
-                    {ex.duration_hint_sec != null && (
-                      <span style={{ ...queueDurStyle, fontSize: cardFontSmall }}>{formatTime(ex.duration_hint_sec * 1000)}</span>
-                    )}
-                  </>
-                ) : (
-                  <span style={{ color: tokens.border, fontSize: 13, flex: 1, textAlign: "center" }}>·</span>
-                )}
+                <span style={{ color: tokens.border, fontSize: 13, flex: 1, textAlign: "center" }}>·</span>
               </div>
             );
           })}

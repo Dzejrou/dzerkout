@@ -306,4 +306,8 @@ pub struct ActiveSessionPayload {
     pub timer_base: TimerBase,
     /// Non-null when the runner is in a between-set rest phase (no active exercise).
     pub rest_phase: Option<RestPhaseInfo>,
+    /// Configured rest-between-sets duration from the workout template.
+    /// None when the session has no template or the template has no rest configured.
+    /// Used by the runner to preview upcoming rest in the exercise queue.
+    pub rest_between_sets_sec: Option<i64>,
 }

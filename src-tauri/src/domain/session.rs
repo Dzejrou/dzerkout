@@ -73,6 +73,10 @@ pub async fn build_payload(
             })
         });
 
+    let rest_between_sets_sec =
+        sessions::fetch_rest_between_sets_sec(&mut conn, session_id)
+            .await?;
+
     Ok(ActiveSessionPayload {
         session,
         sets,
@@ -81,6 +85,7 @@ pub async fn build_payload(
         current_set_id,
         timer_base,
         rest_phase,
+        rest_between_sets_sec,
     })
 }
 

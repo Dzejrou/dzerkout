@@ -23,6 +23,8 @@ interface SessionStore {
   exercisePausedOffsetSec: number;
   // Non-null when the runner is in a between-set rest phase.
   restPhase: RestPhaseInfo | null;
+  // Configured rest duration from the workout template. null = no rest / no template.
+  restBetweenSetsSec: number | null;
 
   load: (payload: ActiveSessionPayload) => void;
   clear: () => void;
@@ -41,9 +43,10 @@ export const useSessionStore = create<SessionStore>((set) => ({
   pausedAt: null,
   exercisePausedOffsetSec: 0,
   restPhase: null,
+  restBetweenSetsSec: null,
 
   load: (payload) => {
-    const { session, sets, exercises, current_set_id, current_exercise_id, timer_base, rest_phase } = payload;
+    const { session, sets, exercises, current_set_id, current_exercise_id, timer_base, rest_phase, rest_between_sets_sec } = payload;
     set((prev) => ({
       sessionId: session.id,
       sessionStatus: session.status,
@@ -65,6 +68,7 @@ export const useSessionStore = create<SessionStore>((set) => ({
               ?? timer_base.paused_total_sec)
           : prev.exercisePausedOffsetSec,
       restPhase: rest_phase ?? null,
+      restBetweenSetsSec: rest_between_sets_sec ?? null,
     }));
   },
 
@@ -81,5 +85,6 @@ export const useSessionStore = create<SessionStore>((set) => ({
       pausedAt: null,
       exercisePausedOffsetSec: 0,
       restPhase: null,
+      restBetweenSetsSec: null,
     }),
 }));

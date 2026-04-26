@@ -104,4 +104,6 @@ export interface ActiveSessionPayload {
   current_set_id: string | null;
   timer_base: TimerBase;
   rest_phase: RestPhaseInfo | null;
+  /** Configured rest duration from the workout template. null = no rest / no template. */
+  rest_between_sets_sec: number | null;
 }
