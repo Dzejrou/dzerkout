@@ -43,8 +43,11 @@ export default function ActiveWorkoutRunner() {
 
   // ── Auto-advance ────────────────────────────────────────────────────────────
   const autoAdvance = useSettingsStore((s) => s.autoAdvance);
+  const autoStartNextSet = useSettingsStore((s) => s.autoStartNextSet);
   const soundCues = useSettingsStore((s) => s.soundCues);
   const runnerCardSize = useSettingsStore((s) => s.runnerCardSize);
+
+  // ── Auto-advance exercises ──────────────────────────────────────────────────
   // Filled in by the in-progress section each render; null during draft/no-session.
   const nextHandlerRef = useRef<(() => void) | null>(null);
   nextHandlerRef.current = null;
@@ -66,6 +69,13 @@ export default function ActiveWorkoutRunner() {
     autoAdvancedExerciseRef.current = currentExerciseId;
     nextHandlerRef.current();
   }, [autoAdvance, pausedAt, sessionStatus, currentExerciseId, restPhase, durationHintSec, exerciseElapsedMs, pending]);
+
+  // ── Auto-start next set (refs only — effect placed after restRemainingSec) ───
+  // Filled in by the in-progress section each render; null outside that path.
+  const startNextSetHandlerRef = useRef<(() => void) | null>(null);
+  startNextSetHandlerRef.current = null;
+  // Tracks which rest phase was last auto-started to prevent repeated triggers.
+  const autoStartedRestRef = useRef<string | null>(null);
 
   // ── Rest-phase elapsed timer ────────────────────────────────────────────────
   // Tracks how many ms have passed since rest started (client-side, non-persisted).
@@ -112,6 +122,23 @@ export default function ActiveWorkoutRunner() {
     soundCues,
     pausedAt !== null,
   );
+
+  // ── Auto-start next set (effect) ────────────────────────────────────────────
+  // restRemainingSec is now in scope. Fires when rest hits zero and the setting
+  // is on; the guard ref prevents more than one call per rest phase.
+  useEffect(() => {
+    if (!autoStartNextSet) return;
+    if (!restPhase) return;
+    if (pausedAt !== null) return;
+    if (sessionStatus !== "in_progress") return;
+    if (restRemainingSec > 0) return;
+    if (pending) return;
+    if (autoStartedRestRef.current === restPhase.next_set_id) return;
+    if (!startNextSetHandlerRef.current) return;
+
+    autoStartedRestRef.current = restPhase.next_set_id;
+    startNextSetHandlerRef.current();
+  }, [autoStartNextSet, restPhase, pausedAt, sessionStatus, restRemainingSec, pending]);
 
   // ── No session ──────────────────────────────────────────────────────────────
   if (!sessionId) {
@@ -287,8 +314,9 @@ export default function ActiveWorkoutRunner() {
     });
   }
 
-  // Expose handleNext to the auto-advance effect running above the early returns.
+  // Expose handlers to the effects that run above the early returns.
   nextHandlerRef.current = handleNext;
+  startNextSetHandlerRef.current = handleStartNextSet;
 
   // ── Keyboard shortcuts (desktop only) ───────────────────────────────────────
   keyHandlerRef.current = (e: KeyboardEvent) => {

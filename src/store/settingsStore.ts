@@ -19,6 +19,10 @@ interface SettingsStore {
    */
   runnerCardSize: number;
   setRunnerCardSize: (v: number) => void;
+
+  /** Automatically start the next set when between-set rest reaches zero. Default: off. */
+  autoStartNextSet: boolean;
+  setAutoStartNextSet: (v: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -35,6 +39,9 @@ export const useSettingsStore = create<SettingsStore>()(
 
       runnerCardSize: 1.0,
       setRunnerCardSize: (v) => set({ runnerCardSize: v }),
+
+      autoStartNextSet: false,
+      setAutoStartNextSet: (v) => set({ autoStartNextSet: v }),
     }),
     { name: "dzerkout_settings" }
   )

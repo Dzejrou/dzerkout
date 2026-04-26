@@ -153,6 +153,8 @@ export default function Settings() {
   const setSoundCues = useSettingsStore((s) => s.setSoundCues);
   const runnerCardSize = useSettingsStore((s) => s.runnerCardSize);
   const setRunnerCardSize = useSettingsStore((s) => s.setRunnerCardSize);
+  const autoStartNextSet = useSettingsStore((s) => s.autoStartNextSet);
+  const setAutoStartNextSet = useSettingsStore((s) => s.setAutoStartNextSet);
 
   return (
     <div style={rootStyle}>
@@ -208,10 +210,11 @@ export default function Settings() {
           />
           <div style={rowDividerStyle} />
           <SettingRow
-            label="Rest timer"
-            description="Show a countdown between exercises."
-            control={<ComingSoonBadge />}
-            disabled
+            label="Auto-start next set"
+            description="Automatically start the next set when between-set rest reaches zero."
+            control={
+              <Toggle value={autoStartNextSet} onChange={setAutoStartNextSet} />
+            }
           />
         </SectionCard>
 
