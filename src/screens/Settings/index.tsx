@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { tokens } from "../../theme/tokens";
 import { useSettingsStore } from "../../store/settingsStore";
 import { fontPresets, FONT_PRESET_KEYS, type FontPresetKey } from "../../theme/fontPresets";
+import { playPreviewCue } from "../../audio/cues";
 
 // ── Toggle ────────────────────────────────────────────────────────────────────
 
@@ -119,6 +120,8 @@ export default function Settings() {
   const navigate = useNavigate();
   const autoAdvance = useSettingsStore((s) => s.autoAdvance);
   const setAutoAdvance = useSettingsStore((s) => s.setAutoAdvance);
+  const soundCues = useSettingsStore((s) => s.soundCues);
+  const setSoundCues = useSettingsStore((s) => s.setSoundCues);
 
   return (
     <div style={rootStyle}>
@@ -169,17 +172,19 @@ export default function Settings() {
         {/* ── Sound cues ─────────────────────────────────────────────────── */}
         <SectionCard title="Sound Cues">
           <SettingRow
-            label="Enable sounds"
-            description="Play audio cues during workouts."
-            control={<ComingSoonBadge />}
-            disabled
+            label="Sound cues"
+            description="Play countdown beeps near the end of timed exercises and between-set rest."
+            control={<Toggle value={soundCues} onChange={setSoundCues} />}
           />
           <div style={rowDividerStyle} />
           <SettingRow
-            label="Sound pack"
-            description="Choose which sounds to play."
-            control={<ComingSoonBadge />}
-            disabled
+            label="Preview cue"
+            description="Play the full countdown sequence right now so you know what to expect."
+            control={
+              <button onClick={playPreviewCue} style={previewBtnStyle}>
+                ▶ Preview
+              </button>
+            }
           />
         </SectionCard>
 
@@ -301,6 +306,17 @@ const comingSoonStyle: React.CSSProperties = {
   border: `1px solid ${tokens.border}`,
   borderRadius: 5,
   padding: "3px 8px",
+};
+
+const previewBtnStyle: React.CSSProperties = {
+  padding: "5px 14px",
+  borderRadius: 7,
+  border: `1px solid ${tokens.borderMedium}`,
+  background: tokens.surfaceActive,
+  color: tokens.textLight,
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 600,
 };
 
 const footerStyle: React.CSSProperties = {

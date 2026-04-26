@@ -5,6 +5,7 @@ import { useSessionStore } from "../../store/sessionStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useElapsedMs, useExerciseElapsedMs } from "../../hooks/useTimer";
+import { useCountdownCues } from "../../hooks/useCountdownCues";
 import { tokens } from "../../theme/tokens";
 
 function formatTime(ms: number): string {
@@ -42,6 +43,7 @@ export default function ActiveWorkoutRunner() {
 
   // ── Auto-advance ────────────────────────────────────────────────────────────
   const autoAdvance = useSettingsStore((s) => s.autoAdvance);
+  const soundCues = useSettingsStore((s) => s.soundCues);
   // Filled in by the in-progress section each render; null during draft/no-session.
   const nextHandlerRef = useRef<(() => void) | null>(null);
   nextHandlerRef.current = null;
@@ -79,6 +81,36 @@ export default function ActiveWorkoutRunner() {
     const id = setInterval(tick, 250);
     return () => clearInterval(id);
   }, [restPhase?.next_set_id]); // re-run only when a new rest phase begins
+
+  // ── Sound cues ──────────────────────────────────────────────────────────────
+  // Exercise countdown: only active for timed exercises (durationHintSec != null).
+  const exerciseRemainingSec =
+    durationHintSec != null
+      ? durationHintSec - exerciseElapsedMs / 1000
+      : 0;
+  // phaseId is null when there is no duration target → cues suppressed automatically.
+  const exerciseCuePhaseId =
+    durationHintSec != null && sessionStatus === "in_progress" && !restPhase
+      ? currentExerciseId
+      : null;
+  useCountdownCues(
+    exerciseRemainingSec,
+    exerciseCuePhaseId,
+    soundCues,
+    pausedAt !== null,
+  );
+
+  // Rest countdown: active during between-set rest phases.
+  const restRemainingSec =
+    restPhase != null
+      ? restPhase.rest_duration_sec - restElapsedMs / 1000
+      : 0;
+  useCountdownCues(
+    restRemainingSec,
+    restPhase?.next_set_id ?? null,
+    soundCues,
+    pausedAt !== null,
+  );
 
   // ── No session ──────────────────────────────────────────────────────────────
   if (!sessionId) {
