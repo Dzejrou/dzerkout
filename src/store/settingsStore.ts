@@ -1,8 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { type FontPresetKey, defaultFontPreset } from "../theme/fontPresets";
+import { type ThemeKey } from "../theme/tokens";
 
 interface SettingsStore {
+  theme: ThemeKey;
+  setTheme: (v: ThemeKey) => void;
+
   autoAdvance: boolean;
   setAutoAdvance: (v: boolean) => void;
 
@@ -28,6 +32,9 @@ interface SettingsStore {
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
+      theme: "dark" as ThemeKey,
+      setTheme: (v) => set({ theme: v }),
+
       autoAdvance: false,
       setAutoAdvance: (v) => set({ autoAdvance: v }),
 

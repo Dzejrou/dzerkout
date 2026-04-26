@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { HashRouter, Route, Routes, useLocation } from "react-router-dom";
 import { usePlatform } from "./hooks/usePlatform";
 import { useSessionRecovery } from "./hooks/useSessionRecovery";
 import { useUiStore } from "./store/uiStore";
 import { useSettingsStore } from "./store/settingsStore";
 import { fontPresets } from "./theme/fontPresets";
+import { allThemes, applyThemeToDOM } from "./theme/tokens";
 import { ConfirmModal } from "./components/ConfirmModal";
 import MainMenu from "./screens/MainMenu";
 import ExerciseLibrary from "./screens/ExerciseLibrary";
@@ -26,10 +27,25 @@ function useFontPreset() {
   }, [fontPreset]);
 }
 
+// Applies the selected theme's concrete color values as CSS custom properties
+// on the document root, so every inline style using `var(--name)` references
+// (via the `tokens` object) resolves to the correct color.
+//
+// useLayoutEffect is intentional: it fires synchronously after the DOM is updated
+// but before the browser paints, eliminating any first-frame flash when a
+// non-default theme was persisted.
+function useThemeApplicator() {
+  const theme = useSettingsStore((s) => s.theme);
+  useLayoutEffect(() => {
+    applyThemeToDOM(allThemes[theme] ?? allThemes.dark);
+  }, [theme]);
+}
+
 // Rendered inside HashRouter so useNavigate (and useSessionRecovery) have router context.
 function AppShell() {
   useSessionRecovery();
   useFontPreset();
+  useThemeApplicator();
   const confirmModal = useUiStore((s) => s.confirmModal);
   const closeConfirmModal = useUiStore((s) => s.closeConfirmModal);
   const location = useLocation();

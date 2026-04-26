@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { tokens } from "../../theme/tokens";
+import { tokens, THEME_KEYS, themeNames, type ThemeKey } from "../../theme/tokens";
 import { useSettingsStore } from "../../store/settingsStore";
 import { fontPresets, FONT_PRESET_KEYS, type FontPresetKey } from "../../theme/fontPresets";
 import { playPreviewCue } from "../../audio/cues";
@@ -143,6 +143,40 @@ function FontSelector() {
   );
 }
 
+// ── Theme selector ────────────────────────────────────────────────────────────
+
+function ThemeSelector() {
+  const theme = useSettingsStore((s) => s.theme);
+  const setTheme = useSettingsStore((s) => s.setTheme);
+
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {THEME_KEYS.map((key: ThemeKey) => {
+        const active = theme === key;
+        return (
+          <button
+            key={key}
+            onClick={() => setTheme(key)}
+            style={{
+              padding: "5px 13px",
+              borderRadius: 7,
+              border: `1px solid ${active ? tokens.green : tokens.border}`,
+              background: active ? tokens.green : tokens.cardSubtle,
+              color: active ? tokens.greenText : tokens.textPrimary,
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: active ? 600 : 400,
+              transition: "background 0.12s, border-color 0.12s, color 0.12s",
+            }}
+          >
+            {themeNames[key]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -167,7 +201,7 @@ export default function Settings() {
           <SettingRow
             label="Theme"
             description="Color scheme used throughout the app."
-            control={<div style={themeChipStyle}>Dark</div>}
+            control={<ThemeSelector />}
           />
           <div style={rowDividerStyle} />
           <SettingRow
@@ -335,15 +369,6 @@ const rowDividerStyle: React.CSSProperties = {
   margin: "0 18px",
 };
 
-const themeChipStyle: React.CSSProperties = {
-  padding: "4px 12px",
-  borderRadius: 6,
-  background: tokens.cardSubtle,
-  border: `1px solid ${tokens.border}`,
-  color: tokens.textPrimary,
-  fontSize: 13,
-  fontWeight: 500,
-};
 
 const comingSoonStyle: React.CSSProperties = {
   fontSize: 11,
