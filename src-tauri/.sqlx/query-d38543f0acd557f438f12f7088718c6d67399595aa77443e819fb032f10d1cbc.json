@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT exercise_id, tag FROM exercise_tags ORDER BY exercise_id, tag",
+  "describe": {
+    "columns": [
+      {
+        "name": "exercise_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "tag",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d38543f0acd557f438f12f7088718c6d67399595aa77443e819fb032f10d1cbc"
+}

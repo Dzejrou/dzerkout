@@ -1,12 +1,12 @@
 use sqlx::SqlitePool;
 use tauri::State;
 use crate::{
-    domain::{exercise, types::{ExerciseRow, ExerciseReferences}},
+    domain::{exercise, types::{Exercise, ExerciseReferences}},
     error::AppError,
 };
 
 #[tauri::command]
-pub async fn list_exercises(pool: State<'_, SqlitePool>) -> Result<Vec<ExerciseRow>, AppError> {
+pub async fn list_exercises(pool: State<'_, SqlitePool>) -> Result<Vec<Exercise>, AppError> {
     exercise::list(&pool).await
 }
 
@@ -15,8 +15,9 @@ pub async fn create_exercise(
     pool: State<'_, SqlitePool>,
     name: String,
     notes: Option<String>,
-) -> Result<ExerciseRow, AppError> {
-    exercise::create(&pool, &name, notes.as_deref()).await
+    tags: Vec<String>,
+) -> Result<Exercise, AppError> {
+    exercise::create(&pool, &name, notes.as_deref(), &tags).await
 }
 
 #[tauri::command]
@@ -25,8 +26,9 @@ pub async fn update_exercise(
     id: String,
     name: String,
     notes: Option<String>,
-) -> Result<ExerciseRow, AppError> {
-    exercise::update(&pool, &id, &name, notes.as_deref()).await
+    tags: Vec<String>,
+) -> Result<Exercise, AppError> {
+    exercise::update(&pool, &id, &name, notes.as_deref(), &tags).await
 }
 
 #[tauri::command]

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use sqlx::{SqliteConnection, SqlitePool};
 use crate::domain::types::{ExerciseRow, ExerciseCardRef};
 
@@ -121,5 +122,63 @@ pub async fn null_assignment_exercise_ids(
     )
     .execute(conn)
     .await?;
+    Ok(())
+}
+
+// ── Tag helpers ───────────────────────────────────────────────────────────────
+
+/// Fetch tags for a single exercise, ordered alphabetically.
+pub async fn fetch_tags(
+    conn: &mut SqliteConnection,
+    exercise_id: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    let rows = sqlx::query!(
+        "SELECT tag FROM exercise_tags WHERE exercise_id = ? ORDER BY tag",
+        exercise_id
+    )
+    .fetch_all(conn)
+    .await?;
+    Ok(rows.into_iter().map(|r| r.tag).collect())
+}
+
+/// Fetch all tags for all exercises in one query.
+/// Returns a map from exercise_id to sorted tag list.
+pub async fn fetch_all_tags(pool: &SqlitePool) -> Result<HashMap<String, Vec<String>>, sqlx::Error> {
+    let rows = sqlx::query!(
+        "SELECT exercise_id, tag FROM exercise_tags ORDER BY exercise_id, tag"
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    for r in rows {
+        map.entry(r.exercise_id).or_default().push(r.tag);
+    }
+    Ok(map)
+}
+
+/// Replace all tags for an exercise with the given slice.
+/// Runs DELETE then INSERT within the caller's connection (use inside a transaction).
+pub async fn set_tags(
+    conn: &mut SqliteConnection,
+    exercise_id: &str,
+    tags: &[String],
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM exercise_tags WHERE exercise_id = ?",
+        exercise_id
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    for tag in tags {
+        sqlx::query!(
+            "INSERT INTO exercise_tags (exercise_id, tag) VALUES (?, ?)",
+            exercise_id,
+            tag
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
     Ok(())
 }

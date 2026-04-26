@@ -49,6 +49,21 @@ function DetailPane({
 
       <div style={detailDividerStyle} />
 
+      {/* Tags section */}
+      <section style={detailSectionStyle}>
+        <h2 style={sectionHeadingStyle}>Tags</h2>
+        {exercise.tags.length > 0 ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {exercise.tags.map((t) => (
+              <span key={t} style={detailTagChipStyle}>{t}</span>
+            ))}
+          </div>
+        ) : (
+          <span style={detailTagChipStyle}>unspecified</span>
+        )}
+      </section>
+      <div style={detailDividerStyle} />
+
       {/* Notes section */}
       {exercise.notes && (
         <>
@@ -124,8 +139,8 @@ export default function ExerciseLibrary() {
   }, [filtered, selectedId]);
 
   const createMut = useMutation({
-    mutationFn: ({ name, notes }: { name: string; notes: string | null }) =>
-      exercisesApi.create(name, notes),
+    mutationFn: ({ name, notes, tags }: { name: string; notes: string | null; tags: string[] }) =>
+      exercisesApi.create(name, notes, tags),
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["exercises"] });
       setSelectedId(created.id);
@@ -134,8 +149,8 @@ export default function ExerciseLibrary() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, name, notes }: { id: string; name: string; notes: string | null }) =>
-      exercisesApi.update(id, name, notes),
+    mutationFn: ({ id, name, notes, tags }: { id: string; name: string; notes: string | null; tags: string[] }) =>
+      exercisesApi.update(id, name, notes, tags),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["exercises"] }); setModal(null); },
   });
 
@@ -202,9 +217,15 @@ export default function ExerciseLibrary() {
               >
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                   <div style={exNameStyle}>{ex.name}</div>
-                  {ex.notes && (
+                  {ex.tags.length > 0 ? (
+                    <div style={exTagsRowStyle}>
+                      {ex.tags.map((t) => (
+                        <span key={t} style={exTagChipStyle}>{t}</span>
+                      ))}
+                    </div>
+                  ) : ex.notes ? (
                     <div style={exNotesStyle}>{ex.notes}</div>
-                  )}
+                  ) : null}
                 </div>
                 <span style={chevronStyle}>›</span>
               </button>
@@ -240,11 +261,11 @@ export default function ExerciseLibrary() {
               initial={modal.type === "edit" ? modal.exercise : undefined}
               saving={createMut.isPending || updateMut.isPending}
               onCancel={() => setModal(null)}
-              onSave={(name, notes) => {
+              onSave={(name, notes, tags) => {
                 if (modal.type === "create") {
-                  createMut.mutate({ name, notes });
+                  createMut.mutate({ name, notes, tags });
                 } else {
-                  updateMut.mutate({ id: modal.exercise.id, name, notes });
+                  updateMut.mutate({ id: modal.exercise.id, name, notes, tags });
                 }
               }}
             />
@@ -402,6 +423,38 @@ const exNotesStyle: React.CSSProperties = {
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+};
+
+const exTagsRowStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 4,
+  marginTop: 4,
+};
+
+const exTagChipStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 600,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: tokens.blue,
+  background: tokens.blueBadgeBg,
+  border: `1px solid ${tokens.blueBadgeBorder}`,
+  borderRadius: 4,
+  padding: "1px 6px",
+};
+
+const detailTagChipStyle: React.CSSProperties = {
+  display: "inline-block",
+  fontSize: 12,
+  fontWeight: 600,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: tokens.blue,
+  background: tokens.blueBadgeBg,
+  border: `1px solid ${tokens.blueBadgeBorder}`,
+  borderRadius: 5,
+  padding: "3px 8px",
 };
 
 const chevronStyle: React.CSSProperties = {

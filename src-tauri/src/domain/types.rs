@@ -50,6 +50,25 @@ pub enum ExerciseStatus {
     Skipped,
 }
 
+// ── Exercise tags ─────────────────────────────────────────────────────────────
+
+/// Every tag value accepted by the exercise tag system.
+/// Validation in the domain layer rejects any value not in this list.
+pub const VALID_EXERCISE_TAGS: &[&str] = &[
+    "unspecified",
+    "push",
+    "pull",
+    "legs",
+    "core",
+    "mobility",
+    "yoga",
+    "cardio",
+    "isotonic",
+    "isometric",
+    "concentric",
+    "eccentric",
+];
+
 // ── Row types returned from DB queries ─────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -60,6 +79,33 @@ pub struct ExerciseRow {
     pub image_url: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+/// Enriched exercise returned to callers — includes the `tags` vec that cannot
+/// be expressed as a plain `sqlx::FromRow` field.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Exercise {
+    pub id: String,
+    pub name: String,
+    pub notes: Option<String>,
+    pub image_url: Option<String>,
+    pub tags: Vec<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+impl Exercise {
+    pub fn from_row_and_tags(row: ExerciseRow, tags: Vec<String>) -> Self {
+        Self {
+            id: row.id,
+            name: row.name,
+            notes: row.notes,
+            image_url: row.image_url,
+            tags,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

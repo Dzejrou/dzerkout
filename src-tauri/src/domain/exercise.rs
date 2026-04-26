@@ -2,32 +2,71 @@ use sqlx::SqlitePool;
 use uuid::Uuid;
 use crate::{
     db::exercises,
-    domain::types::{ExerciseRow, ExerciseReferences},
+    domain::types::{Exercise, ExerciseReferences, VALID_EXERCISE_TAGS},
     error::AppError,
 };
 
-pub async fn list(pool: &SqlitePool) -> Result<Vec<ExerciseRow>, AppError> {
-    exercises::find_all(pool).await.map_err(Into::into)
+// ── Validation ────────────────────────────────────────────────────────────────
+
+fn validate_tags(tags: &[String]) -> Result<(), AppError> {
+    for tag in tags {
+        if !VALID_EXERCISE_TAGS.contains(&tag.as_str()) {
+            return Err(AppError::Validation(format!(
+                "invalid exercise tag: '{}'. Valid tags: {}",
+                tag,
+                VALID_EXERCISE_TAGS.join(", ")
+            )));
+        }
+    }
+    Ok(())
+}
+
+// ── Domain functions ──────────────────────────────────────────────────────────
+
+pub async fn list(pool: &SqlitePool) -> Result<Vec<Exercise>, AppError> {
+    let rows = exercises::find_all(pool).await?;
+    let mut tags_map = exercises::fetch_all_tags(pool).await?;
+
+    let result = rows
+        .into_iter()
+        .map(|row| {
+            let tags = tags_map.remove(&row.id).unwrap_or_default();
+            Exercise::from_row_and_tags(row, tags)
+        })
+        .collect();
+
+    Ok(result)
 }
 
 pub async fn create(
     pool: &SqlitePool,
     name: &str,
     notes: Option<&str>,
-) -> Result<ExerciseRow, AppError> {
+    tags: &[String],
+) -> Result<Exercise, AppError> {
     if name.trim().is_empty() {
         return Err(AppError::Validation("name must not be empty".into()));
     }
+    validate_tags(tags)?;
+
     let id = Uuid::new_v4().to_string();
-    let mut conn = pool.acquire().await?;
-    exercises::insert(&mut conn, &id, name, notes)
+    let mut tx = pool.begin().await?;
+
+    let row = exercises::insert(&mut tx, &id, name, notes)
         .await
         .map_err(|e| match &e {
             sqlx::Error::Database(db) if db.is_unique_violation() => {
                 AppError::Conflict(format!("Exercise '{}' already exists", name))
             }
             _ => e.into(),
-        })
+        })?;
+
+    exercises::set_tags(&mut tx, &id, tags).await?;
+    tx.commit().await?;
+
+    let mut sorted_tags = tags.to_vec();
+    sorted_tags.sort();
+    Ok(Exercise::from_row_and_tags(row, sorted_tags))
 }
 
 pub async fn update(
@@ -35,12 +74,16 @@ pub async fn update(
     id: &str,
     name: &str,
     notes: Option<&str>,
-) -> Result<ExerciseRow, AppError> {
+    tags: &[String],
+) -> Result<Exercise, AppError> {
     if name.trim().is_empty() {
         return Err(AppError::Validation("name must not be empty".into()));
     }
-    let mut conn = pool.acquire().await?;
-    exercises::update(&mut conn, id, name, notes)
+    validate_tags(tags)?;
+
+    let mut tx = pool.begin().await?;
+
+    let row = exercises::update(&mut tx, id, name, notes)
         .await
         .map_err(|e| match &e {
             sqlx::Error::Database(db) if db.is_unique_violation() => {
@@ -48,7 +91,14 @@ pub async fn update(
             }
             sqlx::Error::RowNotFound => AppError::NotFound(id.to_string()),
             _ => e.into(),
-        })
+        })?;
+
+    exercises::set_tags(&mut tx, id, tags).await?;
+    tx.commit().await?;
+
+    let mut sorted_tags = tags.to_vec();
+    sorted_tags.sort();
+    Ok(Exercise::from_row_and_tags(row, sorted_tags))
 }
 
 pub async fn get_references(
@@ -86,7 +136,7 @@ pub async fn delete_with_unlink(
     // 3. Null exercise_id on assignments; preserve or set display_label
     exercises::null_assignment_exercise_ids(&mut tx, id, &exercise.name).await?;
 
-    // 4. Delete exercise — SQLite SET NULL cascades to workout_session_exercises
+    // 4. Delete exercise — CASCADE DELETE removes exercise_tags rows automatically
     exercises::delete(&mut tx, id).await?;
 
     tx.commit().await?;

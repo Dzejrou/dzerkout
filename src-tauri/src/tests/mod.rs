@@ -14,7 +14,7 @@ use crate::{
 async fn test_assignment_validation_rejects_wrong_set(pool: SqlitePool) {
     let set_a = set_template::create(&pool, "Set A", None).await.unwrap();
     let set_b = set_template::create(&pool, "Set B", None).await.unwrap();
-    let exercise = exercise::create(&pool, "Squat", None).await.unwrap();
+    let exercise = exercise::create(&pool, "Squat", None, &[]).await.unwrap();
 
     let card_a = set_template::add_card(
         &pool, &set_a.id, "concrete", Some(&exercise.id), None, None, None, None,
@@ -46,7 +46,7 @@ async fn test_assignment_validation_rejects_wrong_set(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_reorder_cards_two_phase(pool: SqlitePool) {
-    let exercise = exercise::create(&pool, "Push-up", None).await.unwrap();
+    let exercise = exercise::create(&pool, "Push-up", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Reorder Set", None).await.unwrap();
 
     let c0 = set_template::add_card(&pool, &set.id, "concrete", Some(&exercise.id), None, None, None, None).await.unwrap();
@@ -89,7 +89,7 @@ async fn test_reorder_set_refs_two_phase(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_clone_set_template(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Deadlift", None).await.unwrap();
+    let ex = exercise::create(&pool, "Deadlift", None, &[]).await.unwrap();
     let src = set_template::create(&pool, "Source Set", Some("notes")).await.unwrap();
 
     set_template::add_card(&pool, &src.id, "concrete", Some(&ex.id), None, None, Some(45), Some("note")).await.unwrap();
@@ -120,7 +120,7 @@ async fn test_clone_set_template(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_clone_set_from_workout(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Bench Press", None).await.unwrap();
+    let ex = exercise::create(&pool, "Bench Press", None, &[]).await.unwrap();
     let src_set = set_template::create(&pool, "Push Set", None).await.unwrap();
     set_template::add_card(&pool, &src_set.id, "concrete", Some(&ex.id), None, None, Some(60), None).await.unwrap();
 
@@ -144,7 +144,7 @@ async fn test_clone_set_from_workout(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_exercise_delete_unlinks_cards_and_assignments(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Squat", None).await.unwrap();
+    let ex = exercise::create(&pool, "Squat", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Leg Day", None).await.unwrap();
 
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
@@ -169,7 +169,7 @@ async fn test_exercise_delete_unlinks_cards_and_assignments(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_exercise_delete_requires_confirmed_flag(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Lunge", None).await.unwrap();
+    let ex = exercise::create(&pool, "Lunge", None, &[]).await.unwrap();
     let result = exercise::delete_with_unlink(&pool, &ex.id, false).await;
     assert!(matches!(result, Err(AppError::Validation(_))));
 }
@@ -178,7 +178,7 @@ async fn test_exercise_delete_requires_confirmed_flag(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_snapshot_skips_empty_sets(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Squat", None).await.unwrap();
+    let ex = exercise::create(&pool, "Squat", None, &[]).await.unwrap();
 
     let empty_set = set_template::create(&pool, "Empty Set", None).await.unwrap();
     let set_a = set_template::create(&pool, "Set A", None).await.unwrap();
@@ -207,7 +207,7 @@ async fn test_snapshot_skips_empty_sets(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_snapshot_fallback_chains(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Bench Press", None).await.unwrap();
+    let ex = exercise::create(&pool, "Bench Press", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Push Set", None).await.unwrap();
 
     let card1 = set_template::add_card(
@@ -291,7 +291,7 @@ async fn test_placeholder_only_workout_is_startable(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_start_session_transitions(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Squat", None).await.unwrap();
+    let ex = exercise::create(&pool, "Squat", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Leg Set", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
@@ -327,7 +327,7 @@ async fn test_start_session_transitions(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_discard_session_cascades(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Pull-up", None).await.unwrap();
+    let ex = exercise::create(&pool, "Pull-up", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Pull Set", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
 
@@ -363,7 +363,7 @@ async fn test_discard_session_cascades(pool: SqlitePool) {
 async fn make_two_set_session(pool: &SqlitePool) -> (String, Vec<String>, Vec<String>) {
     // Returns (session_id, set_ids[2], exercise_ids[4]) for a started session
     // Set 1: 2 exercises, Set 2: 2 exercises
-    let ex = exercise::create(pool, "Exercise", None).await.unwrap();
+    let ex = exercise::create(pool, "Exercise", None, &[]).await.unwrap();
 
     let set_a = set_template::create(pool, "Set A", None).await.unwrap();
     let set_b = set_template::create(pool, "Set B", None).await.unwrap();
@@ -496,7 +496,7 @@ async fn test_retreat_within_same_set(pool: SqlitePool) {
 
     // Actually, let's retreat from set1_ex1 position
     // Re-setup: fresh session
-    let ex = exercise::create(&pool, "X", None).await.unwrap();
+    let ex = exercise::create(&pool, "X", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "S", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
@@ -734,7 +734,7 @@ async fn test_history_completed_appears(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_history_draft_excluded(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "X", None).await.unwrap();
+    let ex = exercise::create(&pool, "X", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "S", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
     let wt = workout_template::create(&pool, "W", None, 60, None).await.unwrap();
@@ -761,7 +761,7 @@ async fn test_history_abandoned_excluded(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_history_denormalized_names_stable(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Burpee", None).await.unwrap();
+    let ex = exercise::create(&pool, "Burpee", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "S", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
     let wt = workout_template::create(&pool, "W", None, 60, None).await.unwrap();
@@ -805,7 +805,7 @@ async fn test_history_detail_ordered(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_fork_targeted_ref_reppoints(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Push-up", None).await.unwrap();
+    let ex = exercise::create(&pool, "Push-up", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Push Set", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
 
@@ -832,7 +832,7 @@ async fn test_fork_targeted_ref_reppoints(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_fork_sibling_ref_unchanged(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Squat", None).await.unwrap();
+    let ex = exercise::create(&pool, "Squat", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Leg Set", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
 
@@ -864,7 +864,7 @@ async fn test_fork_sibling_ref_unchanged(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_fork_original_edits_do_not_affect_clone(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Lunge", None).await.unwrap();
+    let ex = exercise::create(&pool, "Lunge", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Cardio Set", None).await.unwrap();
     let card = set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
 
@@ -879,7 +879,7 @@ async fn test_fork_original_edits_do_not_affect_clone(pool: SqlitePool) {
     assert_eq!(cloned_detail_before.cards.len(), 1, "clone starts with 1 card");
 
     // Add a card to the ORIGINAL set
-    let ex2 = exercise::create(&pool, "Jump", None).await.unwrap();
+    let ex2 = exercise::create(&pool, "Jump", None, &[]).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex2.id), None, None, None, None).await.unwrap();
 
     // Remove the original card from the ORIGINAL set
@@ -904,7 +904,7 @@ async fn test_fork_original_edits_do_not_affect_clone(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_fork_creates_local_set(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Squat", None).await.unwrap();
+    let ex = exercise::create(&pool, "Squat", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Global Set", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
 
@@ -924,7 +924,7 @@ async fn test_fork_creates_local_set(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_fork_hidden_from_global_library(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Press", None).await.unwrap();
+    let ex = exercise::create(&pool, "Press", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "My Set", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
 
@@ -940,7 +940,7 @@ async fn test_fork_hidden_from_global_library(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_fork_loadable_via_workout(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Row", None).await.unwrap();
+    let ex = exercise::create(&pool, "Row", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Pull Set", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
 
@@ -955,7 +955,7 @@ async fn test_fork_loadable_via_workout(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_export_forked_set_creates_global(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Curl", None).await.unwrap();
+    let ex = exercise::create(&pool, "Curl", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Arm Set", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
 
@@ -991,7 +991,7 @@ async fn test_export_rejects_already_global_set(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_delete_workout_cleans_up_local_sets(pool: SqlitePool) {
-    let ex = exercise::create(&pool, "Deadlift", None).await.unwrap();
+    let ex = exercise::create(&pool, "Deadlift", None, &[]).await.unwrap();
     let set = set_template::create(&pool, "Lift Set", None).await.unwrap();
     set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
 
@@ -1097,7 +1097,7 @@ async fn test_finish_stores_performed_duration(pool: SqlitePool) {
 
 /// Like make_two_set_session, but the workout template has rest_between_sets_sec = 30.
 async fn make_two_set_session_with_rest(pool: &SqlitePool, rest_sec: i64) -> (String, Vec<String>, Vec<String>) {
-    let ex = exercise::create(pool, "Exercise", None).await.unwrap();
+    let ex = exercise::create(pool, "Exercise", None, &[]).await.unwrap();
 
     let set_a = set_template::create(pool, "Set A", None).await.unwrap();
     let set_b = set_template::create(pool, "Set B", None).await.unwrap();
@@ -1366,4 +1366,80 @@ async fn test_prev_clears_performed_duration(pool: SqlitePool) {
         ex0_second.performed_duration_sec.is_some(),
         "second attempt stores performed_duration_sec"
     );
+}
+
+// ── Exercise tags ─────────────────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_create_exercise_with_tags(pool: SqlitePool) {
+    let tags = vec!["push".to_string(), "concentric".to_string()];
+    let ex = exercise::create(&pool, "Bench Press", None, &tags).await.unwrap();
+    assert_eq!(ex.tags, vec!["concentric".to_string(), "push".to_string()],
+        "tags are returned sorted alphabetically");
+}
+
+#[sqlx::test]
+async fn test_create_exercise_no_tags_has_empty_tags(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Plank", None, &[]).await.unwrap();
+    assert!(ex.tags.is_empty(), "no tags → empty vec (UI treats as unspecified)");
+}
+
+#[sqlx::test]
+async fn test_update_exercise_replaces_tags(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Squat", None, &["legs".to_string()]).await.unwrap();
+    assert_eq!(ex.tags, vec!["legs".to_string()]);
+
+    // Replace tags entirely
+    let updated = exercise::update(
+        &pool, &ex.id, "Squat", None,
+        &["legs".to_string(), "isotonic".to_string()],
+    ).await.unwrap();
+    assert_eq!(updated.tags, vec!["isotonic".to_string(), "legs".to_string()],
+        "update replaces tags (sorted alphabetically)");
+
+    // Clear tags
+    let cleared = exercise::update(&pool, &ex.id, "Squat", None, &[]).await.unwrap();
+    assert!(cleared.tags.is_empty(), "updating with empty vec clears all tags");
+}
+
+#[sqlx::test]
+async fn test_invalid_tag_rejected(pool: SqlitePool) {
+    let result = exercise::create(&pool, "Mystery Move", None, &["fly".to_string()]).await;
+    assert!(
+        matches!(result, Err(crate::error::AppError::Validation(_))),
+        "unknown tag should produce Validation error, got: {:?}", result
+    );
+}
+
+#[sqlx::test]
+async fn test_delete_exercise_cleans_tags(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Pull-up", None, &["pull".to_string()]).await.unwrap();
+
+    // Verify tags are present before delete
+    let list_before: Vec<_> = exercise::list(&pool).await.unwrap()
+        .into_iter().filter(|e| e.id == ex.id).collect();
+    assert_eq!(list_before[0].tags, vec!["pull".to_string()]);
+
+    exercise::delete_with_unlink(&pool, &ex.id, true).await.unwrap();
+
+    // Exercise is gone; tags table should have no orphan rows (CASCADE DELETE)
+    let list_after = exercise::list(&pool).await.unwrap();
+    assert!(list_after.iter().all(|e| e.id != ex.id), "exercise deleted");
+}
+
+#[sqlx::test]
+async fn test_list_exercises_includes_tags(pool: SqlitePool) {
+    exercise::create(&pool, "Push-up", None, &["push".to_string(), "isotonic".to_string()]).await.unwrap();
+    exercise::create(&pool, "Stretch", None, &["mobility".to_string()]).await.unwrap();
+    exercise::create(&pool, "Plank", None, &[]).await.unwrap();
+
+    let all = exercise::list(&pool).await.unwrap();
+    let pushup = all.iter().find(|e| e.name == "Push-up").unwrap();
+    assert_eq!(pushup.tags, vec!["isotonic".to_string(), "push".to_string()]);
+
+    let stretch = all.iter().find(|e| e.name == "Stretch").unwrap();
+    assert_eq!(stretch.tags, vec!["mobility".to_string()]);
+
+    let plank = all.iter().find(|e| e.name == "Plank").unwrap();
+    assert!(plank.tags.is_empty());
 }
