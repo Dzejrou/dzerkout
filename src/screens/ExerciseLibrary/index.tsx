@@ -303,7 +303,7 @@ const rootStyle: React.CSSProperties = {
 };
 
 const leftPanelStyle: React.CSSProperties = {
-  width: 400,
+  width: "var(--left-panel-w)",
   flexShrink: 0,
   display: "flex",
   flexDirection: "column",

@@ -657,7 +657,7 @@ const runnerRootStyle: React.CSSProperties = {
 const topBarStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  padding: "10px 16px",
+  padding: "var(--runner-top-pad-y) 16px",
   flexShrink: 0,
 };
 
@@ -687,7 +687,7 @@ const leftColStyle: React.CSSProperties = {
   flex: "0 0 48%",
   display: "flex",
   flexDirection: "column",
-  gap: 10,
+  gap: "var(--runner-left-col-gap)",
   overflow: "hidden",
 };
 
@@ -695,11 +695,12 @@ const timerPanelStyle: React.CSSProperties = {
   background: tokens.card,
   border: `1px solid ${tokens.borderSubtle}`,
   borderRadius: 14,
-  padding: "16px 20px",
+  padding: "var(--runner-timer-pad)",
   display: "flex",
   flexDirection: "column",
-  gap: 4,
+  gap: "var(--runner-timer-gap)",
   flex: 1,
+  minHeight: 0,
   justifyContent: "center",
 };
 
@@ -709,11 +710,11 @@ const panelLabelStyle: React.CSSProperties = {
   color: tokens.textMuted,
   letterSpacing: "0.12em",
   textTransform: "uppercase",
-  marginBottom: 6,
+  marginBottom: "var(--runner-panel-label-mb)",
 };
 
 const bigClockStyle: React.CSSProperties = {
-  fontSize: "clamp(72px, 13vw, 200px)",
+  fontSize: "var(--runner-big-clock)",
   fontWeight: 700,
   fontVariantNumeric: "tabular-nums",
   letterSpacing: "0.01em",
@@ -736,7 +737,7 @@ const setIndexStyle: React.CSSProperties = {
 };
 
 const exClockCurrentStyle: React.CSSProperties = {
-  fontSize: "clamp(56px, 9vw, 160px)",
+  fontSize: "var(--runner-ex-clock)",
   fontWeight: 700,
   fontVariantNumeric: "tabular-nums",
   color: tokens.textPrimary,
@@ -745,7 +746,7 @@ const exClockCurrentStyle: React.CSSProperties = {
 };
 
 const exClockTargetStyle: React.CSSProperties = {
-  fontSize: "clamp(18px, 2.8vw, 36px)",
+  fontSize: "var(--runner-ex-clock-target)",
   fontWeight: 400,
   fontVariantNumeric: "tabular-nums",
   color: tokens.textMuted,
@@ -756,7 +757,7 @@ const exClockTargetStyle: React.CSSProperties = {
 const exNameStyle: React.CSSProperties = {
   fontSize: 14,
   color: tokens.textFaint,
-  marginTop: 10,
+  marginTop: "var(--runner-ex-name-mt)",
 };
 
 // ── Queue column ──────────────────────────────────────────────────────────────
@@ -839,21 +840,21 @@ const primaryCtrlsStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 8,
-  padding: "12px 16px",
+  padding: "var(--runner-ctrl-pad-y) 16px",
 };
 
 const secondaryCtrlsStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   borderLeft: `1px solid ${tokens.divider}`,
-  padding: "8px 10px",
+  padding: "var(--runner-ctrl-pad-y) 10px",
   gap: 2,
 };
 
 function navBtnStyle(disabled: boolean): React.CSSProperties {
   return {
     flex: 1,
-    height: 44,
+    height: "var(--runner-btn-h)",
     padding: 0,
     display: "flex",
     alignItems: "center",
@@ -870,7 +871,7 @@ function navBtnStyle(disabled: boolean): React.CSSProperties {
 
 const pauseBtnStyle: React.CSSProperties = {
   flex: 1.5,
-  height: 44,
+  height: "var(--runner-btn-h)",
   padding: 0,
   display: "flex",
   alignItems: "center",
@@ -914,7 +915,7 @@ const secLabelStyle: React.CSSProperties = {
 
 const startSetBtnStyle: React.CSSProperties = {
   flex: 2,
-  height: 44,
+  height: "var(--runner-btn-h)",
   padding: 0,
   display: "flex",
   alignItems: "center",

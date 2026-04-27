@@ -449,7 +449,7 @@ const rootStyle: React.CSSProperties = {
 };
 
 const leftPanelStyle: React.CSSProperties = {
-  width: 400,
+  width: "var(--left-panel-w)",
   flexShrink: 0,
   display: "flex",
   flexDirection: "column",
@@ -600,7 +600,7 @@ const detailPaneStyle: React.CSSProperties = {
 
 const detailFixedTopStyle: React.CSSProperties = {
   flexShrink: 0,
-  padding: "28px 32px 0",
+  padding: "var(--detail-fixed-top-pad)",
 };
 
 const detailCardListStyle: React.CSSProperties = {
@@ -610,10 +610,11 @@ const detailCardListStyle: React.CSSProperties = {
   padding: "4px 32px 8px",
 };
 
-const detailFixedBottomStyle: React.CSSProperties = {
+const detailFixedBottomStyle = {
   flexShrink: 0,
   padding: "0 32px 32px",
-};
+  display: "var(--detail-fixed-bot-display, block)",
+} as React.CSSProperties;
 
 const detailHeaderRow: React.CSSProperties = {
   display: "flex",
@@ -688,7 +689,7 @@ const detailNotesStyle: React.CSSProperties = {
 
 const dividerStyle: React.CSSProperties = {
   borderTop: `1px solid ${DIVIDER}`,
-  margin: "20px 0",
+  margin: "var(--detail-divider-margin)",
 };
 
 const sectionHeaderRow: React.CSSProperties = {

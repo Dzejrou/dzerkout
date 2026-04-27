@@ -100,7 +100,7 @@ const optionsBtnStyle: React.CSSProperties = {
 
 const logoAreaStyle: React.CSSProperties = {
   textAlign: "center",
-  padding: "40px 20px 36px",
+  padding: "var(--menu-logo-pad-t) 20px var(--menu-logo-pad-b)",
 };
 
 const logoStyle: React.CSSProperties = {

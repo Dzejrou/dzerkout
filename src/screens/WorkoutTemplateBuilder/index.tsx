@@ -564,7 +564,7 @@ const splitAreaStyle: React.CSSProperties = {
 // ── Left panel ────────────────────────────────────────────────────────────────
 
 const leftPanelStyle: React.CSSProperties = {
-  width: 390,
+  width: "var(--left-panel-w)",
   flexShrink: 0,
   display: "flex",
   flexDirection: "column",
