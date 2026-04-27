@@ -246,11 +246,9 @@ function WorkoutListCard({
       onClick={onSelect}
       style={{
         ...listCardStyle,
-        background: isSelected ? tokens.surfaceActive : tokens.card,
-        border: isSelected
-          ? "1px solid rgba(255,255,255,0.22)"
-          : `1px solid ${tokens.borderSubtle}`,
-        boxShadow: isSelected ? "inset 3px 0 0 rgba(255,255,255,0.3)" : "none",
+        background: isSelected ? tokens.surfaceSelected : tokens.card,
+        border: `1px solid ${tokens.borderSubtle}`,
+        boxShadow: isSelected ? `inset 3px 0 0 ${tokens.greenBadgeText}` : "none",
       }}
     >
       <span style={listCardNameStyle}>{workout.name}</span>
@@ -342,81 +340,71 @@ export default function WorkoutTemplateBuilder() {
 
   return (
     <div style={rootStyle}>
-      {/* Fixed header above the split */}
-      <div style={headerAreaStyle}>
-        <div style={topBarStyle}>
+      {/* Left panel */}
+      <div style={leftPanelStyle}>
+        <div style={leftHeaderStyle}>
           <button onClick={() => navigate("/")} style={backBtnStyle}>← BACK</button>
-        </div>
-        <div style={pageHeaderStyle}>
-          <div>
-            <h1 style={pageTitleStyle}>Workouts</h1>
-            <p style={pageSubtitleStyle}>Create and manage your workout templates.</p>
+          <h1 style={pageTitleStyle}>Workouts</h1>
+          <p style={pageSubtitleStyle}>Create and manage your workout templates.</p>
+          <div style={searchRowStyle}>
+            <div style={searchWrapStyle}>
+              <span style={searchIconStyle}>⌕</span>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search workouts…"
+                style={searchInputStyle}
+              />
+            </div>
+            <button onClick={() => setModal({ type: "create" })} style={newBtnStyle}>
+              + New
+            </button>
           </div>
-          <button onClick={() => setModal({ type: "create" })} style={newBtnStyle}>
-            + New Workout
-          </button>
         </div>
+
+        {/* List */}
+        <div style={cardListStyle}>
+          {isLoading && <p style={{ color: tokens.textSecondary, fontSize: 13, padding: "8px 0" }}>Loading…</p>}
+          {!isLoading && filtered.length === 0 && (
+            <p style={emptyStyle}>{search ? "No matches." : "No workouts yet."}</p>
+          )}
+          {filtered.map((w) => (
+            <WorkoutListCard
+              key={w.id}
+              workout={w}
+              isSelected={w.id === resolvedPreviewId}
+              onSelect={() => setPreviewId(w.id)}
+            />
+          ))}
+        </div>
+
+        {!isLoading && (
+          <p style={countLabelStyle}>
+            {filtered.length} workout{filtered.length !== 1 ? "s" : ""}
+          </p>
+        )}
       </div>
 
-      {/* Split area: left list + right preview */}
-      <div style={splitAreaStyle}>
-        {/* Left panel */}
-        <div style={leftPanelStyle}>
-          {/* Search */}
-          <div style={searchWrapStyle}>
-            <span style={searchIconStyle}>⌕</span>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search workouts…"
-              style={searchInputStyle}
-            />
+      {/* Right panel */}
+      <div style={rightPanelStyle}>
+        {resolvedPreviewId ? (
+          <PreviewPane
+            key={resolvedPreviewId}
+            workoutId={resolvedPreviewId}
+            onEdit={() => setEditingId(resolvedPreviewId)}
+            onDelete={() => {
+              const w = filtered.find((x) => x.id === resolvedPreviewId);
+              if (w) setModal({ type: "delete", workout: w });
+            }}
+            onStart={() => handleStart(resolvedPreviewId)}
+            startPending={startPending}
+            startError={startError}
+          />
+        ) : (
+          <div style={emptyPaneStyle}>
+            <p style={emptyPaneLabelStyle}>Select a workout to preview</p>
           </div>
-
-          {/* List */}
-          <div style={cardListStyle}>
-            {isLoading && <p style={{ color: tokens.textSecondary, fontSize: 13, padding: "8px 0" }}>Loading…</p>}
-            {!isLoading && filtered.length === 0 && (
-              <p style={emptyStyle}>{search ? "No matches." : "No workouts yet."}</p>
-            )}
-            {filtered.map((w) => (
-              <WorkoutListCard
-                key={w.id}
-                workout={w}
-                isSelected={w.id === resolvedPreviewId}
-                onSelect={() => setPreviewId(w.id)}
-              />
-            ))}
-          </div>
-
-          {!isLoading && (
-            <p style={countLabelStyle}>
-              {filtered.length} workout{filtered.length !== 1 ? "s" : ""}
-            </p>
-          )}
-        </div>
-
-        {/* Right panel */}
-        <div style={rightPanelStyle}>
-          {resolvedPreviewId ? (
-            <PreviewPane
-              key={resolvedPreviewId}
-              workoutId={resolvedPreviewId}
-              onEdit={() => setEditingId(resolvedPreviewId)}
-              onDelete={() => {
-                const w = filtered.find((x) => x.id === resolvedPreviewId);
-                if (w) setModal({ type: "delete", workout: w });
-              }}
-              onStart={() => handleStart(resolvedPreviewId)}
-              startPending={startPending}
-              startError={startError}
-            />
-          ) : (
-            <div style={emptyPaneStyle}>
-              <p style={emptyPaneLabelStyle}>Select a workout to preview</p>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Create modal */}
@@ -492,40 +480,25 @@ const rootStyle: React.CSSProperties = {
   background: tokens.bg,
   color: tokens.textPrimary,
   display: "flex",
-  flexDirection: "column",
+  flexDirection: "row",
   overflow: "hidden",
 };
 
-const headerAreaStyle: React.CSSProperties = {
-  flexShrink: 0,
-};
-
-const topBarStyle: React.CSSProperties = {
-  padding: "14px 24px 0",
-};
-
 const backBtnStyle: React.CSSProperties = {
-  background: tokens.border,
-  border: `1px solid ${tokens.borderMedium}`,
+  background: tokens.surfaceActive,
+  border: `1px solid ${tokens.borderStrong}`,
   borderRadius: 8,
-  color: tokens.textFaint,
+  color: tokens.textLight,
   cursor: "pointer",
-  fontSize: 12,
-  fontWeight: 600,
-  letterSpacing: "0.06em",
+  fontSize: 13,
+  fontWeight: 500,
   padding: "6px 14px",
-};
-
-const pageHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-end",
-  justifyContent: "space-between",
-  padding: "20px 24px 16px",
-  gap: 16,
+  display: "block",
+  marginBottom: 10,
 };
 
 const pageTitleStyle: React.CSSProperties = {
-  fontSize: 40,
+  fontSize: 34,
   fontWeight: 800,
   margin: "0 0 4px",
   color: tokens.textPrimary,
@@ -536,29 +509,20 @@ const pageTitleStyle: React.CSSProperties = {
 const pageSubtitleStyle: React.CSSProperties = {
   fontSize: 13,
   color: tokens.textSecondary,
-  margin: 0,
+  margin: "0 0 14px",
 };
 
 const newBtnStyle: React.CSSProperties = {
-  padding: "9px 18px",
+  padding: "8px 12px",
   borderRadius: 10,
-  border: `1px solid ${tokens.borderStrong}`,
-  background: tokens.cardSubtle,
-  color: tokens.textPrimary,
+  border: "none",
+  background: tokens.green,
+  color: "#fff",
   cursor: "pointer",
-  fontSize: 14,
+  fontSize: 13,
   fontWeight: 600,
   flexShrink: 0,
   whiteSpace: "nowrap",
-};
-
-// ── Split area ────────────────────────────────────────────────────────────────
-
-const splitAreaStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  overflow: "hidden",
-  minHeight: 0,
 };
 
 // ── Left panel ────────────────────────────────────────────────────────────────
@@ -568,15 +532,26 @@ const leftPanelStyle: React.CSSProperties = {
   flexShrink: 0,
   display: "flex",
   flexDirection: "column",
-  overflowY: "auto",
   borderRight: `1px solid ${tokens.borderSubtle}`,
-  padding: "0 16px 24px",
+  overflow: "hidden",
+};
+
+const leftHeaderStyle: React.CSSProperties = {
+  padding: "14px 16px 12px",
+  flexShrink: 0,
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
+};
+
+const searchRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
 };
 
 const searchWrapStyle: React.CSSProperties = {
+  flex: 1,
   position: "relative",
-  paddingTop: 4,
-  paddingBottom: 12,
+  minWidth: 0,
 };
 
 const searchIconStyle: React.CSSProperties = {
@@ -607,6 +582,8 @@ const cardListStyle: React.CSSProperties = {
   flexDirection: "column",
   gap: 6,
   flex: 1,
+  overflowY: "auto",
+  padding: "8px 16px",
 };
 
 const emptyStyle: React.CSSProperties = {
@@ -620,7 +597,8 @@ const countLabelStyle: React.CSSProperties = {
   textAlign: "center",
   fontSize: 11,
   color: tokens.textDisabled,
-  marginTop: 14,
+  flexShrink: 0,
+  padding: "8px 0 16px",
 };
 
 // ── List card ─────────────────────────────────────────────────────────────────
@@ -662,6 +640,7 @@ const rightPanelStyle: React.CSSProperties = {
   flex: 1,
   overflowY: "auto",
   minWidth: 0,
+  background: tokens.bgElevated,
 };
 
 const emptyPaneStyle: React.CSSProperties = {

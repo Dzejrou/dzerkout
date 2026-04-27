@@ -293,7 +293,7 @@ const rootStyle: React.CSSProperties = {
 };
 
 const leftPanelStyle: React.CSSProperties = {
-  width: 400,
+  width: "var(--left-panel-w)",
   flexShrink: 0,
   display: "flex",
   flexDirection: "column",
@@ -379,7 +379,7 @@ function sessionCardStyle(selected: boolean): React.CSSProperties {
     padding: "14px 20px",
     cursor: "pointer",
     background: selected ? SURFACE_SELECTED : "transparent",
-    boxShadow: selected ? "inset 3px 0 0 rgba(255,255,255,0.3)" : "none",
+    boxShadow: selected ? `inset 3px 0 0 ${tokens.greenBadgeText}` : "none",
     borderBottom: `1px solid ${DIVIDER}`,
     transition: "background 0.1s",
   };

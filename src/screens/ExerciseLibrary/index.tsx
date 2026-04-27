@@ -359,6 +359,8 @@ const searchWrapStyle: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: 8,
   padding: "6px 10px",
+  minWidth: 0,
+  overflow: "hidden",
 };
 
 const searchIconStyle: React.CSSProperties = {
@@ -374,6 +376,7 @@ const searchInputStyle: React.CSSProperties = {
   outline: "none",
   fontSize: 14,
   color: TEXT_PRIMARY,
+  minWidth: 0,
 };
 
 const newBtnStyle: React.CSSProperties = {

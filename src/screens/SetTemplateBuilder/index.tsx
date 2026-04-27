@@ -505,6 +505,8 @@ const searchWrapStyle: React.CSSProperties = {
   border: `1px solid ${CARD_BORDER}`,
   borderRadius: 10,
   padding: "8px 12px",
+  minWidth: 0,
+  overflow: "hidden",
 };
 
 const searchInputStyle: React.CSSProperties = {
@@ -514,6 +516,7 @@ const searchInputStyle: React.CSSProperties = {
   outline: "none",
   fontSize: 14,
   color: TEXT_PRIMARY,
+  minWidth: 0,
 };
 
 const newSetBtnStyle: React.CSSProperties = {
@@ -548,7 +551,7 @@ function setCardStyle(selected: boolean): React.CSSProperties {
     padding: "14px 20px",
     cursor: "pointer",
     background: selected ? SURFACE_SELECTED : "transparent",
-    boxShadow: selected ? "inset 3px 0 0 rgba(255,255,255,0.3)" : "none",
+    boxShadow: selected ? `inset 3px 0 0 ${tokens.greenBadgeText}` : "none",
     borderBottom: `1px solid ${DIVIDER}`,
     transition: "background 0.1s",
   };
