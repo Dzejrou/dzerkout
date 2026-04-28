@@ -272,7 +272,12 @@ export default function ActiveWorkoutRunner() {
     // During rest, Prev cancels rest and re-opens the previous set.
     if (!restPhase && isAtFirstExercise) return;
     const payload = await run("prev", () => sessionsApi.retreat(sessionId!));
-    if (payload) load(payload);
+    if (payload) {
+      // The exercise we return to was what triggered rest via auto-advance.
+      // Reset the guard so it can fire again if duration is reached.
+      if (restPhase) autoAdvancedExerciseRef.current = null;
+      load(payload);
+    }
   }
   async function handleStartNextSet() {
     const payload = await run("startNextSet", () => sessionsApi.startNextSet(sessionId!));
