@@ -4,7 +4,7 @@
 use sqlx::{Row, SqlitePool};
 use crate::{
     db::history as history_db,
-    domain::{exercise, library, session, set_template, workout_template},
+    domain::{exercise, library, library::ExportScope, session, set_template, workout_template},
     error::AppError,
 };
 
@@ -2023,4 +2023,136 @@ async fn test_seed_does_not_write_sessions(pool: SqlitePool) {
         .unwrap()
         .get::<i64, _>(0);
     assert_eq!(session_count, 0, "seeding must not create session rows");
+}
+
+// ── Scoped export ────────────────────────────────────────────────────────────
+
+/// Deserialise the exported JSON back to LibraryExport so tests can inspect counts.
+fn parse_export(json: &str) -> library::LibraryExport {
+    serde_json::from_str(json).expect("exported JSON must be valid LibraryExport")
+}
+
+#[sqlx::test]
+async fn test_export_exercises_scope(pool: SqlitePool) {
+    exercise::create(&pool, "Squat", None, &["push".to_string()]).await.unwrap();
+    set_template::create(&pool, "Leg Set", None).await.unwrap();
+
+    let json = library::export_library(&pool, ExportScope::Exercises).await.unwrap();
+    let lib = parse_export(&json);
+
+    assert_eq!(lib.exercises.len(), 1);
+    assert_eq!(lib.exercises[0].name, "Squat");
+    assert_eq!(lib.exercises[0].tags, vec!["push"]);
+    assert!(lib.set_templates.is_empty(), "exercises scope must not export sets");
+    assert!(lib.workout_templates.is_empty(), "exercises scope must not export workouts");
+}
+
+#[sqlx::test]
+async fn test_export_sets_scope_includes_referenced_exercises(pool: SqlitePool) {
+    let ex_ref = exercise::create(&pool, "Push-up", None, &[]).await.unwrap();
+    let ex_unreferenced = exercise::create(&pool, "Unused", None, &[]).await.unwrap();
+
+    let set = set_template::create(&pool, "Push Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex_ref.id), None, None, None, None).await.unwrap();
+
+    let json = library::export_library(&pool, ExportScope::Sets).await.unwrap();
+    let lib = parse_export(&json);
+
+    assert_eq!(lib.set_templates.len(), 1);
+    assert_eq!(lib.set_templates[0].name, "Push Set");
+    assert_eq!(lib.exercises.len(), 1, "only referenced exercise should be included");
+    assert_eq!(lib.exercises[0].id, ex_ref.id);
+    assert!(!lib.exercises.iter().any(|e| e.id == ex_unreferenced.id));
+    assert!(lib.workout_templates.is_empty());
+}
+
+#[sqlx::test]
+async fn test_export_sets_scope_excludes_workout_local_sets(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Deadlift", None, &[]).await.unwrap();
+    let wt = workout_template::create(&pool, "Workout", None, 60, None).await.unwrap();
+
+    // Global set
+    let global_set = set_template::create(&pool, "Global Set", None).await.unwrap();
+    set_template::add_card(&pool, &global_set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    // Workout-local set (owning_workout_template_id = wt.id)
+    let local_set = set_template::create_local(&pool, "Local Set", None, &wt.id).await.unwrap();
+    set_template::add_card(&pool, &local_set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let json = library::export_library(&pool, ExportScope::Sets).await.unwrap();
+    let lib = parse_export(&json);
+
+    assert_eq!(lib.set_templates.len(), 1, "only global set should be exported");
+    assert_eq!(lib.set_templates[0].id, global_set.id);
+    assert!(!lib.set_templates.iter().any(|s| s.id == local_set.id));
+}
+
+#[sqlx::test]
+async fn test_export_workouts_scope(pool: SqlitePool) {
+    let ex_used = exercise::create(&pool, "Bench Press", None, &[]).await.unwrap();
+    let ex_unused = exercise::create(&pool, "Unused Ex", None, &[]).await.unwrap();
+
+    let global_set = set_template::create(&pool, "Chest Set", None).await.unwrap();
+    set_template::add_card(&pool, &global_set.id, "concrete", Some(&ex_used.id), None, None, None, None).await.unwrap();
+
+    // An unrelated global set (not referenced by any workout)
+    let unrelated_set = set_template::create(&pool, "Unrelated", None).await.unwrap();
+
+    let wt = workout_template::create(&pool, "Chest Day", None, 90, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &global_set.id).await.unwrap();
+
+    let json = library::export_library(&pool, ExportScope::Workouts).await.unwrap();
+    let lib = parse_export(&json);
+
+    assert_eq!(lib.workout_templates.len(), 1);
+    assert_eq!(lib.workout_templates[0].name, "Chest Day");
+
+    assert_eq!(lib.set_templates.len(), 1, "only sets referenced by workouts");
+    assert_eq!(lib.set_templates[0].id, global_set.id);
+    assert!(!lib.set_templates.iter().any(|s| s.id == unrelated_set.id));
+
+    assert_eq!(lib.exercises.len(), 1, "only exercises used by included sets");
+    assert_eq!(lib.exercises[0].id, ex_used.id);
+    assert!(!lib.exercises.iter().any(|e| e.id == ex_unused.id));
+}
+
+#[sqlx::test]
+async fn test_export_workouts_scope_includes_local_sets(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Squat", None, &[]).await.unwrap();
+    let wt = workout_template::create(&pool, "Leg Day", None, 60, None).await.unwrap();
+    let local_set = set_template::create_local(&pool, "Forked Set", None, &wt.id).await.unwrap();
+    set_template::add_card(&pool, &local_set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &local_set.id).await.unwrap();
+
+    let json = library::export_library(&pool, ExportScope::Workouts).await.unwrap();
+    let lib = parse_export(&json);
+
+    let exported_set = lib.set_templates.iter().find(|s| s.id == local_set.id)
+        .expect("workout-local set must be exported in workouts scope");
+    assert_eq!(exported_set.owning_workout_template_id.as_deref(), Some(wt.id.as_str()));
+}
+
+#[sqlx::test]
+async fn test_export_full_scope(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Row", None, &[]).await.unwrap();
+    let global_set = set_template::create(&pool, "Pull Set", None).await.unwrap();
+    let wt = workout_template::create(&pool, "Pull Day", None, 60, None).await.unwrap();
+    let local_set = set_template::create_local(&pool, "Local Set", None, &wt.id).await.unwrap();
+    set_template::add_card(&pool, &global_set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    set_template::add_card(&pool, &local_set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+
+    let json = library::export_library(&pool, ExportScope::Full).await.unwrap();
+    let lib = parse_export(&json);
+
+    assert_eq!(lib.exercises.len(), 1);
+    assert_eq!(lib.set_templates.len(), 2, "full scope must include both global and local sets");
+    assert_eq!(lib.workout_templates.len(), 1);
+}
+
+#[sqlx::test]
+async fn test_export_invalid_scope_returns_error(pool: SqlitePool) {
+    let err = ExportScope::parse("bogus").unwrap_err();
+    assert!(matches!(err, crate::error::AppError::Validation(_)));
+    // Pool unused; test just validates the parse path
+    drop(pool);
 }

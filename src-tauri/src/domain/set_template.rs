@@ -42,6 +42,24 @@ pub async fn create(
         .map_err(Into::into)
 }
 
+/// Create a workout-local (owned) set template.  Used in tests and by the
+/// workout_template domain when forking/cloning sets.
+pub async fn create_local(
+    pool: &SqlitePool,
+    name: &str,
+    notes: Option<&str>,
+    owning_workout_template_id: &str,
+) -> Result<SetTemplateRow, AppError> {
+    if name.trim().is_empty() {
+        return Err(AppError::Validation("name must not be empty".into()));
+    }
+    let id = Uuid::new_v4().to_string();
+    let mut conn = pool.acquire().await?;
+    set_templates::insert(&mut conn, &id, name, notes, Some(owning_workout_template_id))
+        .await
+        .map_err(Into::into)
+}
+
 pub async fn update(
     pool: &SqlitePool,
     id: &str,

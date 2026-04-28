@@ -4,7 +4,7 @@ import { tokens, THEME_KEYS, themeNames, type ThemeKey } from "../../theme/token
 import { useSettingsStore } from "../../store/settingsStore";
 import { fontPresets, FONT_PRESET_KEYS, type FontPresetKey } from "../../theme/fontPresets";
 import { playPreviewCue } from "../../audio/cues";
-import { libraryApi } from "../../api/library";
+import { libraryApi, type ExportScope } from "../../api/library";
 import type { ImportResult } from "../../types/library";
 
 // ── Toggle ────────────────────────────────────────────────────────────────────
@@ -182,7 +182,22 @@ function ThemeSelector() {
 
 // ── Library section ───────────────────────────────────────────────────────────
 
+const SCOPE_OPTIONS: { value: ExportScope; label: string }[] = [
+  { value: "full",      label: "Full" },
+  { value: "exercises", label: "Exercises" },
+  { value: "sets",      label: "Sets" },
+  { value: "workouts",  label: "Workouts" },
+];
+
+const SCOPE_DESC: Record<ExportScope, string> = {
+  full:      "All exercises, set templates, and workout templates.",
+  exercises: "All exercises and their tags only.",
+  sets:      "Global (reusable) sets and the exercises they reference.",
+  workouts:  "All workouts plus their sets (including workout-local), assignments, and referenced exercises.",
+};
+
 function LibrarySection() {
+  const [exportScope, setExportScope] = useState<ExportScope>("full");
   const [exportStatus, setExportStatus] = useState<"idle" | "loading" | "copied" | "error">("idle");
   const [importText, setImportText] = useState("");
   const [importStatus, setImportStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -192,7 +207,7 @@ function LibrarySection() {
   async function handleExport() {
     setExportStatus("loading");
     try {
-      const json = await libraryApi.exportJson();
+      const json = await libraryApi.exportJson(exportScope);
       await navigator.clipboard.writeText(json);
       setExportStatus("copied");
       setTimeout(() => setExportStatus("idle"), 2500);
@@ -220,7 +235,7 @@ function LibrarySection() {
 
   const exportLabel =
     exportStatus === "loading" ? "Exporting…"
-    : exportStatus === "copied" ? "Copied to clipboard!"
+    : exportStatus === "copied" ? "Copied!"
     : exportStatus === "error" ? "Export failed"
     : "Export to clipboard";
 
@@ -229,27 +244,49 @@ function LibrarySection() {
       <h2 style={sectionTitleStyle}>Library</h2>
       <div style={sectionCardStyle}>
         {/* Export row */}
-        <div style={rowStyle}>
+        <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={rowBodyStyle}>
-            <span style={rowLabelStyle}>Export full library</span>
-            <span style={rowDescStyle}>
-              Copies all exercises, set templates, and workout templates as JSON to your clipboard.
-            </span>
+            <span style={rowLabelStyle}>Export library</span>
+            <span style={rowDescStyle}>{SCOPE_DESC[exportScope]}</span>
           </div>
-          <div style={rowControlStyle}>
-            <button
-              onClick={handleExport}
-              disabled={exportStatus === "loading"}
-              style={{
-                ...libBtnStyle,
-                background: exportStatus === "copied" ? tokens.green : tokens.surfaceActive,
-                color: exportStatus === "copied" ? tokens.greenText : tokens.textLight,
-                border: `1px solid ${exportStatus === "copied" ? tokens.greenBorder : tokens.borderMedium}`,
-              }}
-            >
-              {exportLabel}
-            </button>
+          {/* Scope selector */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {SCOPE_OPTIONS.map(({ value, label }) => {
+              const active = exportScope === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => { setExportScope(value); setExportStatus("idle"); }}
+                  style={{
+                    padding: "5px 13px",
+                    borderRadius: 7,
+                    border: `1px solid ${active ? tokens.green : tokens.border}`,
+                    background: active ? tokens.green : tokens.cardSubtle,
+                    color: active ? tokens.greenText : tokens.textPrimary,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: active ? 600 : 400,
+                    transition: "background 0.12s, border-color 0.12s, color 0.12s",
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
+          <button
+            onClick={handleExport}
+            disabled={exportStatus === "loading"}
+            style={{
+              ...libBtnStyle,
+              alignSelf: "flex-start",
+              background: exportStatus === "copied" ? tokens.green : tokens.surfaceActive,
+              color: exportStatus === "copied" ? tokens.greenText : tokens.textLight,
+              border: `1px solid ${exportStatus === "copied" ? tokens.greenBorder : tokens.borderMedium}`,
+            }}
+          >
+            {exportLabel}
+          </button>
         </div>
         <div style={rowDividerStyle} />
         {/* Import row */}
@@ -273,7 +310,7 @@ function LibrarySection() {
           />
           {importStatus === "success" && importResult && (
             <div style={importSuccessStyle}>
-              Imported successfully —{" "}
+              Imported —{" "}
               exercises: +{importResult.exercises_created} / ↻{importResult.exercises_updated},{" "}
               sets: +{importResult.sets_created} / ↻{importResult.sets_updated},{" "}
               workouts: +{importResult.workouts_created} / ↻{importResult.workouts_updated}

@@ -131,13 +131,137 @@ pub async fn seed_if_empty(pool: &SqlitePool, seed_json: &str) -> Result<SeedRes
     Ok(SeedResult { seeded: true, import_result: Some(import_result) })
 }
 
+// ── Export scope ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExportScope {
+    Full,
+    Exercises,
+    Sets,
+    Workouts,
+}
+
+impl ExportScope {
+    pub fn parse(s: &str) -> Result<Self, AppError> {
+        match s {
+            "full"      => Ok(ExportScope::Full),
+            "exercises" => Ok(ExportScope::Exercises),
+            "sets"      => Ok(ExportScope::Sets),
+            "workouts"  => Ok(ExportScope::Workouts),
+            other => Err(AppError::Validation(format!(
+                "unknown export scope '{other}'; valid: full, exercises, sets, workouts"
+            ))),
+        }
+    }
+}
+
+// ── Export helpers ────────────────────────────────────────────────────────────
+
+use crate::domain::types::{SetTemplateRow, WorkoutTemplateRow};
+
+/// Build one ExportedSetTemplate by fetching its cards.
+async fn build_set_template(
+    conn: &mut sqlx::SqliteConnection,
+    row: &SetTemplateRow,
+) -> Result<ExportedSetTemplate, sqlx::Error> {
+    let cards = db_sets::find_cards(conn, &row.id).await?;
+    Ok(ExportedSetTemplate {
+        id: row.id.clone(),
+        name: row.name.clone(),
+        notes: row.notes.clone(),
+        owning_workout_template_id: row.owning_workout_template_id.clone(),
+        cards: cards
+            .into_iter()
+            .map(|c| ExportedCard {
+                id: c.id,
+                order_index: c.order_index,
+                card_type: c.card_type,
+                exercise_id: c.exercise_id,
+                placeholder_tag: c.placeholder_tag,
+                placeholder_label: c.placeholder_label,
+                duration_hint_sec: c.duration_hint_sec,
+                notes: c.notes,
+            })
+            .collect(),
+    })
+}
+
+/// Build one ExportedWorkoutTemplate by fetching its set_refs and assignments.
+/// Assignments within each set_ref are sorted by card_id for determinism.
+async fn build_workout_template(
+    conn: &mut sqlx::SqliteConnection,
+    row: &WorkoutTemplateRow,
+) -> Result<ExportedWorkoutTemplate, sqlx::Error> {
+    let set_refs = db_wt::find_set_refs(conn, &row.id).await?;
+    let assignments = db_wt::find_assignments_for_workout(conn, &row.id).await?;
+
+    let mut asgn_by_ref: HashMap<&str, Vec<&_>> = HashMap::new();
+    for a in &assignments {
+        asgn_by_ref
+            .entry(a.workout_template_set_ref_id.as_str())
+            .or_default()
+            .push(a);
+    }
+
+    let exported_refs = set_refs
+        .iter()
+        .map(|r| {
+            let mut asgns: Vec<ExportedAssignment> = asgn_by_ref
+                .get(r.id.as_str())
+                .map(|list| {
+                    list.iter()
+                        .map(|a| ExportedAssignment {
+                            id: a.id.clone(),
+                            set_template_card_id: a.set_template_card_id.clone(),
+                            exercise_id: a.exercise_id.clone(),
+                            display_label: a.display_label.clone(),
+                            duration_hint_sec: a.duration_hint_sec,
+                            notes: a.notes.clone(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            asgns.sort_by(|a, b| a.set_template_card_id.cmp(&b.set_template_card_id));
+            ExportedSetRef {
+                id: r.id.clone(),
+                set_template_id: r.set_template_id.clone(),
+                order_index: r.order_index,
+                set_name: r.set_name.clone(),
+                source_set_template_id: r.source_set_template_id.clone(),
+                assignments: asgns,
+            }
+        })
+        .collect();
+
+    Ok(ExportedWorkoutTemplate {
+        id: row.id.clone(),
+        name: row.name.clone(),
+        notes: row.notes.clone(),
+        default_exercise_duration_sec: row.default_exercise_duration_sec,
+        rest_between_sets_sec: row.rest_between_sets_sec,
+        set_refs: exported_refs,
+    })
+}
+
+/// Collect exercise IDs from concrete cards across a list of exported set templates.
+fn exercise_ids_from_sets<'a>(sets: &'a [ExportedSetTemplate]) -> HashSet<&'a str> {
+    sets.iter()
+        .flat_map(|s| s.cards.iter())
+        .filter(|c| c.card_type == "concrete")
+        .filter_map(|c| c.exercise_id.as_deref())
+        .collect()
+}
+
 // ── Export ────────────────────────────────────────────────────────────────────
 
-pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> {
-    // Exercises + tags
-    let exercise_rows = db_ex::find_all(pool).await?;
+/// Export the template library as a pretty-printed JSON string.
+/// `scope` controls which categories are included; all scopes use the same
+/// schema so the result can be re-imported by `import_library_json`.
+pub async fn export_library(pool: &SqlitePool, scope: ExportScope) -> Result<String, AppError> {
+    // Fetch all exercises once (already sorted by name); tags fetched once too.
+    let all_exercise_rows = db_ex::find_all(pool).await?;
     let mut tags_map = db_ex::fetch_all_tags(pool).await?;
-    let exercises: Vec<ExportedExercise> = exercise_rows
+    let all_exercises: Vec<ExportedExercise> = all_exercise_rows
         .into_iter()
         .map(|row| ExportedExercise {
             tags: tags_map.remove(&row.id).unwrap_or_default(),
@@ -149,84 +273,80 @@ pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> 
 
     let mut conn = pool.acquire().await?;
 
-    // All set templates (global + workout-local), with their cards
-    let set_rows = db_sets::find_all_for_export(&mut conn).await?;
-    let mut set_templates: Vec<ExportedSetTemplate> = Vec::with_capacity(set_rows.len());
-    for row in &set_rows {
-        let cards = db_sets::find_cards(&mut conn, &row.id).await?;
-        set_templates.push(ExportedSetTemplate {
-            id: row.id.clone(),
-            name: row.name.clone(),
-            notes: row.notes.clone(),
-            owning_workout_template_id: row.owning_workout_template_id.clone(),
-            cards: cards
-                .into_iter()
-                .map(|c| ExportedCard {
-                    id: c.id,
-                    order_index: c.order_index,
-                    card_type: c.card_type,
-                    exercise_id: c.exercise_id,
-                    placeholder_tag: c.placeholder_tag,
-                    placeholder_label: c.placeholder_label,
-                    duration_hint_sec: c.duration_hint_sec,
-                    notes: c.notes,
-                })
-                .collect(),
-        });
-    }
+    let (exercises, set_templates, workout_templates) = match scope {
+        // ── Full ──────────────────────────────────────────────────────────────
+        ExportScope::Full => {
+            let set_rows = db_sets::find_all_for_export(&mut conn).await?;
+            let mut sets = Vec::with_capacity(set_rows.len());
+            for row in &set_rows {
+                sets.push(build_set_template(&mut conn, row).await?);
+            }
 
-    // Workout templates with set_refs and nested assignments
-    let wt_rows = db_wt::find_all_rows(pool).await?;
-    let mut workout_templates: Vec<ExportedWorkoutTemplate> = Vec::with_capacity(wt_rows.len());
-    for row in &wt_rows {
-        let set_refs = db_wt::find_set_refs(&mut conn, &row.id).await?;
-        let assignments = db_wt::find_assignments_for_workout(&mut conn, &row.id).await?;
+            let wt_rows = db_wt::find_all_rows(pool).await?;
+            let mut workouts = Vec::with_capacity(wt_rows.len());
+            for row in &wt_rows {
+                workouts.push(build_workout_template(&mut conn, row).await?);
+            }
 
-        // Group assignments by set_ref_id for efficient lookup
-        let mut asgn_by_ref: HashMap<&str, Vec<&_>> = HashMap::new();
-        for a in &assignments {
-            asgn_by_ref
-                .entry(&a.workout_template_set_ref_id)
-                .or_default()
-                .push(a);
+            (all_exercises, sets, workouts)
         }
 
-        let exported_refs = set_refs
-            .iter()
-            .map(|r| ExportedSetRef {
-                id: r.id.clone(),
-                set_template_id: r.set_template_id.clone(),
-                order_index: r.order_index,
-                set_name: r.set_name.clone(),
-                source_set_template_id: r.source_set_template_id.clone(),
-                assignments: asgn_by_ref
-                    .get(r.id.as_str())
-                    .map(|asgns| {
-                        asgns
-                            .iter()
-                            .map(|a| ExportedAssignment {
-                                id: a.id.clone(),
-                                set_template_card_id: a.set_template_card_id.clone(),
-                                exercise_id: a.exercise_id.clone(),
-                                display_label: a.display_label.clone(),
-                                duration_hint_sec: a.duration_hint_sec,
-                                notes: a.notes.clone(),
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-            })
-            .collect();
+        // ── Exercises only ────────────────────────────────────────────────────
+        ExportScope::Exercises => (all_exercises, vec![], vec![]),
 
-        workout_templates.push(ExportedWorkoutTemplate {
-            id: row.id.clone(),
-            name: row.name.clone(),
-            notes: row.notes.clone(),
-            default_exercise_duration_sec: row.default_exercise_duration_sec,
-            rest_between_sets_sec: row.rest_between_sets_sec,
-            set_refs: exported_refs,
-        });
-    }
+        // ── Sets (global / reusable) ──────────────────────────────────────────
+        ExportScope::Sets => {
+            // Only sets that are NOT workout-local
+            let all_set_rows = db_sets::find_all_for_export(&mut conn).await?;
+            let mut sets = Vec::new();
+            for row in all_set_rows.iter().filter(|r| r.owning_workout_template_id.is_none()) {
+                sets.push(build_set_template(&mut conn, row).await?);
+            }
+
+            // Include only exercises referenced by concrete cards in these sets
+            let needed = exercise_ids_from_sets(&sets);
+            let exercises = all_exercises
+                .into_iter()
+                .filter(|e| needed.contains(e.id.as_str()))
+                .collect();
+
+            (exercises, sets, vec![])
+        }
+
+        // ── Workouts (with all dependency sets and exercises) ─────────────────
+        ExportScope::Workouts => {
+            let wt_rows = db_wt::find_all_rows(pool).await?;
+            let mut workouts = Vec::with_capacity(wt_rows.len());
+            for row in &wt_rows {
+                workouts.push(build_workout_template(&mut conn, row).await?);
+            }
+
+            // Sets: all sets referenced by any workout set_ref (incl. workout-local)
+            let set_rows = db_sets::find_referenced_by_workouts(&mut conn).await?;
+            let mut sets = Vec::with_capacity(set_rows.len());
+            for row in &set_rows {
+                sets.push(build_set_template(&mut conn, row).await?);
+            }
+
+            // Exercises: from set cards + from assignment exercise_ids
+            let mut needed = exercise_ids_from_sets(&sets);
+            for wt in &workouts {
+                for ref_ in &wt.set_refs {
+                    for a in &ref_.assignments {
+                        if let Some(eid) = a.exercise_id.as_deref() {
+                            needed.insert(eid);
+                        }
+                    }
+                }
+            }
+            let exercises = all_exercises
+                .into_iter()
+                .filter(|e| needed.contains(e.id.as_str()))
+                .collect();
+
+            (exercises, sets, workouts)
+        }
+    };
 
     let export = LibraryExport {
         schema: "dzerkout.library".to_string(),
@@ -239,6 +359,12 @@ pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> 
 
     serde_json::to_string_pretty(&export)
         .map_err(|e| AppError::Database(format!("serialization error: {e}")))
+}
+
+/// Convenience alias used by the startup seed check and any callers that
+/// always want the full library.
+pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> {
+    export_library(pool, ExportScope::Full).await
 }
 
 // ── Import ────────────────────────────────────────────────────────────────────
