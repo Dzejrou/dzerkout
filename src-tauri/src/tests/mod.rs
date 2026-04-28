@@ -4,7 +4,7 @@
 use sqlx::SqlitePool;
 use crate::{
     db::history as history_db,
-    domain::{exercise, session, set_template, workout_template},
+    domain::{exercise, library, session, set_template, workout_template},
     error::AppError,
 };
 
@@ -1442,4 +1442,480 @@ async fn test_list_exercises_includes_tags(pool: SqlitePool) {
 
     let plank = all.iter().find(|e| e.name == "Plank").unwrap();
     assert!(plank.tags.is_empty());
+}
+
+// ── Library export / import ──────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_export_excludes_no_session_data(pool: SqlitePool) {
+    exercise::create(&pool, "Squat", None, &["isotonic".to_string()]).await.unwrap();
+    let json = library::export_full_library(&pool).await.unwrap();
+    assert!(json.contains("Squat"));
+    assert!(json.contains("\"schema\": \"dzerkout.library\""));
+    // No session tables in the export
+    assert!(!json.contains("\"sessions\""));
+    assert!(!json.contains("\"session_id\""));
+}
+
+#[sqlx::test]
+async fn test_import_exercises_with_tags(pool: SqlitePool) {
+    let json = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [
+        { "id": "ex-1", "name": "Push-up", "notes": null, "tags": ["push", "isotonic"] }
+      ],
+      "set_templates": [],
+      "workout_templates": []
+    }"#;
+
+    let result = library::import_library_json(&pool, json).await.unwrap();
+    assert_eq!(result.exercises_created, 1);
+    assert_eq!(result.exercises_updated, 0);
+
+    let all = exercise::list(&pool).await.unwrap();
+    let ex = all.iter().find(|e| e.name == "Push-up").unwrap();
+    assert!(ex.tags.contains(&"push".to_string()));
+    assert!(ex.tags.contains(&"isotonic".to_string()));
+}
+
+#[sqlx::test]
+async fn test_import_set_with_concrete_card(pool: SqlitePool) {
+    let json = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [
+        { "id": "ex-a", "name": "Squat", "notes": null, "tags": [] }
+      ],
+      "set_templates": [
+        {
+          "id": "set-a",
+          "name": "Leg Day",
+          "notes": null,
+          "owning_workout_template_id": null,
+          "cards": [
+            {
+              "id": "card-1",
+              "order_index": 0,
+              "card_type": "concrete",
+              "exercise_id": "ex-a",
+              "placeholder_tag": null,
+              "placeholder_label": null,
+              "duration_hint_sec": 60,
+              "notes": null
+            }
+          ]
+        }
+      ],
+      "workout_templates": []
+    }"#;
+
+    let result = library::import_library_json(&pool, json).await.unwrap();
+    assert_eq!(result.sets_created, 1);
+
+    let detail = set_template::get(&pool, "set-a").await.unwrap();
+    assert_eq!(detail.name, "Leg Day");
+    assert_eq!(detail.cards.len(), 1);
+    assert_eq!(detail.cards[0].exercise_id.as_deref(), Some("ex-a"));
+}
+
+#[sqlx::test]
+async fn test_import_workout_with_set_refs_and_assignments(pool: SqlitePool) {
+    let json = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [
+        { "id": "ex-1", "name": "Deadlift", "notes": null, "tags": [] }
+      ],
+      "set_templates": [
+        {
+          "id": "st-1",
+          "name": "Pull Day",
+          "notes": null,
+          "owning_workout_template_id": null,
+          "cards": [
+            {
+              "id": "c-1",
+              "order_index": 0,
+              "card_type": "concrete",
+              "exercise_id": "ex-1",
+              "placeholder_tag": null,
+              "placeholder_label": null,
+              "duration_hint_sec": null,
+              "notes": null
+            }
+          ]
+        }
+      ],
+      "workout_templates": [
+        {
+          "id": "wt-1",
+          "name": "Full Pull",
+          "notes": null,
+          "default_exercise_duration_sec": 120,
+          "rest_between_sets_sec": null,
+          "set_refs": [
+            {
+              "id": "ref-1",
+              "set_template_id": "st-1",
+              "order_index": 0,
+              "set_name": "Pull Day",
+              "source_set_template_id": null,
+              "assignments": [
+                {
+                  "id": "asgn-1",
+                  "set_template_card_id": "c-1",
+                  "exercise_id": "ex-1",
+                  "display_label": "Heavy set",
+                  "duration_hint_sec": 90,
+                  "notes": null
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }"#;
+
+    let result = library::import_library_json(&pool, json).await.unwrap();
+    assert_eq!(result.workouts_created, 1);
+    assert_eq!(result.sets_created, 1);
+    assert_eq!(result.exercises_created, 1);
+
+    let detail = workout_template::get(&pool, "wt-1").await.unwrap();
+    assert_eq!(detail.set_refs.len(), 1);
+    assert_eq!(detail.assignments.len(), 1);
+    assert_eq!(detail.assignments[0].display_label.as_deref(), Some("Heavy set"));
+}
+
+#[sqlx::test]
+async fn test_repeated_import_updates_not_duplicates(pool: SqlitePool) {
+    let json = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [
+        { "id": "ex-dup", "name": "Plank", "notes": null, "tags": [] }
+      ],
+      "set_templates": [],
+      "workout_templates": []
+    }"#;
+
+    library::import_library_json(&pool, json).await.unwrap();
+
+    let json2 = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-02T00:00:00Z",
+      "exercises": [
+        { "id": "ex-dup", "name": "Plank (updated)", "notes": "now with notes", "tags": [] }
+      ],
+      "set_templates": [],
+      "workout_templates": []
+    }"#;
+
+    let result2 = library::import_library_json(&pool, json2).await.unwrap();
+    assert_eq!(result2.exercises_created, 0);
+    assert_eq!(result2.exercises_updated, 1);
+
+    let all = exercise::list(&pool).await.unwrap();
+    let matching: Vec<_> = all.iter().filter(|e| e.id == "ex-dup").collect();
+    assert_eq!(matching.len(), 1, "should not duplicate on repeated import");
+    assert_eq!(matching[0].name, "Plank (updated)");
+}
+
+#[sqlx::test]
+async fn test_import_rejects_invalid_tag(pool: SqlitePool) {
+    let json = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [
+        { "id": "ex-bad", "name": "Bad Exercise", "notes": null, "tags": ["not_a_real_tag"] }
+      ],
+      "set_templates": [],
+      "workout_templates": []
+    }"#;
+
+    let err = library::import_library_json(&pool, json).await.unwrap_err();
+    assert!(matches!(err, AppError::Validation(_)), "expected Validation error, got: {:?}", err);
+}
+
+#[sqlx::test]
+async fn test_import_rejects_assignment_card_mismatch(pool: SqlitePool) {
+    let json = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [
+        { "id": "ex-m", "name": "Exercise M", "notes": null, "tags": [] }
+      ],
+      "set_templates": [
+        {
+          "id": "st-x",
+          "name": "Set X",
+          "notes": null,
+          "owning_workout_template_id": null,
+          "cards": [
+            { "id": "cx-1", "order_index": 0, "card_type": "concrete", "exercise_id": "ex-m",
+              "placeholder_tag": null, "placeholder_label": null, "duration_hint_sec": null, "notes": null }
+          ]
+        },
+        {
+          "id": "st-y",
+          "name": "Set Y",
+          "notes": null,
+          "owning_workout_template_id": null,
+          "cards": [
+            { "id": "cy-1", "order_index": 0, "card_type": "concrete", "exercise_id": "ex-m",
+              "placeholder_tag": null, "placeholder_label": null, "duration_hint_sec": null, "notes": null }
+          ]
+        }
+      ],
+      "workout_templates": [
+        {
+          "id": "wt-m",
+          "name": "Mismatch Workout",
+          "notes": null,
+          "default_exercise_duration_sec": 60,
+          "rest_between_sets_sec": null,
+          "set_refs": [
+            {
+              "id": "ref-x",
+              "set_template_id": "st-x",
+              "order_index": 0,
+              "set_name": "Set X",
+              "source_set_template_id": null,
+              "assignments": [
+                {
+                  "id": "asgn-bad",
+                  "set_template_card_id": "cy-1",
+                  "exercise_id": "ex-m",
+                  "display_label": null,
+                  "duration_hint_sec": null,
+                  "notes": null
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }"#;
+
+    let err = library::import_library_json(&pool, json).await.unwrap_err();
+    assert!(matches!(err, AppError::Validation(_)), "expected Validation error for card mismatch, got: {:?}", err);
+}
+
+#[sqlx::test]
+async fn test_import_is_transactional_on_failure(pool: SqlitePool) {
+    // First exercise is valid; second has an invalid tag.
+    // Nothing should be written if validation fails.
+    let json = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [
+        { "id": "ex-good", "name": "Good", "notes": null, "tags": [] },
+        { "id": "ex-fail", "name": "Fail", "notes": null, "tags": ["totally_invalid"] }
+      ],
+      "set_templates": [],
+      "workout_templates": []
+    }"#;
+
+    let err = library::import_library_json(&pool, json).await.unwrap_err();
+    assert!(matches!(err, AppError::Validation(_)));
+
+    let all = exercise::list(&pool).await.unwrap();
+    assert!(all.is_empty(), "transaction should have rolled back; no exercises should exist");
+}
+
+// ── Bug fixes: workout-local FK order + DB card ownership ───────────────────
+
+#[sqlx::test]
+async fn test_import_workout_local_set_fresh_db(pool: SqlitePool) {
+    // A full-library export that contains a workout-local set whose
+    // owning_workout_template_id must be written after the workout header.
+    let json = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [
+        { "id": "ex-loc", "name": "Deadlift", "notes": null, "tags": [] }
+      ],
+      "set_templates": [
+        {
+          "id": "st-local",
+          "name": "Forked Set",
+          "notes": null,
+          "owning_workout_template_id": "wt-owner",
+          "cards": [
+            { "id": "c-loc", "order_index": 0, "card_type": "concrete",
+              "exercise_id": "ex-loc", "placeholder_tag": null,
+              "placeholder_label": null, "duration_hint_sec": null, "notes": null }
+          ]
+        }
+      ],
+      "workout_templates": [
+        {
+          "id": "wt-owner",
+          "name": "Owner Workout",
+          "notes": null,
+          "default_exercise_duration_sec": 120,
+          "rest_between_sets_sec": null,
+          "set_refs": [
+            { "id": "ref-loc", "set_template_id": "st-local", "order_index": 0,
+              "set_name": "Forked Set", "source_set_template_id": null, "assignments": [] }
+          ]
+        }
+      ]
+    }"#;
+
+    let result = library::import_library_json(&pool, json).await
+        .expect("import with workout-local set should succeed on fresh DB");
+
+    assert_eq!(result.workouts_created, 1);
+    assert_eq!(result.sets_created, 1);
+
+    // owning_workout_template_id must be preserved
+    let detail = set_template::get(&pool, "st-local").await.unwrap();
+    assert_eq!(
+        detail.owning_workout_template_id.as_deref(),
+        Some("wt-owner"),
+        "owning_workout_template_id should be preserved after import"
+    );
+
+    // Workout detail must still reference the set
+    let wt_detail = workout_template::get(&pool, "wt-owner").await.unwrap();
+    assert_eq!(wt_detail.set_refs.len(), 1);
+    assert_eq!(wt_detail.set_refs[0].set_template_id, "st-local");
+}
+
+#[sqlx::test]
+async fn test_import_workout_local_set_repeated(pool: SqlitePool) {
+    let json = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [
+        { "id": "ex-rep", "name": "Squat", "notes": null, "tags": [] }
+      ],
+      "set_templates": [
+        {
+          "id": "st-rep",
+          "name": "Owned Set",
+          "notes": null,
+          "owning_workout_template_id": "wt-rep",
+          "cards": [
+            { "id": "c-rep", "order_index": 0, "card_type": "concrete",
+              "exercise_id": "ex-rep", "placeholder_tag": null,
+              "placeholder_label": null, "duration_hint_sec": null, "notes": null }
+          ]
+        }
+      ],
+      "workout_templates": [
+        {
+          "id": "wt-rep",
+          "name": "Rep Workout",
+          "notes": null,
+          "default_exercise_duration_sec": 60,
+          "rest_between_sets_sec": null,
+          "set_refs": [
+            { "id": "ref-rep", "set_template_id": "st-rep", "order_index": 0,
+              "set_name": "Owned Set", "source_set_template_id": null, "assignments": [] }
+          ]
+        }
+      ]
+    }"#;
+
+    let r1 = library::import_library_json(&pool, json).await.unwrap();
+    assert_eq!(r1.workouts_created, 1);
+    assert_eq!(r1.workouts_updated, 0);
+    assert_eq!(r1.sets_created, 1);
+    assert_eq!(r1.sets_updated, 0);
+
+    let r2 = library::import_library_json(&pool, json).await.unwrap();
+    assert_eq!(r2.workouts_created, 0);
+    assert_eq!(r2.workouts_updated, 1);
+    assert_eq!(r2.sets_created, 0);
+    assert_eq!(r2.sets_updated, 1);
+
+    // Exactly one workout and one owned set with those IDs
+    let wt_detail = workout_template::get(&pool, "wt-rep").await.unwrap();
+    assert_eq!(wt_detail.set_refs.len(), 1);
+
+    let st_detail = set_template::get(&pool, "st-rep").await.unwrap();
+    assert_eq!(st_detail.owning_workout_template_id.as_deref(), Some("wt-rep"));
+}
+
+#[sqlx::test]
+async fn test_import_rejects_db_card_from_wrong_set(pool: SqlitePool) {
+    // Pre-populate two sets and cards in the DB so the assignment card is
+    // already present in the DB but belongs to the wrong set.
+    let ex = exercise::create(&pool, "Press", None, &[]).await.unwrap();
+    let set_a = set_template::create(&pool, "Set A", None).await.unwrap();
+    let set_b = set_template::create(&pool, "Set B", None).await.unwrap();
+    let _card_a = set_template::add_card(
+        &pool, &set_a.id, "concrete", Some(&ex.id), None, None, None, None,
+    ).await.unwrap();
+    let card_b = set_template::add_card(
+        &pool, &set_b.id, "concrete", Some(&ex.id), None, None, None, None,
+    ).await.unwrap();
+
+    // JSON: workout with set_ref pointing to set_a, but assignment pointing to card_b (set B).
+    // card_b is not in the import JSON — the code must check ownership via DB query.
+    let json = format!(r#"{{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [],
+      "set_templates": [],
+      "workout_templates": [
+        {{
+          "id": "wt-bad",
+          "name": "Bad Workout",
+          "notes": null,
+          "default_exercise_duration_sec": 60,
+          "rest_between_sets_sec": null,
+          "set_refs": [
+            {{
+              "id": "ref-bad",
+              "set_template_id": "{set_a_id}",
+              "order_index": 0,
+              "set_name": "Set A",
+              "source_set_template_id": null,
+              "assignments": [
+                {{
+                  "id": "asgn-bad",
+                  "set_template_card_id": "{card_b_id}",
+                  "exercise_id": null,
+                  "display_label": null,
+                  "duration_hint_sec": null,
+                  "notes": null
+                }}
+              ]
+            }}
+          ]
+        }}
+      ]
+    }}"#,
+        set_a_id = set_a.id,
+        card_b_id = card_b.id,
+    );
+
+    let err = library::import_library_json(&pool, &json).await.unwrap_err();
+    assert!(
+        matches!(err, AppError::Validation(_)),
+        "expected Validation error for DB card from wrong set, got: {:?}",
+        err
+    );
+
+    // Transaction must have rolled back — workout should not exist
+    let wt = workout_template::get(&pool, "wt-bad").await;
+    assert!(
+        wt.is_err(),
+        "workout from bad import should not exist after rollback"
+    );
 }

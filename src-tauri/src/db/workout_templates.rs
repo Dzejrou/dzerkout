@@ -19,6 +19,18 @@ pub async fn find_all(pool: &SqlitePool) -> Result<Vec<WorkoutTemplateSummaryRow
     .await
 }
 
+/// Returns all workout template rows without the set_count join — used by export.
+pub async fn find_all_rows(pool: &SqlitePool) -> Result<Vec<WorkoutTemplateRow>, sqlx::Error> {
+    sqlx::query_as!(
+        WorkoutTemplateRow,
+        "SELECT id, name, notes, default_exercise_duration_sec, rest_between_sets_sec,
+                created_at, updated_at
+         FROM workout_templates ORDER BY name"
+    )
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn find_by_id(
     conn: &mut SqliteConnection,
     id: &str,

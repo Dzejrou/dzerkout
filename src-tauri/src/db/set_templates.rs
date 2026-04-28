@@ -245,6 +245,20 @@ pub async fn reorder_cards_phase2(
     Ok(())
 }
 
+/// Returns every set_template row (global and workout-local) ordered by name.
+/// Used by the library export path.
+pub async fn find_all_for_export(
+    conn: &mut SqliteConnection,
+) -> Result<Vec<SetTemplateRow>, sqlx::Error> {
+    sqlx::query_as!(
+        SetTemplateRow,
+        "SELECT id, name, notes, owning_workout_template_id, created_at, updated_at
+         FROM set_templates ORDER BY name"
+    )
+    .fetch_all(conn)
+    .await
+}
+
 pub async fn count_workout_refs(
     conn: &mut SqliteConnection,
     set_id: &str,

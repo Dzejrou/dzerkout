@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO workout_templates\n                 (id, name, notes, default_exercise_duration_sec, rest_between_sets_sec)\n             VALUES (?, ?, ?, ?, ?)\n             ON CONFLICT(id) DO UPDATE SET\n               name                          = excluded.name,\n               notes                         = excluded.notes,\n               default_exercise_duration_sec = excluded.default_exercise_duration_sec,\n               rest_between_sets_sec         = excluded.rest_between_sets_sec",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "79f57b76930b455d25ed4eaeb00d623baf6cb4155e4c422d633cf40832c1e3c8"
+}

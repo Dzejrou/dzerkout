@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT set_template_id FROM set_template_cards WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "set_template_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "324504991dd4cc13a3ec520dc507ae493f80995fafa5279a469f42d633c2d325"
+}

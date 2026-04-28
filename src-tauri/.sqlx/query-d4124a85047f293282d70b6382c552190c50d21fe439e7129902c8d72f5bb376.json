@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO set_templates (id, name, notes, owning_workout_template_id)\n             VALUES (?, ?, ?, ?)\n             ON CONFLICT(id) DO UPDATE SET\n               name = excluded.name,\n               notes = excluded.notes,\n               owning_workout_template_id = excluded.owning_workout_template_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "d4124a85047f293282d70b6382c552190c50d21fe439e7129902c8d72f5bb376"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO workout_template_card_assignments\n                         (id, workout_template_set_ref_id, set_template_card_id,\n                          exercise_id, display_label, duration_hint_sec, notes)\n                     VALUES (?, ?, ?, ?, ?, ?, ?)\n                     ON CONFLICT(workout_template_set_ref_id, set_template_card_id)\n                     DO UPDATE SET\n                       exercise_id       = excluded.exercise_id,\n                       display_label     = excluded.display_label,\n                       duration_hint_sec = excluded.duration_hint_sec,\n                       notes             = excluded.notes",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "6b25bf40781f5f9749be6a668f70f6f8807f28cca504e2d67ccf25fa27534a14"
+}

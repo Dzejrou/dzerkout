@@ -5,7 +5,7 @@ mod error;
 #[cfg(test)]
 mod tests;
 
-use commands::{exercises::*, history::{get_session_detail, list_session_history}, sessions::*, set_templates::*, workout_templates::*};
+use commands::{exercises::*, history::{get_session_detail, list_session_history}, library::*, sessions::*, set_templates::*, workout_templates::*};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -21,6 +21,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // library
+            export_library_json,
+            import_library_json,
             // exercises
             list_exercises,
             create_exercise,

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO set_template_cards\n                     (id, set_template_id, card_type, order_index, exercise_id,\n                      placeholder_tag, placeholder_label, duration_hint_sec, notes)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n                 ON CONFLICT(id) DO UPDATE SET\n                   set_template_id    = excluded.set_template_id,\n                   card_type          = excluded.card_type,\n                   order_index        = excluded.order_index,\n                   exercise_id        = excluded.exercise_id,\n                   placeholder_tag    = excluded.placeholder_tag,\n                   placeholder_label  = excluded.placeholder_label,\n                   duration_hint_sec  = excluded.duration_hint_sec,\n                   notes              = excluded.notes",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "be20123630902b99d9221d7bfbfe12b354e39de495cc51a554e9b16e90b670d7"
+}

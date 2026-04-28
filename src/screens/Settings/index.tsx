@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { tokens, THEME_KEYS, themeNames, type ThemeKey } from "../../theme/tokens";
 import { useSettingsStore } from "../../store/settingsStore";
 import { fontPresets, FONT_PRESET_KEYS, type FontPresetKey } from "../../theme/fontPresets";
 import { playPreviewCue } from "../../audio/cues";
+import { libraryApi } from "../../api/library";
+import type { ImportResult } from "../../types/library";
 
 // ── Toggle ────────────────────────────────────────────────────────────────────
 
@@ -177,6 +180,125 @@ function ThemeSelector() {
   );
 }
 
+// ── Library section ───────────────────────────────────────────────────────────
+
+function LibrarySection() {
+  const [exportStatus, setExportStatus] = useState<"idle" | "loading" | "copied" | "error">("idle");
+  const [importText, setImportText] = useState("");
+  const [importStatus, setImportStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  async function handleExport() {
+    setExportStatus("loading");
+    try {
+      const json = await libraryApi.exportJson();
+      await navigator.clipboard.writeText(json);
+      setExportStatus("copied");
+      setTimeout(() => setExportStatus("idle"), 2500);
+    } catch {
+      setExportStatus("error");
+      setTimeout(() => setExportStatus("idle"), 3000);
+    }
+  }
+
+  async function handleImport() {
+    if (!importText.trim()) return;
+    setImportStatus("loading");
+    setImportResult(null);
+    setImportError(null);
+    try {
+      const result = await libraryApi.importJson(importText.trim());
+      setImportResult(result);
+      setImportStatus("success");
+      setImportText("");
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : String(err));
+      setImportStatus("error");
+    }
+  }
+
+  const exportLabel =
+    exportStatus === "loading" ? "Exporting…"
+    : exportStatus === "copied" ? "Copied to clipboard!"
+    : exportStatus === "error" ? "Export failed"
+    : "Export to clipboard";
+
+  return (
+    <div style={sectionStyle}>
+      <h2 style={sectionTitleStyle}>Library</h2>
+      <div style={sectionCardStyle}>
+        {/* Export row */}
+        <div style={rowStyle}>
+          <div style={rowBodyStyle}>
+            <span style={rowLabelStyle}>Export full library</span>
+            <span style={rowDescStyle}>
+              Copies all exercises, set templates, and workout templates as JSON to your clipboard.
+            </span>
+          </div>
+          <div style={rowControlStyle}>
+            <button
+              onClick={handleExport}
+              disabled={exportStatus === "loading"}
+              style={{
+                ...libBtnStyle,
+                background: exportStatus === "copied" ? tokens.green : tokens.surfaceActive,
+                color: exportStatus === "copied" ? tokens.greenText : tokens.textLight,
+                border: `1px solid ${exportStatus === "copied" ? tokens.greenBorder : tokens.borderMedium}`,
+              }}
+            >
+              {exportLabel}
+            </button>
+          </div>
+        </div>
+        <div style={rowDividerStyle} />
+        {/* Import row */}
+        <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={rowBodyStyle}>
+            <span style={rowLabelStyle}>Import library JSON</span>
+            <span style={rowDescStyle}>
+              Paste a previously exported JSON below. Existing items will be updated; new items will be added.
+              The import runs in a single transaction — any validation error rolls everything back.
+            </span>
+          </div>
+          <textarea
+            value={importText}
+            onChange={(e) => {
+              setImportText(e.target.value);
+              if (importStatus !== "idle") { setImportStatus("idle"); setImportError(null); setImportResult(null); }
+            }}
+            placeholder='Paste exported JSON here…'
+            rows={6}
+            style={importTextareaStyle}
+          />
+          {importStatus === "success" && importResult && (
+            <div style={importSuccessStyle}>
+              Imported successfully —{" "}
+              exercises: +{importResult.exercises_created} / ↻{importResult.exercises_updated},{" "}
+              sets: +{importResult.sets_created} / ↻{importResult.sets_updated},{" "}
+              workouts: +{importResult.workouts_created} / ↻{importResult.workouts_updated}
+            </div>
+          )}
+          {importStatus === "error" && importError && (
+            <div style={importErrorStyle}>{importError}</div>
+          )}
+          <button
+            onClick={handleImport}
+            disabled={importStatus === "loading" || !importText.trim()}
+            style={{
+              ...libBtnStyle,
+              alignSelf: "flex-start",
+              opacity: importStatus === "loading" || !importText.trim() ? 0.5 : 1,
+            }}
+          >
+            {importStatus === "loading" ? "Importing…" : "Import"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -270,6 +392,9 @@ export default function Settings() {
             }
           />
         </SectionCard>
+
+        {/* ── Library ────────────────────────────────────────────────────── */}
+        <LibrarySection />
 
         <p style={footerStyle}>More options will appear here as features ship.</p>
       </div>
@@ -407,4 +532,47 @@ const footerStyle: React.CSSProperties = {
   fontSize: 12,
   color: tokens.textMuted,
   marginTop: 8,
+};
+
+const libBtnStyle: React.CSSProperties = {
+  padding: "6px 14px",
+  borderRadius: 7,
+  border: `1px solid ${tokens.borderMedium}`,
+  background: tokens.surfaceActive,
+  color: tokens.textLight,
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 600,
+  transition: "background 0.12s, color 0.12s, border-color 0.12s",
+};
+
+const importTextareaStyle: React.CSSProperties = {
+  background: tokens.cardSubtle,
+  border: `1px solid ${tokens.border}`,
+  borderRadius: 8,
+  color: tokens.textPrimary,
+  fontSize: 12,
+  fontFamily: "monospace",
+  padding: "10px 12px",
+  resize: "vertical",
+  outline: "none",
+};
+
+const importSuccessStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: tokens.greenBadgeText,
+  background: tokens.green,
+  border: `1px solid ${tokens.greenBorder}`,
+  borderRadius: 7,
+  padding: "7px 12px",
+};
+
+const importErrorStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: tokens.textPrimary,
+  background: tokens.cardSubtle,
+  border: `1px solid ${tokens.borderStrong}`,
+  borderRadius: 7,
+  padding: "7px 12px",
+  wordBreak: "break-word",
 };
