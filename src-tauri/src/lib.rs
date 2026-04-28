@@ -6,6 +6,7 @@ mod error;
 mod tests;
 
 use commands::{exercises::*, history::{get_session_detail, list_session_history}, library::*, sessions::*, set_templates::*, workout_templates::*};
+use domain::library::seed_if_empty;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -17,6 +18,10 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir)?;
             let pool = tauri::async_runtime::block_on(db::init_pool(&app_data_dir))
                 .expect("failed to initialize database");
+            tauri::async_runtime::block_on(
+                seed_if_empty(&pool, include_str!("../seeds/default_library.json"))
+            )
+            .expect("bundled library seed import failed");
             app.manage(pool);
             Ok(())
         })

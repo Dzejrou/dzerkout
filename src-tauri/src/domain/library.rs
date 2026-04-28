@@ -94,6 +94,43 @@ pub struct ImportResult {
     pub workouts_updated: u32,
 }
 
+#[derive(Debug, Clone)]
+pub struct SeedResult {
+    /// `true` if the DB was empty and the seed was applied.
+    pub seeded: bool,
+    pub import_result: Option<ImportResult>,
+}
+
+// ── First-run seed ────────────────────────────────────────────────────────────
+
+/// Import `seed_json` only when the template library is completely empty
+/// (no exercises, no set_templates, no workout_templates).  Session / history
+/// tables are intentionally ignored when deciding whether to seed.
+///
+/// Call this with `include_str!("../seeds/default_library.json")` at startup.
+/// Tests pass JSON strings directly so no file I/O is needed.
+pub async fn seed_if_empty(pool: &SqlitePool, seed_json: &str) -> Result<SeedResult, AppError> {
+    let has_exercises = sqlx::query!("SELECT id FROM exercises LIMIT 1")
+        .fetch_optional(pool)
+        .await?
+        .is_some();
+    let has_sets = sqlx::query!("SELECT id FROM set_templates LIMIT 1")
+        .fetch_optional(pool)
+        .await?
+        .is_some();
+    let has_workouts = sqlx::query!("SELECT id FROM workout_templates LIMIT 1")
+        .fetch_optional(pool)
+        .await?
+        .is_some();
+
+    if has_exercises || has_sets || has_workouts {
+        return Ok(SeedResult { seeded: false, import_result: None });
+    }
+
+    let import_result = import_library_json(pool, seed_json).await?;
+    Ok(SeedResult { seeded: true, import_result: Some(import_result) })
+}
+
 // ── Export ────────────────────────────────────────────────────────────────────
 
 pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> {

@@ -1,7 +1,7 @@
 // Integration tests using sqlx::test — each test gets a fresh in-memory SQLite
 // with migrations applied automatically.
 
-use sqlx::SqlitePool;
+use sqlx::{Row, SqlitePool};
 use crate::{
     db::history as history_db,
     domain::{exercise, library, session, set_template, workout_template},
@@ -1918,4 +1918,109 @@ async fn test_import_rejects_db_card_from_wrong_set(pool: SqlitePool) {
         wt.is_err(),
         "workout from bad import should not exist after rollback"
     );
+}
+
+// ── First-run seed ───────────────────────────────────────────────────────────
+
+const SEED_WITH_EXERCISE: &str = r#"{
+  "schema": "dzerkout.library",
+  "version": 1,
+  "exported_at": "2026-01-01T00:00:00Z",
+  "exercises": [
+    { "id": "seed-ex-1", "name": "Seeded Exercise", "notes": null, "tags": ["push"] }
+  ],
+  "set_templates": [],
+  "workout_templates": []
+}"#;
+
+const EMPTY_SEED: &str = r#"{
+  "schema": "dzerkout.library",
+  "version": 1,
+  "exported_at": "2026-01-01T00:00:00Z",
+  "exercises": [],
+  "set_templates": [],
+  "workout_templates": []
+}"#;
+
+const INVALID_SEED: &str = r#"{
+  "schema": "not.valid",
+  "version": 1,
+  "exported_at": "2026-01-01T00:00:00Z",
+  "exercises": [],
+  "set_templates": [],
+  "workout_templates": []
+}"#;
+
+#[sqlx::test]
+async fn test_seed_empty_db_triggers_import(pool: SqlitePool) {
+    let result = library::seed_if_empty(&pool, SEED_WITH_EXERCISE).await.unwrap();
+    assert!(result.seeded, "empty DB should trigger seeding");
+    let ir = result.import_result.unwrap();
+    assert_eq!(ir.exercises_created, 1);
+
+    let all = exercise::list(&pool).await.unwrap();
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].name, "Seeded Exercise");
+}
+
+#[sqlx::test]
+async fn test_seed_nonempty_db_skips_import(pool: SqlitePool) {
+    exercise::create(&pool, "Pre-existing", None, &[]).await.unwrap();
+
+    let result = library::seed_if_empty(&pool, SEED_WITH_EXERCISE).await.unwrap();
+    assert!(!result.seeded, "non-empty DB should not be seeded");
+    assert!(result.import_result.is_none());
+
+    // Seeded exercise must not appear; only the pre-existing one exists
+    let all = exercise::list(&pool).await.unwrap();
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].name, "Pre-existing");
+}
+
+#[sqlx::test]
+async fn test_seed_nonempty_set_skips_import(pool: SqlitePool) {
+    // A set template alone (no exercises) is enough to block seeding
+    set_template::create(&pool, "Pre-existing Set", None).await.unwrap();
+
+    let result = library::seed_if_empty(&pool, SEED_WITH_EXERCISE).await.unwrap();
+    assert!(!result.seeded, "DB with a set_template should not be seeded");
+    let all = exercise::list(&pool).await.unwrap();
+    assert!(all.is_empty(), "exercise from seed must not exist");
+}
+
+#[sqlx::test]
+async fn test_seed_empty_json_is_safe(pool: SqlitePool) {
+    let result = library::seed_if_empty(&pool, EMPTY_SEED).await.unwrap();
+    assert!(result.seeded, "seeding was attempted on empty DB");
+    let ir = result.import_result.unwrap();
+    assert_eq!(ir.exercises_created, 0);
+    assert_eq!(ir.sets_created, 0);
+    assert_eq!(ir.workouts_created, 0);
+    // DB still effectively empty — second seed call should also attempt
+    // (nothing to block it, but it's idempotent with 0 rows)
+    let result2 = library::seed_if_empty(&pool, EMPTY_SEED).await.unwrap();
+    assert!(result2.seeded, "re-seeding on still-empty DB is fine");
+}
+
+#[sqlx::test]
+async fn test_seed_invalid_json_returns_error(pool: SqlitePool) {
+    let err = library::seed_if_empty(&pool, INVALID_SEED).await.unwrap_err();
+    assert!(
+        matches!(err, AppError::Validation(_)),
+        "invalid seed schema should return Validation error, got: {:?}",
+        err
+    );
+}
+
+#[sqlx::test]
+async fn test_seed_does_not_write_sessions(pool: SqlitePool) {
+    library::seed_if_empty(&pool, SEED_WITH_EXERCISE).await.unwrap();
+
+    // Use non-macro query to avoid offline-cache type-inference friction
+    let session_count = sqlx::query("SELECT COUNT(*) FROM workout_sessions")
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .get::<i64, _>(0);
+    assert_eq!(session_count, 0, "seeding must not create session rows");
 }
