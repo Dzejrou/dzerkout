@@ -2156,3 +2156,136 @@ async fn test_export_invalid_scope_returns_error(pool: SqlitePool) {
     // Pool unused; test just validates the parse path
     drop(pool);
 }
+
+// ── Reset local data ──────────────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_reset_clears_library_data(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Squat", None, &[]).await.unwrap();
+    let set = set_template::create(&pool, "Leg Set", None).await.unwrap();
+    let wt = workout_template::create(&pool, "Leg Day", None, 60, None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    let result = library::reset_local_data_with_seed(&pool, EMPTY_SEED).await.unwrap();
+    assert!(result.cleared);
+
+    let ex_count = sqlx::query("SELECT COUNT(*) FROM exercises")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+    let set_count = sqlx::query("SELECT COUNT(*) FROM set_templates")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+    let wt_count = sqlx::query("SELECT COUNT(*) FROM workout_templates")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+
+    assert_eq!(ex_count, 0);
+    assert_eq!(set_count, 0);
+    assert_eq!(wt_count, 0);
+}
+
+#[sqlx::test]
+async fn test_reset_clears_session_data(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Press", None, &[]).await.unwrap();
+    let set = set_template::create(&pool, "Push Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    let wt = workout_template::create(&pool, "Push Day", None, 60, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    session::create_session_draft(&pool, &wt.id).await.unwrap();
+
+    library::reset_local_data_with_seed(&pool, EMPTY_SEED).await.unwrap();
+
+    let session_count = sqlx::query("SELECT COUNT(*) FROM workout_sessions")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+    assert_eq!(session_count, 0);
+}
+
+#[sqlx::test]
+async fn test_reset_leaves_schema_usable(pool: SqlitePool) {
+    library::reset_local_data_with_seed(&pool, EMPTY_SEED).await.unwrap();
+
+    // Should be able to create data again without errors
+    let ex = exercise::create(&pool, "New Exercise", None, &[]).await.unwrap();
+    let set = set_template::create(&pool, "New Set", None).await.unwrap();
+    let card = set_template::add_card(
+        &pool, &set.id, "concrete", Some(&ex.id), None, None, None, None,
+    ).await.unwrap();
+    let wt = workout_template::create(&pool, "New Workout", None, 60, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    assert!(!ex.id.is_empty());
+    assert!(!card.id.is_empty());
+    assert!(!wt.id.is_empty());
+}
+
+#[sqlx::test]
+async fn test_reset_reseeds_from_seed_json(pool: SqlitePool) {
+    let seed = r#"{
+        "schema": "dzerkout.library",
+        "version": 1,
+        "exported_at": "2026-01-01T00:00:00Z",
+        "exercises": [
+            {"id": "ex-seed-1", "name": "Seed Exercise", "notes": null, "tags": []}
+        ],
+        "set_templates": [],
+        "workout_templates": []
+    }"#;
+
+    let result = library::reset_local_data_with_seed(&pool, seed).await.unwrap();
+
+    assert!(result.cleared);
+    assert!(result.seeded);
+    let ir = result.import_result.unwrap();
+    assert_eq!(ir.exercises_created, 1);
+
+    let ex_count = sqlx::query("SELECT COUNT(*) FROM exercises")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+    assert_eq!(ex_count, 1);
+}
+
+#[sqlx::test]
+async fn test_reset_with_empty_seed_leaves_db_empty(pool: SqlitePool) {
+    // Populate first
+    exercise::create(&pool, "Bench Press", None, &[]).await.unwrap();
+
+    let result = library::reset_local_data_with_seed(&pool, EMPTY_SEED).await.unwrap();
+
+    assert!(result.cleared);
+    // seed_if_empty runs (DB is empty post-reset) but the empty JSON seeds nothing
+    assert!(result.seeded, "seed_if_empty runs after reset since DB is empty");
+    let ir = result.import_result.unwrap();
+    assert_eq!(ir.exercises_created, 0);
+    assert_eq!(ir.sets_created, 0);
+    assert_eq!(ir.workouts_created, 0);
+
+    let ex_count = sqlx::query("SELECT COUNT(*) FROM exercises")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+    assert_eq!(ex_count, 0);
+}
+
+#[sqlx::test]
+async fn test_reset_reseed_skipped_when_db_nonempty_after_clear(pool: SqlitePool) {
+    // Simulate: reset clears DB, then seed_if_empty sees empty DB and seeds.
+    // Verify that a second reset re-clears and re-seeds again (seeds are re-applied each time).
+    let seed = r#"{
+        "schema": "dzerkout.library",
+        "version": 1,
+        "exported_at": "2026-01-01T00:00:00Z",
+        "exercises": [
+            {"id": "ex-seed-2", "name": "Persistent Seed", "notes": null, "tags": []}
+        ],
+        "set_templates": [],
+        "workout_templates": []
+    }"#;
+
+    let r1 = library::reset_local_data_with_seed(&pool, seed).await.unwrap();
+    assert!(r1.seeded);
+
+    // Second reset: should clear the seeded data and re-seed
+    let r2 = library::reset_local_data_with_seed(&pool, seed).await.unwrap();
+    assert!(r2.cleared);
+    assert!(r2.seeded, "seed should be re-applied after second reset clears the DB");
+
+    let ex_count = sqlx::query("SELECT COUNT(*) FROM exercises")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+    assert_eq!(ex_count, 1);
+}

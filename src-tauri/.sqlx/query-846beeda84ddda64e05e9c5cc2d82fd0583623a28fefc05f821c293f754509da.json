@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM workout_template_set_refs",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "846beeda84ddda64e05e9c5cc2d82fd0583623a28fefc05f821c293f754509da"
+}

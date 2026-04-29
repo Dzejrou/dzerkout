@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM workout_template_card_assignments",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "b9f73ca9214a06e0792ca796bc8d148cf2483343da7667a1621d4c24a564583d"
+}

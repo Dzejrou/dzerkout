@@ -5,13 +5,14 @@ mod error;
 #[cfg(test)]
 mod tests;
 
-use commands::{exercises::*, history::{get_session_detail, list_session_history}, library::*, sessions::*, set_templates::*, workout_templates::*};
+use commands::{exercises::*, history::{get_session_detail, list_session_history}, library::{export_library_json, import_library_json, reset_local_data}, sessions::*, set_templates::*, workout_templates::*};
 use domain::library::seed_if_empty;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_os::init())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir().expect("app data dir not found");
@@ -75,6 +76,8 @@ pub fn run() {
             // history
             list_session_history,
             get_session_detail,
+            // maintenance
+            reset_local_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application")

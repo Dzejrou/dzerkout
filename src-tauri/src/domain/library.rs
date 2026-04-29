@@ -83,6 +83,14 @@ pub struct ExportedAssignment {
     pub notes: Option<String>,
 }
 
+/// Counts returned to the caller after a successful reset + optional re-seed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResetResult {
+    pub cleared: bool,
+    pub seeded: bool,
+    pub import_result: Option<ImportResult>,
+}
+
 /// Counts returned to the caller after a successful import.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportResult {
@@ -791,4 +799,62 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
 
     tx.commit().await?;
     Ok(result)
+}
+
+// ── Reset ─────────────────────────────────────────────────────────────────────
+
+/// Delete all domain data in FK-safe order within a single transaction, then
+/// re-seed from `seed_json` via `seed_if_empty`.
+///
+/// The command layer passes `include_str!("../seeds/default_library.json")`;
+/// tests pass JSON strings directly.
+pub async fn reset_local_data_with_seed(
+    pool: &SqlitePool,
+    seed_json: &str,
+) -> Result<ResetResult, AppError> {
+    let mut tx = pool.begin().await?;
+
+    // FK-safe delete order (RESTRICT constraints require explicit sequencing):
+    //   session children → sessions → assignment children → set_refs
+    //   → set_template_cards → set_templates → exercise_tags → exercises
+    //   → workout_templates
+    sqlx::query!("DELETE FROM workout_session_exercises")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM workout_session_sets")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM workout_sessions")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM workout_template_card_assignments")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM workout_template_set_refs")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM set_template_cards")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM set_templates")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM exercise_tags")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM exercises")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM workout_templates")
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+
+    let seed = seed_if_empty(pool, seed_json).await?;
+    Ok(ResetResult {
+        cleared: true,
+        seeded: seed.seeded,
+        import_result: seed.import_result,
+    })
 }

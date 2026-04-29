@@ -6,3 +6,9 @@ export interface ImportResult {
   workouts_created: number;
   workouts_updated: number;
 }
+
+export interface ResetResult {
+  cleared: boolean;
+  seeded: boolean;
+  import_result: ImportResult | null;
+}

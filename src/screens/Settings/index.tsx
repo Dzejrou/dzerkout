@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { tokens, THEME_KEYS, themeNames, type ThemeKey } from "../../theme/tokens";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useSessionStore } from "../../store/sessionStore";
 import { fontPresets, FONT_PRESET_KEYS, type FontPresetKey } from "../../theme/fontPresets";
 import { playPreviewCue } from "../../audio/cues";
+import { writeText as clipboardWriteText } from "@tauri-apps/plugin-clipboard-manager";
 import { libraryApi, type ExportScope } from "../../api/library";
 import type { ImportResult } from "../../types/library";
+import { ConfirmModal } from "../../components/ConfirmModal";
 
 // ── Toggle ────────────────────────────────────────────────────────────────────
 
@@ -199,6 +203,7 @@ const SCOPE_DESC: Record<ExportScope, string> = {
 function LibrarySection() {
   const [exportScope, setExportScope] = useState<ExportScope>("full");
   const [exportStatus, setExportStatus] = useState<"idle" | "loading" | "copied" | "error">("idle");
+  const [exportFallbackJson, setExportFallbackJson] = useState<string | null>(null);
   const [importText, setImportText] = useState("");
   const [importStatus, setImportStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -206,11 +211,18 @@ function LibrarySection() {
 
   async function handleExport() {
     setExportStatus("loading");
+    setExportFallbackJson(null);
     try {
       const json = await libraryApi.exportJson(exportScope);
-      await navigator.clipboard.writeText(json);
-      setExportStatus("copied");
-      setTimeout(() => setExportStatus("idle"), 2500);
+      try {
+        await clipboardWriteText(json);
+        setExportStatus("copied");
+        setTimeout(() => setExportStatus("idle"), 2500);
+      } catch {
+        // Clipboard write failed — show JSON inline so the user can copy it manually
+        setExportFallbackJson(json);
+        setExportStatus("error");
+      }
     } catch {
       setExportStatus("error");
       setTimeout(() => setExportStatus("idle"), 3000);
@@ -236,7 +248,8 @@ function LibrarySection() {
   const exportLabel =
     exportStatus === "loading" ? "Exporting…"
     : exportStatus === "copied" ? "Copied!"
-    : exportStatus === "error" ? "Export failed"
+    : exportStatus === "error" && !exportFallbackJson ? "Export failed"
+    : exportFallbackJson ? "Clipboard unavailable"
     : "Export to clipboard";
 
   return (
@@ -256,7 +269,7 @@ function LibrarySection() {
               return (
                 <button
                   key={value}
-                  onClick={() => { setExportScope(value); setExportStatus("idle"); }}
+                  onClick={() => { setExportScope(value); setExportStatus("idle"); setExportFallbackJson(null); }}
                   style={{
                     padding: "5px 13px",
                     borderRadius: 7,
@@ -287,6 +300,20 @@ function LibrarySection() {
           >
             {exportLabel}
           </button>
+          {exportFallbackJson && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={{ fontSize: 12, color: tokens.amber }}>
+                Clipboard copy failed. Select and copy the JSON below.
+              </span>
+              <textarea
+                readOnly
+                value={exportFallbackJson}
+                rows={8}
+                onFocus={(e) => e.target.select()}
+                style={importTextareaStyle}
+              />
+            </div>
+          )}
         </div>
         <div style={rowDividerStyle} />
         {/* Import row */}
@@ -332,6 +359,72 @@ function LibrarySection() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Reset section ─────────────────────────────────────────────────────────────
+
+function ResetSection() {
+  const queryClient = useQueryClient();
+  const clearSession = useSessionStore((s) => s.clear);
+  const [confirming, setConfirming] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function handleReset() {
+    setLoading(true);
+    setError(null);
+    try {
+      await libraryApi.resetLocalData();
+      clearSession();
+      queryClient.invalidateQueries();
+      setConfirming(false);
+      setDone(true);
+      setTimeout(() => setDone(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={sectionStyle}>
+      <h2 style={sectionTitleStyle}>Danger Zone</h2>
+      <div style={sectionCardStyle}>
+        <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={rowBodyStyle}>
+            <span style={rowLabelStyle}>Reset local data</span>
+            <span style={rowDescStyle}>
+              Permanently deletes all exercises, sets, workout templates, and session history.
+              The bundled starter library will be restored after clearing.
+            </span>
+          </div>
+          {done && (
+            <div style={importSuccessStyle}>Data reset successfully.</div>
+          )}
+          <button
+            onClick={() => { setError(null); setConfirming(true); }}
+            style={{ ...libBtnStyle, ...resetBtnStyle, alignSelf: "flex-start" }}
+          >
+            Reset local data…
+          </button>
+        </div>
+      </div>
+      {confirming && (
+        <ConfirmModal
+          title="Reset all local data?"
+          message="This will permanently delete all exercises, set templates, workout templates, and session history. This action cannot be undone."
+          confirmLabel="Reset everything"
+          destructive
+          loading={loading}
+          error={error}
+          onConfirm={handleReset}
+          onCancel={() => { if (!loading) { setConfirming(false); setError(null); } }}
+        />
+      )}
     </div>
   );
 }
@@ -432,6 +525,9 @@ export default function Settings() {
 
         {/* ── Library ────────────────────────────────────────────────────── */}
         <LibrarySection />
+
+        {/* ── Danger Zone ────────────────────────────────────────────────── */}
+        <ResetSection />
 
         <p style={footerStyle}>More options will appear here as features ship.</p>
       </div>
@@ -612,4 +708,10 @@ const importErrorStyle: React.CSSProperties = {
   borderRadius: 7,
   padding: "7px 12px",
   wordBreak: "break-word",
+};
+
+const resetBtnStyle: React.CSSProperties = {
+  background: tokens.redBg,
+  border: `1px solid ${tokens.redBorder}`,
+  color: tokens.red,
 };
