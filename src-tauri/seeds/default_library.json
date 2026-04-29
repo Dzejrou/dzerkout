@@ -1,8 +1,392 @@
 {
   "schema": "dzerkout.library",
   "version": 1,
-  "exported_at": "2026-04-29T00:00:00Z",
-  "exercises": [],
-  "set_templates": [],
-  "workout_templates": []
+  "exported_at": "2026-04-29T11:19:14.636294+00:00",
+  "exercises": [
+    {
+      "id": "da239a6c-f56d-42c2-9403-d9fb12bd3b3a",
+      "name": "Dand",
+      "notes": "Hindu push-up lorem ipsum dolor sit amet whatever lmao testing longer text. Hindu push-up lorem ipsum dolor sit amet whatever lmao testing longer text. Hindu push-up lorem ipsum dolor sit amet whatever lmao testing longer text. Hindu push-up lorem ipsum dolor sit amet whatever lmao testing longer text. Hindu push-up lorem ipsum dolor sit amet whatever lmao testing longer text.",
+      "tags": [
+        "cardio",
+        "core",
+        "mobility",
+        "push",
+        "yoga"
+      ]
+    },
+    {
+      "id": "3616e371-5ba1-46ee-8dc3-e521f5865efd",
+      "name": "Kossack squat",
+      "notes": "Some note",
+      "tags": [
+        "core",
+        "legs",
+        "mobility"
+      ]
+    },
+    {
+      "id": "cfa88232-f78f-4961-b99c-650af5f208ff",
+      "name": "Leg split",
+      "notes": null,
+      "tags": [
+        "legs"
+      ]
+    },
+    {
+      "id": "ac1df29d-ef1d-4025-b8cd-9944ddac7e6d",
+      "name": "Seated row",
+      "notes": null,
+      "tags": [
+        "pull"
+      ]
+    }
+  ],
+  "set_templates": [
+    {
+      "id": "13259e6a-8239-42f8-9e32-ee67c9e89d7c",
+      "name": "20 sec Testset A",
+      "notes": null,
+      "owning_workout_template_id": null,
+      "cards": [
+        {
+          "id": "88a3e78c-d9b7-42e5-b2ea-d757bcef9442",
+          "order_index": 0,
+          "card_type": "placeholder",
+          "exercise_id": null,
+          "placeholder_tag": "core",
+          "placeholder_label": "Plank",
+          "duration_hint_sec": 10,
+          "notes": null
+        },
+        {
+          "id": "efbe0b04-6796-40ad-a957-d9dce17a96ce",
+          "order_index": 1,
+          "card_type": "concrete",
+          "exercise_id": "cfa88232-f78f-4961-b99c-650af5f208ff",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 15,
+          "notes": null
+        },
+        {
+          "id": "4df3b5f0-e9b8-4e61-949d-f35f0ed70d8b",
+          "order_index": 2,
+          "card_type": "placeholder",
+          "exercise_id": null,
+          "placeholder_tag": "unspecified",
+          "placeholder_label": "Testing",
+          "duration_hint_sec": 3,
+          "notes": null
+        },
+        {
+          "id": "d6aff3ce-cec3-4ed9-be16-311cdbb869b0",
+          "order_index": 3,
+          "card_type": "concrete",
+          "exercise_id": "da239a6c-f56d-42c2-9403-d9fb12bd3b3a",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 20,
+          "notes": null
+        }
+      ]
+    },
+    {
+      "id": "235f458f-124b-4716-a118-6cc7775e4df3",
+      "name": "Test set A",
+      "notes": null,
+      "owning_workout_template_id": "bb304197-9b77-4aae-85ea-ecc5f274f84a",
+      "cards": [
+        {
+          "id": "eba28ccc-8a67-49c6-97ac-14c14eacdb20",
+          "order_index": 0,
+          "card_type": "placeholder",
+          "exercise_id": null,
+          "placeholder_tag": "push",
+          "placeholder_label": "Shoulders",
+          "duration_hint_sec": 120,
+          "notes": null
+        },
+        {
+          "id": "45198b2b-e105-4c44-95b6-56b74f0d067c",
+          "order_index": 1,
+          "card_type": "concrete",
+          "exercise_id": "da239a6c-f56d-42c2-9403-d9fb12bd3b3a",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 120,
+          "notes": null
+        },
+        {
+          "id": "c09c67d0-46bb-4e1a-ae39-71bab270734e",
+          "order_index": 2,
+          "card_type": "concrete",
+          "exercise_id": "cfa88232-f78f-4961-b99c-650af5f208ff",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 120,
+          "notes": null
+        }
+      ]
+    },
+    {
+      "id": "e621e6b9-1d56-4feb-aeab-d35eea37dcf7",
+      "name": "Test set A (copy)",
+      "notes": null,
+      "owning_workout_template_id": null,
+      "cards": [
+        {
+          "id": "d55409d1-4819-475f-a0f3-c7a4f1b2d719",
+          "order_index": 0,
+          "card_type": "placeholder",
+          "exercise_id": null,
+          "placeholder_tag": "push",
+          "placeholder_label": "Shoulders",
+          "duration_hint_sec": 10,
+          "notes": null
+        },
+        {
+          "id": "f8a5f09b-0756-49d3-b0c9-ae71899a70c1",
+          "order_index": 1,
+          "card_type": "concrete",
+          "exercise_id": "3616e371-5ba1-46ee-8dc3-e521f5865efd",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 120,
+          "notes": null
+        },
+        {
+          "id": "ae3d314c-7d55-48d3-893f-ab685f61b21b",
+          "order_index": 2,
+          "card_type": "concrete",
+          "exercise_id": "da239a6c-f56d-42c2-9403-d9fb12bd3b3a",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 120,
+          "notes": null
+        },
+        {
+          "id": "b9660fd9-0262-4af0-b74e-ef270325b23d",
+          "order_index": 3,
+          "card_type": "concrete",
+          "exercise_id": "cfa88232-f78f-4961-b99c-650af5f208ff",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 120,
+          "notes": null
+        },
+        {
+          "id": "8af0021f-26de-4791-a783-78c2862fc288",
+          "order_index": 4,
+          "card_type": "placeholder",
+          "exercise_id": null,
+          "placeholder_tag": "unspecified",
+          "placeholder_label": "Cross arm curl",
+          "duration_hint_sec": 120,
+          "notes": null
+        },
+        {
+          "id": "f2077c88-228f-4532-a69e-a405ef0c6a6e",
+          "order_index": 5,
+          "card_type": "concrete",
+          "exercise_id": "da239a6c-f56d-42c2-9403-d9fb12bd3b3a",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": null,
+          "notes": null
+        },
+        {
+          "id": "05641a29-43a0-4ff9-95ed-cca18b496124",
+          "order_index": 6,
+          "card_type": "concrete",
+          "exercise_id": "da239a6c-f56d-42c2-9403-d9fb12bd3b3a",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": null,
+          "notes": null
+        }
+      ]
+    },
+    {
+      "id": "7024984f-1a22-49c3-9c8c-83ccbcadee99",
+      "name": "Test set A edited",
+      "notes": "Lol",
+      "owning_workout_template_id": null,
+      "cards": [
+        {
+          "id": "f37b948e-1127-4bcd-a7cc-e539bdf3f8b9",
+          "order_index": 0,
+          "card_type": "placeholder",
+          "exercise_id": null,
+          "placeholder_tag": "push",
+          "placeholder_label": "Shoulders",
+          "duration_hint_sec": 120,
+          "notes": null
+        },
+        {
+          "id": "864ea807-1336-46ef-8329-9164aca60215",
+          "order_index": 1,
+          "card_type": "concrete",
+          "exercise_id": "3616e371-5ba1-46ee-8dc3-e521f5865efd",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 120,
+          "notes": null
+        },
+        {
+          "id": "54a3c5c3-9d80-40cc-ac30-ec350d9fe663",
+          "order_index": 2,
+          "card_type": "concrete",
+          "exercise_id": "da239a6c-f56d-42c2-9403-d9fb12bd3b3a",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 120,
+          "notes": null
+        },
+        {
+          "id": "78127691-0ba6-4a01-8898-fb080e25d4aa",
+          "order_index": 3,
+          "card_type": "concrete",
+          "exercise_id": "cfa88232-f78f-4961-b99c-650af5f208ff",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 120,
+          "notes": null
+        }
+      ]
+    },
+    {
+      "id": "7749b17b-57ba-4a03-aa6e-0ce1540bbffd",
+      "name": "Test set A from a fork",
+      "notes": null,
+      "owning_workout_template_id": null,
+      "cards": [
+        {
+          "id": "82fe5e5d-2a8b-469c-b1e3-56968a2f192b",
+          "order_index": 0,
+          "card_type": "placeholder",
+          "exercise_id": null,
+          "placeholder_tag": "push",
+          "placeholder_label": "Shoulders",
+          "duration_hint_sec": 120,
+          "notes": null
+        },
+        {
+          "id": "f8a1e88b-0795-4e78-9b2f-7ae1a88947f7",
+          "order_index": 1,
+          "card_type": "concrete",
+          "exercise_id": "da239a6c-f56d-42c2-9403-d9fb12bd3b3a",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 120,
+          "notes": null
+        },
+        {
+          "id": "e0fe87aa-7ec9-4f6d-a6a8-63af53eaa45d",
+          "order_index": 2,
+          "card_type": "concrete",
+          "exercise_id": "cfa88232-f78f-4961-b99c-650af5f208ff",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": 120,
+          "notes": null
+        }
+      ]
+    },
+    {
+      "id": "a9219dd3-00eb-49bd-852b-040b89f06eb6",
+      "name": "another set",
+      "notes": null,
+      "owning_workout_template_id": null,
+      "cards": [
+        {
+          "id": "ffc69257-e506-4d99-89b6-68715ee297ad",
+          "order_index": 0,
+          "card_type": "concrete",
+          "exercise_id": "ac1df29d-ef1d-4025-b8cd-9944ddac7e6d",
+          "placeholder_tag": null,
+          "placeholder_label": null,
+          "duration_hint_sec": null,
+          "notes": null
+        }
+      ]
+    }
+  ],
+  "workout_templates": [
+    {
+      "id": "aeda16ad-ca1b-44ad-abbe-40ba1bf09bc4",
+      "name": "20sec Test Workout A",
+      "notes": "Lorem ipsum dolor sit amen",
+      "default_exercise_duration_sec": 5,
+      "rest_between_sets_sec": 60,
+      "set_refs": [
+        {
+          "id": "1689a464-bd7b-4e66-973e-b784822e9b45",
+          "set_template_id": "13259e6a-8239-42f8-9e32-ee67c9e89d7c",
+          "order_index": 0,
+          "set_name": "20 sec Testset A",
+          "source_set_template_id": null,
+          "assignments": []
+        },
+        {
+          "id": "b73b0b25-616a-4cec-a99c-e00414ca5500",
+          "set_template_id": "13259e6a-8239-42f8-9e32-ee67c9e89d7c",
+          "order_index": 1,
+          "set_name": "20 sec Testset A",
+          "source_set_template_id": null,
+          "assignments": []
+        },
+        {
+          "id": "df55f9b6-caa1-478e-aa1c-0adb503b03d7",
+          "set_template_id": "13259e6a-8239-42f8-9e32-ee67c9e89d7c",
+          "order_index": 2,
+          "set_name": "20 sec Testset A",
+          "source_set_template_id": null,
+          "assignments": []
+        }
+      ]
+    },
+    {
+      "id": "bb304197-9b77-4aae-85ea-ecc5f274f84a",
+      "name": "Test workout A",
+      "notes": "Test",
+      "default_exercise_duration_sec": 20,
+      "rest_between_sets_sec": 60,
+      "set_refs": [
+        {
+          "id": "a03517c8-b73d-4da0-9808-3fc2fec0a837",
+          "set_template_id": "235f458f-124b-4716-a118-6cc7775e4df3",
+          "order_index": 0,
+          "set_name": "Test set A",
+          "source_set_template_id": "7024984f-1a22-49c3-9c8c-83ccbcadee99",
+          "assignments": []
+        },
+        {
+          "id": "ef38fbfa-d693-405a-975b-f0cde60fa7a4",
+          "set_template_id": "e621e6b9-1d56-4feb-aeab-d35eea37dcf7",
+          "order_index": 1,
+          "set_name": "Test set A (copy)",
+          "source_set_template_id": null,
+          "assignments": []
+        }
+      ]
+    },
+    {
+      "id": "729ff38c-1abe-4001-b030-009061ba1de2",
+      "name": "To be abandoned",
+      "notes": null,
+      "default_exercise_duration_sec": 45,
+      "rest_between_sets_sec": null,
+      "set_refs": [
+        {
+          "id": "553101e0-d14b-45c5-8bd3-adb58fb5e450",
+          "set_template_id": "e621e6b9-1d56-4feb-aeab-d35eea37dcf7",
+          "order_index": 0,
+          "set_name": "Test set A (copy)",
+          "source_set_template_id": null,
+          "assignments": []
+        }
+      ]
+    }
+  ]
 }
