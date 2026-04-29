@@ -15,6 +15,7 @@ const MENU_ITEMS: MenuItem[] = [
   { to: "/workouts",  label: "Workouts",  desc: "Build and edit your workout templates.", icon: "⊟" },
   { to: "/runner",    label: "Runner",    desc: "Start and run your workouts.", icon: "▶" },
   { to: "/history",   label: "History",   desc: "View your past workout sessions.", icon: "↺" },
+  { to: "/stats",     label: "Stats",     desc: "See aggregates across completed workouts.", icon: "◎" },
 ];
 
 export default function MainMenu() {

@@ -6,6 +6,7 @@ pub mod set_templates;
 pub mod workout_templates;
 pub mod sessions;
 pub mod history;
+pub mod stats;
 
 pub async fn init_pool(app_data_dir: &Path) -> Result<SqlitePool, sqlx::Error> {
     let db_path = app_data_dir.join("dzerkout.db");

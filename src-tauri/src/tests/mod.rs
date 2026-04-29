@@ -4,7 +4,7 @@
 use sqlx::{Row, SqlitePool};
 use crate::{
     db::history as history_db,
-    domain::{exercise, library, library::ExportScope, session, set_template, workout_template},
+    domain::{exercise, library, library::ExportScope, session, set_template, stats, workout_template},
     error::AppError,
 };
 
@@ -2359,4 +2359,169 @@ async fn test_clear_leaves_schema_usable(pool: SqlitePool) {
     assert!(!ex.id.is_empty());
     assert!(!card.id.is_empty());
     assert!(!wt.id.is_empty());
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+/// Create a minimal completed session with one exercise.
+async fn make_completed_session(pool: &SqlitePool, exercise_id: &str) -> String {
+    let set = set_template::create(pool, "Stats Set", None).await.unwrap();
+    set_template::add_card(pool, &set.id, "concrete", Some(exercise_id), None, None, Some(60), None).await.unwrap();
+    let wt = workout_template::create(pool, "Stats Workout", None, 60, None).await.unwrap();
+    workout_template::add_set_ref(pool, &wt.id, &set.id).await.unwrap();
+    let draft = session::create_session_draft(pool, &wt.id).await.unwrap();
+    let started = session::start_session(pool, &draft.session.id).await.unwrap();
+    let finished = session::finish_session(pool, &started.session.id).await.unwrap();
+    finished.id
+}
+
+#[sqlx::test]
+async fn test_stats_only_counts_completed_sessions(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Squat", None, &[]).await.unwrap();
+    make_completed_session(&pool, &ex.id).await;
+
+    // Draft — must not count
+    let set2 = set_template::create(&pool, "Draft Set", None).await.unwrap();
+    set_template::add_card(&pool, &set2.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    let wt2 = workout_template::create(&pool, "Draft Workout", None, 60, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt2.id, &set2.id).await.unwrap();
+    session::create_session_draft(&pool, &wt2.id).await.unwrap();
+
+    // In-progress — must not count
+    let set3 = set_template::create(&pool, "Active Set", None).await.unwrap();
+    set_template::add_card(&pool, &set3.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    let wt3 = workout_template::create(&pool, "Active Workout", None, 60, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt3.id, &set3.id).await.unwrap();
+    let d3 = session::create_session_draft(&pool, &wt3.id).await.unwrap();
+    session::start_session(&pool, &d3.session.id).await.unwrap();
+
+    let payload = stats::get_stats(&pool, "all").await.unwrap();
+    assert_eq!(payload.summary.completed_workouts, 1, "only completed sessions counted");
+}
+
+#[sqlx::test]
+async fn test_stats_range_filter_excludes_old_sessions(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Press", None, &[]).await.unwrap();
+    make_completed_session(&pool, &ex.id).await;
+
+    // Insert a backdated completed session
+    sqlx::query(
+        "INSERT INTO workout_sessions (id, status, started_at, ended_at, created_at, updated_at)
+         VALUES ('old-s', 'completed',
+                 '2020-01-01T10:00:00.000Z', '2020-01-01T11:00:00.000Z',
+                 '2020-01-01T10:00:00.000Z', '2020-01-01T10:00:00.000Z')"
+    ).execute(&pool).await.unwrap();
+
+    let all = stats::get_stats(&pool, "all").await.unwrap();
+    assert_eq!(all.summary.completed_workouts, 2);
+
+    let week = stats::get_stats(&pool, "7d").await.unwrap();
+    assert_eq!(week.summary.completed_workouts, 1, "7d excludes old session");
+}
+
+#[sqlx::test]
+async fn test_stats_exercise_duration_sums_performed_sec(pool: SqlitePool) {
+    sqlx::query(
+        "INSERT INTO workout_sessions (id, status, started_at, ended_at, created_at, updated_at)
+         VALUES ('s1', 'completed',
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now','-120 seconds'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO workout_session_sets (id, workout_session_id, order_index, paused_total_sec, created_at, updated_at)
+         VALUES ('ss1', 's1', 0, 0,
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO workout_session_exercises
+         (id, workout_session_set_id, order_index, display_name, status, skipped, paused_offset_sec, performed_duration_sec, created_at, updated_at)
+         VALUES ('e1','ss1',0,'Row','completed',0,0,45,
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO workout_session_exercises
+         (id, workout_session_set_id, order_index, display_name, status, skipped, paused_offset_sec, performed_duration_sec, created_at, updated_at)
+         VALUES ('e2','ss1',1,'Row','completed',0,0,30,
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).execute(&pool).await.unwrap();
+
+    let payload = stats::get_stats(&pool, "all").await.unwrap();
+    assert_eq!(payload.summary.total_exercise_duration_sec, 75);
+}
+
+#[sqlx::test]
+async fn test_stats_tag_counts_multi_tag_exercise_under_each_tag(pool: SqlitePool) {
+    let tags = vec!["pull".to_string(), "isotonic".to_string()];
+    let ex = exercise::create(&pool, "Pull-up", None, &tags).await.unwrap();
+
+    sqlx::query(
+        "INSERT INTO workout_sessions (id, status, started_at, ended_at, created_at, updated_at)
+         VALUES ('s1','completed',
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now','-60 seconds'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO workout_session_sets (id, workout_session_id, order_index, paused_total_sec, created_at, updated_at)
+         VALUES ('ss1','s1',0,0,
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO workout_session_exercises
+         (id, workout_session_set_id, order_index, exercise_id, display_name, status, skipped, paused_offset_sec, performed_duration_sec, created_at, updated_at)
+         VALUES ('e1','ss1',0,?,'Pull-up','completed',0,0,30,
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).bind(&ex.id).execute(&pool).await.unwrap();
+
+    let payload = stats::get_stats(&pool, "all").await.unwrap();
+    let tags: Vec<&str> = payload.tags.iter().map(|t| t.tag.as_str()).collect();
+    assert!(tags.contains(&"pull"), "pull tag present");
+    assert!(tags.contains(&"isotonic"), "isotonic tag present");
+    for t in &payload.tags {
+        assert_eq!(t.exercise_count, 1, "each tag sees 1 exercise");
+        assert_eq!(t.duration_sec, 30, "each tag sees 30s");
+    }
+}
+
+#[sqlx::test]
+async fn test_stats_deleted_exercise_still_in_leaderboard(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Ghost", None, &[]).await.unwrap();
+
+    sqlx::query(
+        "INSERT INTO workout_sessions (id, status, started_at, ended_at, created_at, updated_at)
+         VALUES ('s1','completed',
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now','-60 seconds'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO workout_session_sets (id, workout_session_id, order_index, paused_total_sec, created_at, updated_at)
+         VALUES ('ss1','s1',0,0,
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO workout_session_exercises
+         (id, workout_session_set_id, order_index, exercise_id, display_name, status, skipped, paused_offset_sec, performed_duration_sec, created_at, updated_at)
+         VALUES ('e1','ss1',0,?,'Ghost','completed',0,0,60,
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).bind(&ex.id).execute(&pool).await.unwrap();
+
+    // Delete exercise — ON DELETE SET NULL clears exercise_id in session rows
+    exercise::delete_with_unlink(&pool, &ex.id, true).await.unwrap();
+
+    let payload = stats::get_stats(&pool, "all").await.unwrap();
+    assert!(!payload.exercises.is_empty());
+    assert_eq!(payload.exercises[0].display_name, "Ghost");
+    assert_eq!(payload.exercises[0].duration_sec, 60);
+}
+
+#[sqlx::test]
+async fn test_stats_invalid_range_returns_validation_error(pool: SqlitePool) {
+    let err = stats::get_stats(&pool, "bogus").await.unwrap_err();
+    assert!(matches!(err, crate::error::AppError::Validation(_)));
+    drop(pool);
 }

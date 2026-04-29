@@ -13,6 +13,7 @@ import SetTemplateBuilder from "./screens/SetTemplateBuilder";
 import WorkoutTemplateBuilder from "./screens/WorkoutTemplateBuilder";
 import ActiveWorkoutRunner from "./screens/ActiveWorkoutRunner";
 import WorkoutHistory from "./screens/WorkoutHistory";
+import Stats from "./screens/Stats";
 import Settings from "./screens/Settings";
 
 // Applies the stored font preset to the CSS variable on the document root.
@@ -49,7 +50,7 @@ function AppShell() {
   const confirmModal = useUiStore((s) => s.confirmModal);
   const closeConfirmModal = useUiStore((s) => s.closeConfirmModal);
   const location = useLocation();
-  const noScroll = ["/runner", "/workouts", "/history", "/sets", "/exercises"].includes(location.pathname);
+  const noScroll = ["/runner", "/workouts", "/history", "/stats", "/sets", "/exercises"].includes(location.pathname);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -63,6 +64,7 @@ function AppShell() {
           <Route path="/workouts/:id" element={<WorkoutTemplateBuilder />} />
           <Route path="/runner" element={<ActiveWorkoutRunner />} />
           <Route path="/history" element={<WorkoutHistory />} />
+          <Route path="/stats" element={<Stats />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>

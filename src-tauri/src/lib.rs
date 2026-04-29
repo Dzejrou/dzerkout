@@ -5,7 +5,7 @@ mod error;
 #[cfg(test)]
 mod tests;
 
-use commands::{exercises::*, history::{get_session_detail, list_session_history}, library::{clear_local_data, export_library_json, import_library_json, reset_local_data}, sessions::*, set_templates::*, workout_templates::*};
+use commands::{exercises::*, history::{get_session_detail, list_session_history}, library::{clear_local_data, export_library_json, import_library_json, reset_local_data}, sessions::*, set_templates::*, stats::get_stats, workout_templates::*};
 use domain::library::seed_if_empty;
 use tauri::Manager;
 
@@ -79,6 +79,8 @@ pub fn run() {
             // maintenance
             reset_local_data,
             clear_local_data,
+            // stats
+            get_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application")
