@@ -363,15 +363,31 @@ function LibrarySection() {
   );
 }
 
-// ── Reset section ─────────────────────────────────────────────────────────────
+// ── Danger Zone section ───────────────────────────────────────────────────────
 
-function ResetSection() {
+type DangerAction = "reset" | "clear" | null;
+
+function DangerZoneSection() {
   const queryClient = useQueryClient();
   const clearSession = useSessionStore((s) => s.clear);
-  const [confirming, setConfirming] = useState(false);
+
+  const [confirming, setConfirming] = useState<DangerAction>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  function openConfirm(action: DangerAction) {
+    setError(null);
+    setSuccessMsg(null);
+    setConfirming(action);
+  }
+
+  function closeConfirm() {
+    if (!loading) {
+      setConfirming(null);
+      setError(null);
+    }
+  }
 
   async function handleReset() {
     setLoading(true);
@@ -380,9 +396,26 @@ function ResetSection() {
       await libraryApi.resetLocalData();
       clearSession();
       queryClient.invalidateQueries();
-      setConfirming(false);
-      setDone(true);
-      setTimeout(() => setDone(false), 3000);
+      setConfirming(null);
+      setSuccessMsg("Data reset and default library restored.");
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleClear() {
+    setLoading(true);
+    setError(null);
+    try {
+      await libraryApi.clearLocalData();
+      clearSession();
+      queryClient.invalidateQueries();
+      setConfirming(null);
+      setSuccessMsg("Data cleared. Defaults will load on next launch.");
+      setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -394,35 +427,64 @@ function ResetSection() {
     <div style={sectionStyle}>
       <h2 style={sectionTitleStyle}>Danger Zone</h2>
       <div style={sectionCardStyle}>
+        {/* Reset to default library */}
         <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={rowBodyStyle}>
-            <span style={rowLabelStyle}>Reset local data</span>
+            <span style={rowLabelStyle}>Reset to default library</span>
             <span style={rowDescStyle}>
-              Permanently deletes all exercises, sets, workout templates, and session history.
-              The bundled starter library will be restored after clearing.
+              Deletes all local data and immediately restores the bundled default library.
             </span>
           </div>
-          {done && (
-            <div style={importSuccessStyle}>Data reset successfully.</div>
-          )}
           <button
-            onClick={() => { setError(null); setConfirming(true); }}
+            onClick={() => openConfirm("reset")}
             style={{ ...libBtnStyle, ...resetBtnStyle, alignSelf: "flex-start" }}
           >
-            Reset local data…
+            Reset to default library…
+          </button>
+        </div>
+        <div style={rowDividerStyle} />
+        {/* Clear local data */}
+        <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={rowBodyStyle}>
+            <span style={rowLabelStyle}>Clear local data</span>
+            <span style={rowDescStyle}>
+              Deletes all local data and leaves the app empty for this session.
+              The bundled default library will load again on next launch.
+            </span>
+          </div>
+          <button
+            onClick={() => openConfirm("clear")}
+            style={{ ...libBtnStyle, ...resetBtnStyle, alignSelf: "flex-start" }}
+          >
+            Clear local data…
           </button>
         </div>
       </div>
-      {confirming && (
+      {successMsg && (
+        <div style={{ ...importSuccessStyle, marginTop: 10 }}>{successMsg}</div>
+      )}
+      {confirming === "reset" && (
         <ConfirmModal
-          title="Reset all local data?"
-          message="This will permanently delete all exercises, set templates, workout templates, and session history. This action cannot be undone."
-          confirmLabel="Reset everything"
+          title="Reset to default library?"
+          message="This will permanently delete all exercises, set templates, workout templates, and session history, then immediately restore the bundled default library. This action cannot be undone."
+          confirmLabel="Reset to defaults"
           destructive
           loading={loading}
           error={error}
           onConfirm={handleReset}
-          onCancel={() => { if (!loading) { setConfirming(false); setError(null); } }}
+          onCancel={closeConfirm}
+        />
+      )}
+      {confirming === "clear" && (
+        <ConfirmModal
+          title="Clear all local data?"
+          message="This will permanently delete all exercises, set templates, workout templates, and session history. The app will be empty for this session. The bundled default library will load again on next launch."
+          confirmLabel="Clear everything"
+          destructive
+          loading={loading}
+          error={error}
+          onConfirm={handleClear}
+          onCancel={closeConfirm}
         />
       )}
     </div>
@@ -527,7 +589,7 @@ export default function Settings() {
         <LibrarySection />
 
         {/* ── Danger Zone ────────────────────────────────────────────────── */}
-        <ResetSection />
+        <DangerZoneSection />
 
         <p style={footerStyle}>More options will appear here as features ship.</p>
       </div>

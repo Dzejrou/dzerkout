@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ImportResult, ResetResult } from "../types/library";
+import type { ClearResult, ImportResult, ResetResult } from "../types/library";
 
 export type ExportScope = "full" | "exercises" | "sets" | "workouts";
 
@@ -12,4 +12,7 @@ export const libraryApi = {
 
   resetLocalData: () =>
     invoke<ResetResult>("reset_local_data"),
+
+  clearLocalData: () =>
+    invoke<ClearResult>("clear_local_data"),
 };

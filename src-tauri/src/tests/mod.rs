@@ -2289,3 +2289,74 @@ async fn test_reset_reseed_skipped_when_db_nonempty_after_clear(pool: SqlitePool
         .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
     assert_eq!(ex_count, 1);
 }
+
+// ── Clear local data (no seed) ────────────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_clear_deletes_library_data(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Squat", None, &[]).await.unwrap();
+    let set = set_template::create(&pool, "Leg Set", None).await.unwrap();
+    let wt = workout_template::create(&pool, "Leg Day", None, 60, None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    library::clear_local_data(&pool).await.unwrap();
+
+    let ex_count = sqlx::query("SELECT COUNT(*) FROM exercises")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+    let set_count = sqlx::query("SELECT COUNT(*) FROM set_templates")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+    let wt_count = sqlx::query("SELECT COUNT(*) FROM workout_templates")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+
+    assert_eq!(ex_count, 0);
+    assert_eq!(set_count, 0);
+    assert_eq!(wt_count, 0);
+}
+
+#[sqlx::test]
+async fn test_clear_deletes_session_data(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Press", None, &[]).await.unwrap();
+    let set = set_template::create(&pool, "Push Set", None).await.unwrap();
+    set_template::add_card(&pool, &set.id, "concrete", Some(&ex.id), None, None, None, None).await.unwrap();
+    let wt = workout_template::create(&pool, "Push Day", None, 60, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    session::create_session_draft(&pool, &wt.id).await.unwrap();
+
+    library::clear_local_data(&pool).await.unwrap();
+
+    let session_count = sqlx::query("SELECT COUNT(*) FROM workout_sessions")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+    assert_eq!(session_count, 0);
+}
+
+#[sqlx::test]
+async fn test_clear_does_not_seed(pool: SqlitePool) {
+    // Even when seed JSON is available, clear does not import it
+    exercise::create(&pool, "Bench Press", None, &[]).await.unwrap();
+
+    library::clear_local_data(&pool).await.unwrap();
+
+    // DB is empty — if seed ran there would be rows; since we don't call seed, none
+    let ex_count = sqlx::query("SELECT COUNT(*) FROM exercises")
+        .fetch_one(&pool).await.unwrap().get::<i64, _>(0);
+    assert_eq!(ex_count, 0, "clear must not seed");
+}
+
+#[sqlx::test]
+async fn test_clear_leaves_schema_usable(pool: SqlitePool) {
+    library::clear_local_data(&pool).await.unwrap();
+
+    let ex = exercise::create(&pool, "New Exercise", None, &[]).await.unwrap();
+    let set = set_template::create(&pool, "New Set", None).await.unwrap();
+    let card = set_template::add_card(
+        &pool, &set.id, "concrete", Some(&ex.id), None, None, None, None,
+    ).await.unwrap();
+    let wt = workout_template::create(&pool, "New Workout", None, 60, None).await.unwrap();
+    workout_template::add_set_ref(&pool, &wt.id, &set.id).await.unwrap();
+
+    assert!(!ex.id.is_empty());
+    assert!(!card.id.is_empty());
+    assert!(!wt.id.is_empty());
+}

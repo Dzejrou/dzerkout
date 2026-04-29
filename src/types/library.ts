@@ -12,3 +12,7 @@ export interface ResetResult {
   seeded: boolean;
   import_result: ImportResult | null;
 }
+
+export interface ClearResult {
+  cleared: boolean;
+}

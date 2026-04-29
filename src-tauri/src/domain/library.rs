@@ -91,6 +91,12 @@ pub struct ResetResult {
     pub import_result: Option<ImportResult>,
 }
 
+/// Result returned by the clear-only command.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClearResult {
+    pub cleared: bool,
+}
+
 /// Counts returned to the caller after a successful import.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportResult {
@@ -801,23 +807,18 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
     Ok(result)
 }
 
-// ── Reset ─────────────────────────────────────────────────────────────────────
+// ── Clear / Reset ─────────────────────────────────────────────────────────────
 
-/// Delete all domain data in FK-safe order within a single transaction, then
-/// re-seed from `seed_json` via `seed_if_empty`.
+/// Delete all domain data in FK-safe order within a single transaction.
+/// Does not seed afterwards — leaves the DB empty.
 ///
-/// The command layer passes `include_str!("../seeds/default_library.json")`;
-/// tests pass JSON strings directly.
-pub async fn reset_local_data_with_seed(
-    pool: &SqlitePool,
-    seed_json: &str,
-) -> Result<ResetResult, AppError> {
+/// FK-safe delete order (RESTRICT constraints require explicit sequencing):
+///   session children → sessions → assignment children → set_refs
+///   → set_template_cards → set_templates → exercise_tags → exercises
+///   → workout_templates
+pub async fn clear_local_data(pool: &SqlitePool) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
 
-    // FK-safe delete order (RESTRICT constraints require explicit sequencing):
-    //   session children → sessions → assignment children → set_refs
-    //   → set_template_cards → set_templates → exercise_tags → exercises
-    //   → workout_templates
     sqlx::query!("DELETE FROM workout_session_exercises")
         .execute(&mut *tx)
         .await?;
@@ -850,7 +851,19 @@ pub async fn reset_local_data_with_seed(
         .await?;
 
     tx.commit().await?;
+    Ok(())
+}
 
+/// Clear all domain data then immediately re-seed from `seed_json` via
+/// `seed_if_empty`.
+///
+/// The command layer passes `include_str!("../seeds/default_library.json")`;
+/// tests pass JSON strings directly.
+pub async fn reset_local_data_with_seed(
+    pool: &SqlitePool,
+    seed_json: &str,
+) -> Result<ResetResult, AppError> {
+    clear_local_data(pool).await?;
     let seed = seed_if_empty(pool, seed_json).await?;
     Ok(ResetResult {
         cleared: true,
