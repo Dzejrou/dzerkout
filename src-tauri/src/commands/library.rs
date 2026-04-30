@@ -1,17 +1,12 @@
 use sqlx::SqlitePool;
 use tauri::State;
-use crate::{domain::library::{self, ClearResult, ExportScope, ImportResult, ResetResult}, error::AppError};
+use crate::{domain::library::{self, ClearResult, ImportResult, ResetResult}, error::AppError};
 
 #[tauri::command]
 pub async fn export_library_json(
     pool: State<'_, SqlitePool>,
-    scope: Option<String>,
 ) -> Result<String, AppError> {
-    let scope = match scope.as_deref() {
-        None | Some("full") => ExportScope::Full,
-        Some(s) => ExportScope::parse(s)?,
-    };
-    library::export_library(&pool, scope).await
+    library::export_full_library(&pool).await
 }
 
 #[tauri::command]

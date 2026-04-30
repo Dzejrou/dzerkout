@@ -7,7 +7,7 @@ import { useSessionStore } from "../../store/sessionStore";
 import { fontPresets, FONT_PRESET_KEYS, type FontPresetKey } from "../../theme/fontPresets";
 import { playPreviewCue } from "../../audio/cues";
 import { writeText as clipboardWriteText } from "@tauri-apps/plugin-clipboard-manager";
-import { libraryApi, type ExportScope } from "../../api/library";
+import { libraryApi } from "../../api/library";
 import type { ImportResult } from "../../types/library";
 import { ConfirmModal } from "../../components/ConfirmModal";
 
@@ -186,22 +186,7 @@ function ThemeSelector() {
 
 // ── Library section ───────────────────────────────────────────────────────────
 
-const SCOPE_OPTIONS: { value: ExportScope; label: string }[] = [
-  { value: "full",      label: "Full" },
-  { value: "exercises", label: "Exercises" },
-  { value: "sets",      label: "Sets" },
-  { value: "workouts",  label: "Workouts" },
-];
-
-const SCOPE_DESC: Record<ExportScope, string> = {
-  full:      "All exercises, set templates, and workout templates.",
-  exercises: "All exercises and their tags only.",
-  sets:      "Global (reusable) sets and the exercises they reference.",
-  workouts:  "All workouts plus their sets (including workout-local), assignments, and referenced exercises.",
-};
-
 function LibrarySection() {
-  const [exportScope, setExportScope] = useState<ExportScope>("full");
   const [exportStatus, setExportStatus] = useState<"idle" | "loading" | "copied" | "error">("idle");
   const [exportFallbackJson, setExportFallbackJson] = useState<string | null>(null);
   const [importText, setImportText] = useState("");
@@ -213,7 +198,7 @@ function LibrarySection() {
     setExportStatus("loading");
     setExportFallbackJson(null);
     try {
-      const json = await libraryApi.exportJson(exportScope);
+      const json = await libraryApi.exportJson();
       try {
         await clipboardWriteText(json);
         setExportStatus("copied");
@@ -250,42 +235,20 @@ function LibrarySection() {
     : exportStatus === "copied" ? "Copied!"
     : exportStatus === "error" && !exportFallbackJson ? "Export failed"
     : exportFallbackJson ? "Clipboard unavailable"
-    : "Export to clipboard";
+    : "Export data to clipboard";
 
   return (
     <div style={sectionStyle}>
-      <h2 style={sectionTitleStyle}>Library</h2>
+      <h2 style={sectionTitleStyle}>Data</h2>
       <div style={sectionCardStyle}>
         {/* Export row */}
         <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={rowBodyStyle}>
-            <span style={rowLabelStyle}>Export library</span>
-            <span style={rowDescStyle}>{SCOPE_DESC[exportScope]}</span>
-          </div>
-          {/* Scope selector */}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {SCOPE_OPTIONS.map(({ value, label }) => {
-              const active = exportScope === value;
-              return (
-                <button
-                  key={value}
-                  onClick={() => { setExportScope(value); setExportStatus("idle"); setExportFallbackJson(null); }}
-                  style={{
-                    padding: "5px 13px",
-                    borderRadius: 7,
-                    border: `1px solid ${active ? tokens.green : tokens.border}`,
-                    background: active ? tokens.green : tokens.cardSubtle,
-                    color: active ? tokens.greenText : tokens.textPrimary,
-                    cursor: "pointer",
-                    fontSize: 13,
-                    fontWeight: active ? 600 : 400,
-                    transition: "background 0.12s, border-color 0.12s, color 0.12s",
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
+            <span style={rowLabelStyle}>Export backup</span>
+            <span style={rowDescStyle}>
+              Exports all exercises, sets, workouts, and session history as a single JSON backup.
+              Use this to move your data to another device.
+            </span>
           </div>
           <button
             onClick={handleExport}
@@ -319,10 +282,10 @@ function LibrarySection() {
         {/* Import row */}
         <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={rowBodyStyle}>
-            <span style={rowLabelStyle}>Import library JSON</span>
+            <span style={rowLabelStyle}>Import backup</span>
             <span style={rowDescStyle}>
               Paste a previously exported JSON below. Existing items will be updated; new items will be added.
-              The import runs in a single transaction — any validation error rolls everything back.
+              Session history is merged. The import runs in a single transaction — any validation error rolls everything back.
             </span>
           </div>
           <textarea
@@ -340,7 +303,8 @@ function LibrarySection() {
               Imported —{" "}
               exercises: +{importResult.exercises_created} / ↻{importResult.exercises_updated},{" "}
               sets: +{importResult.sets_created} / ↻{importResult.sets_updated},{" "}
-              workouts: +{importResult.workouts_created} / ↻{importResult.workouts_updated}
+              workouts: +{importResult.workouts_created} / ↻{importResult.workouts_updated},{" "}
+              sessions: +{importResult.sessions_created} / ↻{importResult.sessions_updated}
             </div>
           )}
           {importStatus === "error" && importError && (

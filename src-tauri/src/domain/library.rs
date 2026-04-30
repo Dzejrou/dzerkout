@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
+use sqlx::{Row, SqlitePool};
 
 use crate::{
     db::{exercises as db_ex, set_templates as db_sets, workout_templates as db_wt},
@@ -20,6 +20,13 @@ pub struct LibraryExport {
     pub exercises: Vec<ExportedExercise>,
     pub set_templates: Vec<ExportedSetTemplate>,
     pub workout_templates: Vec<ExportedWorkoutTemplate>,
+    /// Absent in older exports — defaults to empty on deserialise.
+    #[serde(default)]
+    pub sessions: Vec<ExportedSession>,
+    #[serde(default)]
+    pub session_sets: Vec<ExportedSessionSet>,
+    #[serde(default)]
+    pub session_exercises: Vec<ExportedSessionExercise>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,6 +90,56 @@ pub struct ExportedAssignment {
     pub notes: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportedSession {
+    pub id: String,
+    pub workout_template_id: Option<String>,
+    pub source_workout_template_name: Option<String>,
+    pub status: String,
+    pub session_date: Option<String>,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportedSessionSet {
+    pub id: String,
+    pub workout_session_id: String,
+    pub source_set_template_id: Option<String>,
+    pub order_index: i64,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub paused_total_sec: i64,
+    pub paused_at: Option<String>,
+    pub rest_duration_sec: Option<i64>,
+    pub rest_started_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportedSessionExercise {
+    pub id: String,
+    pub workout_session_set_id: String,
+    pub order_index: i64,
+    pub exercise_id: Option<String>,
+    pub placeholder_tag: Option<String>,
+    pub display_name: String,
+    pub duration_hint_sec: Option<i64>,
+    pub status: String,
+    pub skipped: i64,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub notes: Option<String>,
+    pub paused_offset_sec: i64,
+    pub performed_duration_sec: Option<i64>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 /// Counts returned to the caller after a successful reset + optional re-seed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResetResult {
@@ -106,6 +163,8 @@ pub struct ImportResult {
     pub sets_updated: u32,
     pub workouts_created: u32,
     pub workouts_updated: u32,
+    pub sessions_created: u32,
+    pub sessions_updated: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -145,29 +204,6 @@ pub async fn seed_if_empty(pool: &SqlitePool, seed_json: &str) -> Result<SeedRes
     Ok(SeedResult { seeded: true, import_result: Some(import_result) })
 }
 
-// ── Export scope ──────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ExportScope {
-    Full,
-    Exercises,
-    Sets,
-    Workouts,
-}
-
-impl ExportScope {
-    pub fn parse(s: &str) -> Result<Self, AppError> {
-        match s {
-            "full"      => Ok(ExportScope::Full),
-            "exercises" => Ok(ExportScope::Exercises),
-            "sets"      => Ok(ExportScope::Sets),
-            "workouts"  => Ok(ExportScope::Workouts),
-            other => Err(AppError::Validation(format!(
-                "unknown export scope '{other}'; valid: full, exercises, sets, workouts"
-            ))),
-        }
-    }
-}
 
 // ── Export helpers ────────────────────────────────────────────────────────────
 
@@ -257,25 +293,97 @@ async fn build_workout_template(
     })
 }
 
-/// Collect exercise IDs from concrete cards across a list of exported set templates.
-fn exercise_ids_from_sets<'a>(sets: &'a [ExportedSetTemplate]) -> HashSet<&'a str> {
-    sets.iter()
-        .flat_map(|s| s.cards.iter())
-        .filter(|c| c.card_type == "concrete")
-        .filter_map(|c| c.exercise_id.as_deref())
-        .collect()
-}
-
 // ── Export ────────────────────────────────────────────────────────────────────
 
-/// Export the template library as a pretty-printed JSON string.
-/// `scope` controls which categories are included; all scopes use the same
-/// schema so the result can be re-imported by `import_library_json`.
-pub async fn export_library(pool: &SqlitePool, scope: ExportScope) -> Result<String, AppError> {
-    // Fetch all exercises once (already sorted by name); tags fetched once too.
+async fn fetch_sessions_for_export(pool: &SqlitePool) -> Result<Vec<ExportedSession>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT id, workout_template_id, source_workout_template_name,
+                status, session_date, started_at, ended_at, notes,
+                created_at, updated_at
+         FROM workout_sessions
+         ORDER BY created_at"
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|r| ExportedSession {
+        id:                           r.get("id"),
+        workout_template_id:          r.get("workout_template_id"),
+        source_workout_template_name: r.get("source_workout_template_name"),
+        status:                       r.get("status"),
+        session_date:                 r.get("session_date"),
+        started_at:                   r.get("started_at"),
+        ended_at:                     r.get("ended_at"),
+        notes:                        r.get("notes"),
+        created_at:                   r.get("created_at"),
+        updated_at:                   r.get("updated_at"),
+    }).collect())
+}
+
+async fn fetch_session_sets_for_export(pool: &SqlitePool) -> Result<Vec<ExportedSessionSet>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT id, workout_session_id, source_set_template_id, order_index,
+                started_at, ended_at, paused_total_sec, paused_at,
+                rest_duration_sec, rest_started_at, created_at, updated_at
+         FROM workout_session_sets
+         ORDER BY workout_session_id, order_index"
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|r| ExportedSessionSet {
+        id:                    r.get("id"),
+        workout_session_id:    r.get("workout_session_id"),
+        source_set_template_id: r.get("source_set_template_id"),
+        order_index:           r.get("order_index"),
+        started_at:            r.get("started_at"),
+        ended_at:              r.get("ended_at"),
+        paused_total_sec:      r.get("paused_total_sec"),
+        paused_at:             r.get("paused_at"),
+        rest_duration_sec:     r.get("rest_duration_sec"),
+        rest_started_at:       r.get("rest_started_at"),
+        created_at:            r.get("created_at"),
+        updated_at:            r.get("updated_at"),
+    }).collect())
+}
+
+async fn fetch_session_exercises_for_export(pool: &SqlitePool) -> Result<Vec<ExportedSessionExercise>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT id, workout_session_set_id, order_index, exercise_id, placeholder_tag,
+                display_name, duration_hint_sec, status, skipped, started_at, ended_at,
+                notes, paused_offset_sec, performed_duration_sec, created_at, updated_at
+         FROM workout_session_exercises
+         ORDER BY workout_session_set_id, order_index"
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|r| ExportedSessionExercise {
+        id:                    r.get("id"),
+        workout_session_set_id: r.get("workout_session_set_id"),
+        order_index:           r.get("order_index"),
+        exercise_id:           r.get("exercise_id"),
+        placeholder_tag:       r.get("placeholder_tag"),
+        display_name:          r.get("display_name"),
+        duration_hint_sec:     r.get("duration_hint_sec"),
+        status:                r.get("status"),
+        skipped:               r.get("skipped"),
+        started_at:            r.get("started_at"),
+        ended_at:              r.get("ended_at"),
+        notes:                 r.get("notes"),
+        paused_offset_sec:     r.get("paused_offset_sec"),
+        performed_duration_sec: r.get("performed_duration_sec"),
+        created_at:            r.get("created_at"),
+        updated_at:            r.get("updated_at"),
+    }).collect())
+}
+
+/// Export everything — library templates and session history — as a single
+/// pretty-printed JSON backup.  Use this for clipboard export and tests.
+pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> {
     let all_exercise_rows = db_ex::find_all(pool).await?;
     let mut tags_map = db_ex::fetch_all_tags(pool).await?;
-    let all_exercises: Vec<ExportedExercise> = all_exercise_rows
+    let exercises: Vec<ExportedExercise> = all_exercise_rows
         .into_iter()
         .map(|row| ExportedExercise {
             tags: tags_map.remove(&row.id).unwrap_or_default(),
@@ -287,80 +395,21 @@ pub async fn export_library(pool: &SqlitePool, scope: ExportScope) -> Result<Str
 
     let mut conn = pool.acquire().await?;
 
-    let (exercises, set_templates, workout_templates) = match scope {
-        // ── Full ──────────────────────────────────────────────────────────────
-        ExportScope::Full => {
-            let set_rows = db_sets::find_all_for_export(&mut conn).await?;
-            let mut sets = Vec::with_capacity(set_rows.len());
-            for row in &set_rows {
-                sets.push(build_set_template(&mut conn, row).await?);
-            }
+    let set_rows = db_sets::find_all_for_export(&mut conn).await?;
+    let mut set_templates = Vec::with_capacity(set_rows.len());
+    for row in &set_rows {
+        set_templates.push(build_set_template(&mut conn, row).await?);
+    }
 
-            let wt_rows = db_wt::find_all_rows(pool).await?;
-            let mut workouts = Vec::with_capacity(wt_rows.len());
-            for row in &wt_rows {
-                workouts.push(build_workout_template(&mut conn, row).await?);
-            }
+    let wt_rows = db_wt::find_all_rows(pool).await?;
+    let mut workout_templates = Vec::with_capacity(wt_rows.len());
+    for row in &wt_rows {
+        workout_templates.push(build_workout_template(&mut conn, row).await?);
+    }
 
-            (all_exercises, sets, workouts)
-        }
-
-        // ── Exercises only ────────────────────────────────────────────────────
-        ExportScope::Exercises => (all_exercises, vec![], vec![]),
-
-        // ── Sets (global / reusable) ──────────────────────────────────────────
-        ExportScope::Sets => {
-            // Only sets that are NOT workout-local
-            let all_set_rows = db_sets::find_all_for_export(&mut conn).await?;
-            let mut sets = Vec::new();
-            for row in all_set_rows.iter().filter(|r| r.owning_workout_template_id.is_none()) {
-                sets.push(build_set_template(&mut conn, row).await?);
-            }
-
-            // Include only exercises referenced by concrete cards in these sets
-            let needed = exercise_ids_from_sets(&sets);
-            let exercises = all_exercises
-                .into_iter()
-                .filter(|e| needed.contains(e.id.as_str()))
-                .collect();
-
-            (exercises, sets, vec![])
-        }
-
-        // ── Workouts (with all dependency sets and exercises) ─────────────────
-        ExportScope::Workouts => {
-            let wt_rows = db_wt::find_all_rows(pool).await?;
-            let mut workouts = Vec::with_capacity(wt_rows.len());
-            for row in &wt_rows {
-                workouts.push(build_workout_template(&mut conn, row).await?);
-            }
-
-            // Sets: all sets referenced by any workout set_ref (incl. workout-local)
-            let set_rows = db_sets::find_referenced_by_workouts(&mut conn).await?;
-            let mut sets = Vec::with_capacity(set_rows.len());
-            for row in &set_rows {
-                sets.push(build_set_template(&mut conn, row).await?);
-            }
-
-            // Exercises: from set cards + from assignment exercise_ids
-            let mut needed = exercise_ids_from_sets(&sets);
-            for wt in &workouts {
-                for ref_ in &wt.set_refs {
-                    for a in &ref_.assignments {
-                        if let Some(eid) = a.exercise_id.as_deref() {
-                            needed.insert(eid);
-                        }
-                    }
-                }
-            }
-            let exercises = all_exercises
-                .into_iter()
-                .filter(|e| needed.contains(e.id.as_str()))
-                .collect();
-
-            (exercises, sets, workouts)
-        }
-    };
+    let sessions          = fetch_sessions_for_export(pool).await?;
+    let session_sets      = fetch_session_sets_for_export(pool).await?;
+    let session_exercises = fetch_session_exercises_for_export(pool).await?;
 
     let export = LibraryExport {
         schema: "dzerkout.library".to_string(),
@@ -369,16 +418,13 @@ pub async fn export_library(pool: &SqlitePool, scope: ExportScope) -> Result<Str
         exercises,
         set_templates,
         workout_templates,
+        sessions,
+        session_sets,
+        session_exercises,
     };
 
     serde_json::to_string_pretty(&export)
         .map_err(|e| AppError::Database(format!("serialization error: {e}")))
-}
-
-/// Convenience alias used by the startup seed check and any callers that
-/// always want the full library.
-pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> {
-    export_library(pool, ExportScope::Full).await
 }
 
 // ── Import ────────────────────────────────────────────────────────────────────
@@ -602,6 +648,8 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
         sets_updated: 0,
         workouts_created: 0,
         workouts_updated: 0,
+        sessions_created: 0,
+        sessions_updated: 0,
     };
 
     // 1. Exercises
@@ -801,6 +849,122 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
                 .await?;
             }
         }
+    }
+
+    // 7. Session history — upsert in FK-safe order:
+    //    sessions → session_sets → session_exercises
+    //
+    //    workout_template_id has ON DELETE SET NULL so the FK is nullable and safe.
+    //    exercise_id in session_exercises also has ON DELETE SET NULL, also safe.
+    //
+    //    Use sqlx::query (no macro) so no offline cache update is required.
+    let existing_session_ids: HashSet<String> = sqlx::query("SELECT id FROM workout_sessions")
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .map(|r| r.get::<String, _>("id"))
+        .collect();
+
+    for s in &lib.sessions {
+        let existed = existing_session_ids.contains(&s.id);
+        sqlx::query(
+            "INSERT INTO workout_sessions
+                 (id, workout_template_id, source_workout_template_name, status,
+                  session_date, started_at, ended_at, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               workout_template_id          = excluded.workout_template_id,
+               source_workout_template_name = excluded.source_workout_template_name,
+               status                       = excluded.status,
+               session_date                 = excluded.session_date,
+               started_at                   = excluded.started_at,
+               ended_at                     = excluded.ended_at,
+               notes                        = excluded.notes"
+        )
+        .bind(&s.id)
+        .bind(&s.workout_template_id)
+        .bind(&s.source_workout_template_name)
+        .bind(&s.status)
+        .bind(&s.session_date)
+        .bind(&s.started_at)
+        .bind(&s.ended_at)
+        .bind(&s.notes)
+        .execute(&mut *tx)
+        .await?;
+
+        if existed { result.sessions_updated += 1; } else { result.sessions_created += 1; }
+    }
+
+    for ss in &lib.session_sets {
+        sqlx::query(
+            "INSERT INTO workout_session_sets
+                 (id, workout_session_id, source_set_template_id, order_index,
+                  started_at, ended_at, paused_total_sec, paused_at,
+                  rest_duration_sec, rest_started_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               workout_session_id     = excluded.workout_session_id,
+               source_set_template_id = excluded.source_set_template_id,
+               order_index            = excluded.order_index,
+               started_at             = excluded.started_at,
+               ended_at               = excluded.ended_at,
+               paused_total_sec       = excluded.paused_total_sec,
+               paused_at              = excluded.paused_at,
+               rest_duration_sec      = excluded.rest_duration_sec,
+               rest_started_at        = excluded.rest_started_at"
+        )
+        .bind(&ss.id)
+        .bind(&ss.workout_session_id)
+        .bind(&ss.source_set_template_id)
+        .bind(ss.order_index)
+        .bind(&ss.started_at)
+        .bind(&ss.ended_at)
+        .bind(ss.paused_total_sec)
+        .bind(&ss.paused_at)
+        .bind(ss.rest_duration_sec)
+        .bind(&ss.rest_started_at)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    for se in &lib.session_exercises {
+        sqlx::query(
+            "INSERT INTO workout_session_exercises
+                 (id, workout_session_set_id, order_index, exercise_id, placeholder_tag,
+                  display_name, duration_hint_sec, status, skipped, started_at, ended_at,
+                  notes, paused_offset_sec, performed_duration_sec)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               workout_session_set_id = excluded.workout_session_set_id,
+               order_index            = excluded.order_index,
+               exercise_id            = excluded.exercise_id,
+               placeholder_tag        = excluded.placeholder_tag,
+               display_name           = excluded.display_name,
+               duration_hint_sec      = excluded.duration_hint_sec,
+               status                 = excluded.status,
+               skipped                = excluded.skipped,
+               started_at             = excluded.started_at,
+               ended_at               = excluded.ended_at,
+               notes                  = excluded.notes,
+               paused_offset_sec      = excluded.paused_offset_sec,
+               performed_duration_sec = excluded.performed_duration_sec"
+        )
+        .bind(&se.id)
+        .bind(&se.workout_session_set_id)
+        .bind(se.order_index)
+        .bind(&se.exercise_id)
+        .bind(&se.placeholder_tag)
+        .bind(&se.display_name)
+        .bind(se.duration_hint_sec)
+        .bind(&se.status)
+        .bind(se.skipped)
+        .bind(&se.started_at)
+        .bind(&se.ended_at)
+        .bind(&se.notes)
+        .bind(se.paused_offset_sec)
+        .bind(se.performed_duration_sec)
+        .execute(&mut *tx)
+        .await?;
     }
 
     tx.commit().await?;

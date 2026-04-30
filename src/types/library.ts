@@ -5,6 +5,8 @@ export interface ImportResult {
   sets_updated: number;
   workouts_created: number;
   workouts_updated: number;
+  sessions_created: number;
+  sessions_updated: number;
 }
 
 export interface ResetResult {
