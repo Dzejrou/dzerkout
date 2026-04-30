@@ -27,6 +27,12 @@ pnpm-debug.log*
 .env.*.local
 *.local
 
+# Android signing — NEVER commit keystores or passwords
+*.jks
+*.keystore
+android-signing.properties
+scripts/android-release.local.sh
+
 .DS_Store
 Thumbs.db
 desktop.ini
