@@ -215,6 +215,8 @@ export default function WorkoutHistory() {
   useEffect(() => {
     if (sessions.length > 0 && !selectedId) {
       setSelectedId(sessions[0].id);
+    } else if (selectedId && !sessions.find((s) => s.id === selectedId)) {
+      setSelectedId(sessions.length > 0 ? sessions[0].id : null);
     }
   }, [sessions, selectedId]);
 

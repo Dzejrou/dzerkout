@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, createContext, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { tokens, THEME_KEYS, themeNames, type ThemeKey } from "../../theme/tokens";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useSessionStore } from "../../store/sessionStore";
@@ -8,8 +8,63 @@ import { fontPresets, FONT_PRESET_KEYS, type FontPresetKey } from "../../theme/f
 import { playPreviewCue } from "../../audio/cues";
 import { writeText as clipboardWriteText } from "@tauri-apps/plugin-clipboard-manager";
 import { libraryApi } from "../../api/library";
+import { exercisesApi } from "../../api/exercises";
+import { setTemplatesApi } from "../../api/setTemplates";
+import { workoutTemplatesApi } from "../../api/workoutTemplates";
+import { historyApi } from "../../api/history";
+import { statsApi } from "../../api/stats";
+import { saveJsonToFile, pickJsonFile, readJsonFile } from "../../api/fileExport";
 import type { ImportResult } from "../../types/library";
 import { ConfirmModal } from "../../components/ConfirmModal";
+
+// ── Phase logging ─────────────────────────────────────────────────────────────
+
+function importLog(opId: number, phase: string, detail?: string) {
+  const ts = new Date().toISOString();
+  console.log(`[import:${opId}] ${ts} ${phase}${detail ? " — " + detail : ""}`);
+}
+
+// ── Shared data-op mutex ──────────────────────────────────────────────────────
+// Prevents import, clear, and reset from running concurrently.
+
+interface DataOpCtx {
+  isDataBusy: boolean;
+  tryAcquire: () => boolean;
+  releaseDataBusy: () => void;
+}
+
+const DataOpContext = createContext<DataOpCtx>({
+  isDataBusy: false,
+  tryAcquire: () => true,
+  releaseDataBusy: () => {},
+});
+
+function useDataOp() {
+  return useContext(DataOpContext);
+}
+
+// ── Cache refresh ─────────────────────────────────────────────────────────────
+
+function removeAllAppDataQueries(qc: QueryClient) {
+  qc.removeQueries({ queryKey: ["exercises"] });
+  qc.removeQueries({ queryKey: ["set-templates"] });
+  qc.removeQueries({ queryKey: ["set-template"] });
+  qc.removeQueries({ queryKey: ["workout-templates"] });
+  qc.removeQueries({ queryKey: ["workout-template"] });
+  qc.removeQueries({ queryKey: ["session-history"] });
+  qc.removeQueries({ queryKey: ["session-detail"] });
+  qc.removeQueries({ queryKey: ["stats"] });
+}
+
+async function hydrateCoreLists(qc: QueryClient) {
+  await Promise.allSettled([
+    qc.fetchQuery({ queryKey: ["exercises"],         queryFn: exercisesApi.list }),
+    qc.fetchQuery({ queryKey: ["set-templates"],     queryFn: setTemplatesApi.list }),
+    qc.fetchQuery({ queryKey: ["workout-templates"], queryFn: workoutTemplatesApi.list }),
+    qc.fetchQuery({ queryKey: ["session-history"],   queryFn: historyApi.list }),
+    qc.fetchQuery({ queryKey: ["stats", "all"],      queryFn: () => statsApi.getStats("all") }),
+  ]);
+}
 
 // ── Toggle ────────────────────────────────────────────────────────────────────
 
@@ -187,12 +242,30 @@ function ThemeSelector() {
 // ── Library section ───────────────────────────────────────────────────────────
 
 function LibrarySection() {
+  const queryClient = useQueryClient();
+  const { isDataBusy, tryAcquire, releaseDataBusy } = useDataOp();
+
+  // Clipboard export state
   const [exportStatus, setExportStatus] = useState<"idle" | "loading" | "copied" | "error">("idle");
   const [exportFallbackJson, setExportFallbackJson] = useState<string | null>(null);
+
+  // File export state
+  const [fileExportStatus, setFileExportStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
+
+  // Clipboard import state
   const [importText, setImportText] = useState("");
   const [importStatus, setImportStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+
+  // File import state — phases allow the label to reflect where we actually are
+  type FileImportStatus = "idle" | "picking" | "reading" | "importing" | "refreshing" | "success" | "error";
+  const [fileImportStatus, setFileImportStatus] = useState<FileImportStatus>("idle");
+  const [fileImportResult, setFileImportResult] = useState<ImportResult | null>(null);
+  const [fileImportError, setFileImportError] = useState<string | null>(null);
+  // Monotonically-increasing op-id: guards against stale async completions
+  // reaching setState after a cancel or a second tap on Android.
+  const fileImportOpRef = useRef(0);
 
   async function handleExport() {
     setExportStatus("loading");
@@ -214,19 +287,124 @@ function LibrarySection() {
     }
   }
 
+  async function handleFileExport() {
+    setFileExportStatus("loading");
+    try {
+      const json = await libraryApi.exportJson();
+      const outcome = await saveJsonToFile(json);
+      if (outcome === "cancelled") {
+        setFileExportStatus("idle");
+        return;
+      }
+      setFileExportStatus("saved");
+      setTimeout(() => setFileExportStatus("idle"), 2500);
+    } catch {
+      setFileExportStatus("error");
+      setTimeout(() => setFileExportStatus("idle"), 3000);
+    }
+  }
+
   async function handleImport() {
     if (!importText.trim()) return;
+    if (!tryAcquire()) return;
     setImportStatus("loading");
     setImportResult(null);
     setImportError(null);
     try {
       const result = await libraryApi.importJson(importText.trim());
+      removeAllAppDataQueries(queryClient);
+      await hydrateCoreLists(queryClient);
       setImportResult(result);
       setImportStatus("success");
       setImportText("");
     } catch (err) {
       setImportError(err instanceof Error ? err.message : String(err));
       setImportStatus("error");
+    } finally {
+      releaseDataBusy();
+    }
+  }
+
+  function cancelFileImport() {
+    // Bump op-id so any in-flight async chain becomes stale, then reset status.
+    fileImportOpRef.current++;
+    setFileImportStatus("idle");
+    setFileImportError(null);
+    releaseDataBusy();
+  }
+
+  async function handleFileImport() {
+    if (!tryAcquire()) return;
+
+    const opId = ++fileImportOpRef.current;
+    // owned() returns true only for the most-recent invocation.
+    const owned = () => fileImportOpRef.current === opId;
+
+    setFileImportResult(null);
+    setFileImportError(null);
+    setFileImportStatus("picking");
+
+    try {
+      importLog(opId, "picking", "entering picker");
+      const filePath = await pickJsonFile();
+      importLog(opId, "picker-returned", filePath ?? "null");
+
+      if (!owned()) {
+        importLog(opId, "stale", "discarding — newer op is active");
+        return;
+      }
+      if (filePath == null) {
+        importLog(opId, "cancelled", "picker returned null");
+        setFileImportStatus("idle");
+        return;
+      }
+
+      setFileImportStatus("reading");
+      importLog(opId, "reading", filePath);
+      const json = await readJsonFile(filePath);
+      importLog(opId, "reading-done", `${json.length} chars`);
+
+      if (!owned()) return;
+      const trimmed = json.trim();
+      if (!trimmed) throw new Error("Selected file is empty");
+
+      setFileImportStatus("importing");
+      importLog(opId, "importing");
+      const result = await libraryApi.importJson(trimmed);
+      importLog(opId, "importing-done", `ex+${result.exercises_created}/upd${result.exercises_updated}`);
+
+      if (!owned()) return;
+
+      setFileImportStatus("refreshing");
+      importLog(opId, "refreshing");
+      removeAllAppDataQueries(queryClient);
+      await hydrateCoreLists(queryClient);
+      importLog(opId, "hydration-done");
+
+      if (!owned()) return;
+
+      setFileImportResult(result);
+      setFileImportStatus("success");
+      importLog(opId, "success");
+    } catch (err) {
+      importLog(opId, "error", String(err));
+      if (owned()) {
+        setFileImportError(err instanceof Error ? err.message : String(err));
+        setFileImportStatus("error");
+      }
+    } finally {
+      // Safety net: if the op is still current and somehow still in a transient
+      // phase (e.g. owned() returned early without updating status), force idle.
+      if (owned()) {
+        setFileImportStatus((prev) => {
+          if (prev === "picking" || prev === "reading" || prev === "importing" || prev === "refreshing") {
+            importLog(opId, "finally-forced-idle", `was ${prev}`);
+            return "idle";
+          }
+          return prev;
+        });
+      }
+      releaseDataBusy();
     }
   }
 
@@ -235,7 +413,30 @@ function LibrarySection() {
     : exportStatus === "copied" ? "Copied!"
     : exportStatus === "error" && !exportFallbackJson ? "Export failed"
     : exportFallbackJson ? "Clipboard unavailable"
-    : "Export data to clipboard";
+    : "Export to clipboard";
+
+  const fileExportLabel =
+    fileExportStatus === "loading" ? "Exporting…"
+    : fileExportStatus === "saved" ? "File saved!"
+    : fileExportStatus === "error" ? "Export failed"
+    : "Export to file";
+
+  const fileImportLabel =
+    fileImportStatus === "picking"    ? "Picking file…"
+    : fileImportStatus === "reading"  ? "Reading…"
+    : fileImportStatus === "importing" ? "Importing…"
+    : fileImportStatus === "refreshing" ? "Updating…"
+    : fileImportStatus === "success"  ? "Imported!"
+    : "Import from file";
+
+  const fileImportBusy =
+    fileImportStatus === "picking" ||
+    fileImportStatus === "reading" ||
+    fileImportStatus === "importing" ||
+    fileImportStatus === "refreshing";
+
+  const anyExportBusy = exportStatus === "loading" || fileExportStatus === "loading";
+  const anyImportBusy = importStatus === "loading" || fileImportBusy;
 
   return (
     <div style={sectionStyle}>
@@ -250,19 +451,34 @@ function LibrarySection() {
               Use this to move your data to another device.
             </span>
           </div>
-          <button
-            onClick={handleExport}
-            disabled={exportStatus === "loading"}
-            style={{
-              ...libBtnStyle,
-              alignSelf: "flex-start",
-              background: exportStatus === "copied" ? tokens.green : tokens.surfaceActive,
-              color: exportStatus === "copied" ? tokens.greenText : tokens.textLight,
-              border: `1px solid ${exportStatus === "copied" ? tokens.greenBorder : tokens.borderMedium}`,
-            }}
-          >
-            {exportLabel}
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              onClick={handleExport}
+              disabled={anyExportBusy}
+              style={{
+                ...libBtnStyle,
+                background: exportStatus === "copied" ? tokens.green : tokens.surfaceActive,
+                color: exportStatus === "copied" ? tokens.greenText : tokens.textLight,
+                border: `1px solid ${exportStatus === "copied" ? tokens.greenBorder : tokens.borderMedium}`,
+                opacity: anyExportBusy && exportStatus !== "loading" ? 0.5 : 1,
+              }}
+            >
+              {exportLabel}
+            </button>
+            <button
+              onClick={handleFileExport}
+              disabled={anyExportBusy}
+              style={{
+                ...libBtnStyle,
+                background: fileExportStatus === "saved" ? tokens.green : tokens.surfaceActive,
+                color: fileExportStatus === "saved" ? tokens.greenText : tokens.textLight,
+                border: `1px solid ${fileExportStatus === "saved" ? tokens.greenBorder : tokens.borderMedium}`,
+                opacity: anyExportBusy && fileExportStatus !== "loading" ? 0.5 : 1,
+              }}
+            >
+              {fileExportLabel}
+            </button>
+          </div>
           {exportFallbackJson && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={{ fontSize: 12, color: tokens.amber }}>
@@ -279,12 +495,12 @@ function LibrarySection() {
           )}
         </div>
         <div style={rowDividerStyle} />
-        {/* Import row */}
+        {/* Paste import row */}
         <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={rowBodyStyle}>
             <span style={rowLabelStyle}>Import backup</span>
             <span style={rowDescStyle}>
-              Paste a previously exported JSON below. Existing items will be updated; new items will be added.
+              Paste a previously exported JSON below, or pick a file. Existing items will be updated; new items will be added.
               Session history is merged. The import runs in a single transaction — any validation error rolls everything back.
             </span>
           </div>
@@ -310,17 +526,48 @@ function LibrarySection() {
           {importStatus === "error" && importError && (
             <div style={importErrorStyle}>{importError}</div>
           )}
-          <button
-            onClick={handleImport}
-            disabled={importStatus === "loading" || !importText.trim()}
-            style={{
-              ...libBtnStyle,
-              alignSelf: "flex-start",
-              opacity: importStatus === "loading" || !importText.trim() ? 0.5 : 1,
-            }}
-          >
-            {importStatus === "loading" ? "Importing…" : "Import"}
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button
+              onClick={handleImport}
+              disabled={anyImportBusy || isDataBusy || !importText.trim()}
+              style={{
+                ...libBtnStyle,
+                opacity: anyImportBusy || isDataBusy || !importText.trim() ? 0.5 : 1,
+              }}
+            >
+              {importStatus === "loading" ? "Importing…" : "Import from clipboard"}
+            </button>
+            <button
+              onClick={handleFileImport}
+              disabled={anyImportBusy || isDataBusy}
+              style={{
+                ...libBtnStyle,
+                opacity: (anyImportBusy && !fileImportBusy) || (isDataBusy && !fileImportBusy) ? 0.5 : 1,
+              }}
+            >
+              {fileImportLabel}
+            </button>
+            {fileImportBusy && (
+              <button
+                onClick={cancelFileImport}
+                style={{ ...libBtnStyle, fontSize: 12, color: tokens.textSecondary, background: "transparent", border: "none", padding: "6px 6px" }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+          {fileImportStatus === "success" && fileImportResult && (
+            <div style={importSuccessStyle}>
+              Imported from file —{" "}
+              exercises: +{fileImportResult.exercises_created} / ↻{fileImportResult.exercises_updated},{" "}
+              sets: +{fileImportResult.sets_created} / ↻{fileImportResult.sets_updated},{" "}
+              workouts: +{fileImportResult.workouts_created} / ↻{fileImportResult.workouts_updated},{" "}
+              sessions: +{fileImportResult.sessions_created} / ↻{fileImportResult.sessions_updated}
+            </div>
+          )}
+          {fileImportStatus === "error" && fileImportError && (
+            <div style={importErrorStyle}>{fileImportError}</div>
+          )}
         </div>
       </div>
     </div>
@@ -334,6 +581,7 @@ type DangerAction = "reset" | "clear" | null;
 function DangerZoneSection() {
   const queryClient = useQueryClient();
   const clearSession = useSessionStore((s) => s.clear);
+  const { isDataBusy, tryAcquire, releaseDataBusy } = useDataOp();
 
   const [confirming, setConfirming] = useState<DangerAction>(null);
   const [loading, setLoading] = useState(false);
@@ -354,12 +602,14 @@ function DangerZoneSection() {
   }
 
   async function handleReset() {
+    if (!tryAcquire()) return;
     setLoading(true);
     setError(null);
     try {
       await libraryApi.resetLocalData();
       clearSession();
-      queryClient.invalidateQueries();
+      removeAllAppDataQueries(queryClient);
+      await hydrateCoreLists(queryClient);
       setConfirming(null);
       setSuccessMsg("Data reset and default library restored.");
       setTimeout(() => setSuccessMsg(null), 4000);
@@ -367,16 +617,18 @@ function DangerZoneSection() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+      releaseDataBusy();
     }
   }
 
   async function handleClear() {
+    if (!tryAcquire()) return;
     setLoading(true);
     setError(null);
     try {
       await libraryApi.clearLocalData();
       clearSession();
-      queryClient.invalidateQueries();
+      removeAllAppDataQueries(queryClient);
       setConfirming(null);
       setSuccessMsg("Data cleared. Defaults will load on next launch.");
       setTimeout(() => setSuccessMsg(null), 4000);
@@ -384,6 +636,7 @@ function DangerZoneSection() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+      releaseDataBusy();
     }
   }
 
@@ -401,7 +654,8 @@ function DangerZoneSection() {
           </div>
           <button
             onClick={() => openConfirm("reset")}
-            style={{ ...libBtnStyle, ...resetBtnStyle, alignSelf: "flex-start" }}
+            disabled={isDataBusy}
+            style={{ ...libBtnStyle, ...resetBtnStyle, alignSelf: "flex-start", opacity: isDataBusy ? 0.45 : 1 }}
           >
             Reset to default library…
           </button>
@@ -418,7 +672,8 @@ function DangerZoneSection() {
           </div>
           <button
             onClick={() => openConfirm("clear")}
-            style={{ ...libBtnStyle, ...resetBtnStyle, alignSelf: "flex-start" }}
+            disabled={isDataBusy}
+            style={{ ...libBtnStyle, ...resetBtnStyle, alignSelf: "flex-start", opacity: isDataBusy ? 0.45 : 1 }}
           >
             Clear local data…
           </button>
@@ -468,7 +723,22 @@ export default function Settings() {
   const autoStartNextSet = useSettingsStore((s) => s.autoStartNextSet);
   const setAutoStartNextSet = useSettingsStore((s) => s.setAutoStartNextSet);
 
+  // Shared mutex — prevents import, reset, and clear from running concurrently.
+  const dataBusyRef = useRef(false);
+  const [isDataBusy, setIsDataBusy] = useState(false);
+  const tryAcquire = useCallback(() => {
+    if (dataBusyRef.current) return false;
+    dataBusyRef.current = true;
+    setIsDataBusy(true);
+    return true;
+  }, []);
+  const releaseDataBusy = useCallback(() => {
+    dataBusyRef.current = false;
+    setIsDataBusy(false);
+  }, []);
+
   return (
+    <DataOpContext.Provider value={{ isDataBusy, tryAcquire, releaseDataBusy }}>
     <div style={rootStyle}>
       <div style={contentStyle}>
         <button onClick={() => navigate("/")} style={backBtnStyle}>← Back</button>
@@ -558,6 +828,7 @@ export default function Settings() {
         <p style={footerStyle}>More options will appear here as features ship.</p>
       </div>
     </div>
+    </DataOpContext.Provider>
   );
 }
 

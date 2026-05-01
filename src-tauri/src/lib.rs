@@ -5,7 +5,7 @@ mod error;
 #[cfg(test)]
 mod tests;
 
-use commands::{exercises::*, history::{get_session_detail, list_session_history}, library::{clear_local_data, export_library_json, import_library_json, reset_local_data}, sessions::*, set_templates::*, stats::get_stats, workout_templates::*};
+use commands::{exercises::*, file_io::{plugin as file_io_plugin, read_text_from_uri, write_text_to_uri}, history::{get_session_detail, list_session_history}, library::{clear_local_data, export_library_json, import_library_json, reset_local_data}, sessions::*, set_templates::*, stats::get_stats, workout_templates::*};
 use domain::library::seed_if_empty;
 use tauri::Manager;
 
@@ -13,7 +13,9 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(file_io_plugin())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir().expect("app data dir not found");
             std::fs::create_dir_all(&app_data_dir)?;
@@ -76,6 +78,9 @@ pub fn run() {
             // history
             list_session_history,
             get_session_detail,
+            // file I/O (dialog path → content:// URI on Android)
+            write_text_to_uri,
+            read_text_from_uri,
             // maintenance
             reset_local_data,
             clear_local_data,

@@ -344,7 +344,11 @@ export default function SetTemplateBuilder() {
   });
 
   useEffect(() => {
-    if (sets.length > 0 && !selectedId) setSelectedId(sets[0].id);
+    if (sets.length > 0 && !selectedId) {
+      setSelectedId(sets[0].id);
+    } else if (selectedId && !sets.find((s) => s.id === selectedId)) {
+      setSelectedId(sets.length > 0 ? sets[0].id : null);
+    }
   }, [sets, selectedId]);
 
   const filtered = search.trim()
