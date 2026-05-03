@@ -1,10 +1,9 @@
-import { useEffect, useLayoutEffect } from "react";
+import { useLayoutEffect } from "react";
 import { HashRouter, Route, Routes, useLocation } from "react-router-dom";
 import { usePlatform } from "./hooks/usePlatform";
 import { useSessionRecovery } from "./hooks/useSessionRecovery";
 import { useUiStore } from "./store/uiStore";
 import { useSettingsStore } from "./store/settingsStore";
-import { fontPresets } from "./theme/fontPresets";
 import { allThemes, applyThemeToDOM } from "./theme/tokens";
 import { ConfirmModal } from "./components/ConfirmModal";
 import MainMenu from "./screens/MainMenu";
@@ -15,18 +14,6 @@ import ActiveWorkoutRunner from "./screens/ActiveWorkoutRunner";
 import WorkoutHistory from "./screens/WorkoutHistory";
 import Stats from "./screens/Stats";
 import Settings from "./screens/Settings";
-
-// Applies the stored font preset to the CSS variable on the document root.
-// Runs outside the router because font application needs no routing context.
-function useFontPreset() {
-  const fontPreset = useSettingsStore((s) => s.fontPreset);
-  useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--font-family",
-      fontPresets[fontPreset].stack,
-    );
-  }, [fontPreset]);
-}
 
 // Applies the selected theme's concrete color values as CSS custom properties
 // on the document root, so every inline style using `var(--name)` references
@@ -45,7 +32,6 @@ function useThemeApplicator() {
 // Rendered inside HashRouter so useNavigate (and useSessionRecovery) have router context.
 function AppShell() {
   useSessionRecovery();
-  useFontPreset();
   useThemeApplicator();
   const confirmModal = useUiStore((s) => s.confirmModal);
   const closeConfirmModal = useUiStore((s) => s.closeConfirmModal);

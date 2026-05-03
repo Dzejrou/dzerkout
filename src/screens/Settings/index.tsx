@@ -4,7 +4,6 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { tokens, THEME_KEYS, themeNames, type ThemeKey } from "../../theme/tokens";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useSessionStore } from "../../store/sessionStore";
-import { fontPresets, FONT_PRESET_KEYS, type FontPresetKey } from "../../theme/fontPresets";
 import { playPreviewCue } from "../../audio/cues";
 import { writeText as clipboardWriteText } from "@tauri-apps/plugin-clipboard-manager";
 import { libraryApi } from "../../api/library";
@@ -35,7 +34,7 @@ const {
 type SettingsCategory = "appearance" | "runner" | "sound" | "data";
 
 const CATEGORIES: { value: SettingsCategory; label: string; desc: string }[] = [
-  { value: "appearance", label: "Appearance", desc: "Theme, font, and display"   },
+  { value: "appearance", label: "Appearance", desc: "Theme and display"          },
   { value: "runner",     label: "Runner",     desc: "Auto-advance and timing"    },
   { value: "sound",      label: "Sound",      desc: "Cues and audio feedback"    },
   { value: "data",       label: "Data",       desc: "Backup, import, and reset"  },
@@ -185,38 +184,6 @@ function SliderControl({ value, onChange, min, max, step, format }: SliderContro
   );
 }
 
-function FontSelector() {
-  const fontPreset = useSettingsStore((s) => s.fontPreset);
-  const setFontPreset = useSettingsStore((s) => s.setFontPreset);
-  return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-      {FONT_PRESET_KEYS.map((key: FontPresetKey) => {
-        const active = fontPreset === key;
-        return (
-          <button
-            key={key}
-            onClick={() => setFontPreset(key)}
-            style={{
-              padding: "5px 13px",
-              borderRadius: 7,
-              border: `1px solid ${active ? tokens.green : tokens.border}`,
-              background: active ? tokens.green : tokens.cardSubtle,
-              color: active ? tokens.greenText : tokens.textPrimary,
-              cursor: "pointer",
-              fontSize: 13,
-              fontWeight: active ? 600 : 400,
-              fontFamily: fontPresets[key].stack,
-              transition: "background 0.12s, border-color 0.12s, color 0.12s",
-            }}
-          >
-            {fontPresets[key].label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function ThemeSelector() {
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
@@ -259,12 +226,6 @@ function AppearanceCategoryView() {
         label="Theme"
         description="Color scheme used throughout the app."
         control={<ThemeSelector />}
-      />
-      <div style={rowDividerStyle} />
-      <SettingRow
-        label="Font"
-        description="UI typeface applied across the entire app."
-        control={<FontSelector />}
       />
       <div style={rowDividerStyle} />
       <SettingRow
