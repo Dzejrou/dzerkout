@@ -208,20 +208,203 @@ export const graphiteTheme: ThemeTokens = {
   purpleBorder: "rgba(139,92,246,0.25)",
 };
 
+/**
+ * Forest — dark green-tinted charcoal; natural deep-green primary accents.
+ */
+export const forestTheme: ThemeTokens = {
+  bg:         "#141a16",
+  bgElevated: "#1a2219",
+  card:       "#212b23",
+  cardSubtle: "#2a362e",
+
+  border:       "rgba(120,180,130,0.10)",
+  borderSubtle: "rgba(120,180,130,0.07)",
+  borderMedium: "rgba(120,180,130,0.15)",
+  borderStrong: "rgba(120,180,130,0.22)",
+  divider:      "rgba(120,180,130,0.08)",
+
+  surfaceSelected:  "rgba(120,180,130,0.06)",
+  surfaceActive:    "rgba(120,180,130,0.10)",
+  surfaceDisabled:  "rgba(255,255,255,0.02)",
+
+  textPrimary:   "#e8f0ea",
+  textSecondary: "#7a9880",
+  textMuted:     "#5a7260",
+  textFaint:     "#8aac90",
+  textLight:     "#d4e8d8",
+  textDisabled:  "#3d5040",
+  iconText:      "#b8d4bc",
+
+  overlay: "rgba(0,0,0,0.65)",
+
+  green:       "#1e6b3a",
+  greenText:   "#86efac",
+  greenBorder: "rgba(30,107,58,0.65)",
+
+  red:       "#f87171",
+  redBg:     "rgba(239,68,68,0.09)",
+  redBorder: "rgba(239,68,68,0.26)",
+
+  blue:  "#60a5fa",
+  amber: "#f59e0b",
+
+  greenBadgeText:   "#4ade80",
+  greenBadgeBg:     "rgba(34,197,94,0.12)",
+  greenBadgeBorder: "rgba(34,197,94,0.22)",
+
+  amberBadgeBg:     "rgba(245,158,11,0.12)",
+  amberBadgeBorder: "rgba(245,158,11,0.22)",
+
+  redBadgeBg:     "rgba(239,68,68,0.12)",
+  redBadgeBorder: "rgba(239,68,68,0.22)",
+
+  blueBadgeBg:     "rgba(59,130,246,0.12)",
+  blueBadgeBorder: "rgba(59,130,246,0.22)",
+
+  purple:       "#a78bfa",
+  purpleBg:     "rgba(139,92,246,0.12)",
+  purpleBorder: "rgba(139,92,246,0.22)",
+};
+
+/**
+ * Ember — warm charcoal with amber/orange primary accents.
+ * Destructive red is intentionally kept clearly red.
+ */
+export const emberTheme: ThemeTokens = {
+  bg:         "#1a1614",
+  bgElevated: "#221c19",
+  card:       "#2c2420",
+  cardSubtle: "#38302a",
+
+  border:       "rgba(255,195,130,0.09)",
+  borderSubtle: "rgba(255,195,130,0.06)",
+  borderMedium: "rgba(255,195,130,0.14)",
+  borderStrong: "rgba(255,195,130,0.21)",
+  divider:      "rgba(255,195,130,0.07)",
+
+  surfaceSelected:  "rgba(255,195,130,0.05)",
+  surfaceActive:    "rgba(255,195,130,0.09)",
+  surfaceDisabled:  "rgba(255,255,255,0.02)",
+
+  textPrimary:   "#f5ede8",
+  textSecondary: "#a08878",
+  textMuted:     "#786055",
+  textFaint:     "#a89080",
+  textLight:     "#ecddd8",
+  textDisabled:  "#58443c",
+  iconText:      "#d4c0b8",
+
+  overlay: "rgba(0,0,0,0.65)",
+
+  // amber-brown for primary actions so the UI feels warm
+  green:       "#9a5a10",
+  greenText:   "#fed7aa",
+  greenBorder: "rgba(154,90,16,0.65)",
+
+  red:       "#f87171",
+  redBg:     "rgba(239,68,68,0.09)",
+  redBorder: "rgba(239,68,68,0.28)",
+
+  blue:  "#93c5fd",
+  amber: "#fb923c",
+
+  greenBadgeText:   "#fdba74",
+  greenBadgeBg:     "rgba(251,146,60,0.13)",
+  greenBadgeBorder: "rgba(251,146,60,0.23)",
+
+  amberBadgeBg:     "rgba(245,158,11,0.13)",
+  amberBadgeBorder: "rgba(245,158,11,0.23)",
+
+  redBadgeBg:     "rgba(239,68,68,0.12)",
+  redBadgeBorder: "rgba(239,68,68,0.24)",
+
+  blueBadgeBg:     "rgba(59,130,246,0.12)",
+  blueBadgeBorder: "rgba(59,130,246,0.22)",
+
+  purple:       "#c4b5fd",
+  purpleBg:     "rgba(139,92,246,0.12)",
+  purpleBorder: "rgba(139,92,246,0.22)",
+};
+
+/**
+ * Slate — cool blue-gray palette; calm teal/blue primary accents.
+ */
+export const slateTheme: ThemeTokens = {
+  bg:         "#131720",
+  bgElevated: "#1a1f2a",
+  card:       "#222736",
+  cardSubtle: "#2c3342",
+
+  border:       "rgba(140,180,255,0.09)",
+  borderSubtle: "rgba(140,180,255,0.06)",
+  borderMedium: "rgba(140,180,255,0.14)",
+  borderStrong: "rgba(140,180,255,0.21)",
+  divider:      "rgba(140,180,255,0.07)",
+
+  surfaceSelected:  "rgba(140,180,255,0.05)",
+  surfaceActive:    "rgba(140,180,255,0.09)",
+  surfaceDisabled:  "rgba(255,255,255,0.02)",
+
+  textPrimary:   "#e8edf8",
+  textSecondary: "#7a8eac",
+  textMuted:     "#5a6e8a",
+  textFaint:     "#8a9eb8",
+  textLight:     "#d0daf0",
+  textDisabled:  "#3a4a62",
+  iconText:      "#b0c4e0",
+
+  overlay: "rgba(0,0,0,0.70)",
+
+  // teal-blue for primary actions
+  green:       "#1a5f7a",
+  greenText:   "#7dd3fc",
+  greenBorder: "rgba(26,95,122,0.65)",
+
+  red:       "#f87171",
+  redBg:     "rgba(239,68,68,0.09)",
+  redBorder: "rgba(239,68,68,0.28)",
+
+  blue:  "#60a5fa",
+  amber: "#f59e0b",
+
+  greenBadgeText:   "#4ade80",
+  greenBadgeBg:     "rgba(34,197,94,0.12)",
+  greenBadgeBorder: "rgba(34,197,94,0.22)",
+
+  amberBadgeBg:     "rgba(245,158,11,0.12)",
+  amberBadgeBorder: "rgba(245,158,11,0.22)",
+
+  redBadgeBg:     "rgba(239,68,68,0.12)",
+  redBadgeBorder: "rgba(239,68,68,0.22)",
+
+  blueBadgeBg:     "rgba(59,130,246,0.13)",
+  blueBadgeBorder: "rgba(59,130,246,0.23)",
+
+  purple:       "#a78bfa",
+  purpleBg:     "rgba(139,92,246,0.12)",
+  purpleBorder: "rgba(139,92,246,0.22)",
+};
+
 // ── Theme registry ────────────────────────────────────────────────────────────
 
-export const THEME_KEYS = ["dark", "graphite"] as const;
+export const THEME_KEYS = ["dark", "graphite", "forest", "ember", "slate"] as const;
 export type ThemeKey = (typeof THEME_KEYS)[number];
 
 /** Display labels shown in the Settings theme selector. */
 export const themeNames: Record<ThemeKey, string> = {
-  dark:      "Dark",
-  graphite:  "Graphite",
+  dark:     "Dark",
+  graphite: "Graphite",
+  forest:   "Forest",
+  ember:    "Ember",
+  slate:    "Slate",
 };
 
 export const allThemes: Record<ThemeKey, ThemeTokens> = {
-  dark:      darkTheme,
-  graphite:  graphiteTheme,
+  dark:     darkTheme,
+  graphite: graphiteTheme,
+  forest:   forestTheme,
+  ember:    emberTheme,
+  slate:    slateTheme,
 };
 
 // ── CSS variable helpers ───────────────────────────────────────────────────────
