@@ -1,0 +1,241 @@
+/* ── Main Menu Dashboard Layout ──────────────────────────────────────────── */
+
+.mm-root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* ── Header: breathing room + title ─────────────────────────────────────── */
+
+/*
+ * Header takes all space above the content zone.
+ * flex: 1 fills leftover; on small landscape it shrinks naturally.
+ * Title is pushed to the bottom of the header so it sits just above the
+ * content area, giving the "more free space at top" feel from the sketch.
+ */
+.mm-header {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  position: relative;
+  padding: 0 16px 18px;
+  min-height: 70px;
+}
+
+.mm-title-area {
+  text-align: center;
+}
+
+.mm-title {
+  font-size: clamp(32px, 5vw, 56px);
+  font-weight: 800;
+  margin: 0;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.mm-tagline {
+  font-size: clamp(15px, 2.2vw, 24px);
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+}
+
+/* Options button — absolute so it doesn't affect header flex layout */
+.mm-options-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: var(--card);
+  border: 2px solid var(--border-medium);
+  border-radius: 8px;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.mm-options-btn:hover {
+  background: var(--surface-active);
+  border-color: var(--border-strong);
+}
+
+/* ── Three-zone content grid ─────────────────────────────────────────────── */
+
+/*
+ * --menu-logo-h is the single source of truth for both the rendered logo
+ * height and the side column height.  space-between then spans exactly the
+ * logo's visible pixel extent, aligning top/bottom buttons with the logo.
+ */
+.mm-content {
+  --menu-logo-h: clamp(160px, 52vh, 360px);
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 1fr 1.8fr 1fr;
+  grid-template-rows: var(--menu-logo-h); /* explicit row locks all three cells to the same height */
+  gap: 16px;
+  padding: 0 20px 20px;
+  box-sizing: border-box;
+}
+
+/*
+ * The SVG viewBox is 1024×1024. Visual content runs y=258–828, so the mark
+ * sits inside 25.2% top whitespace and 19.1% bottom whitespace.
+ * calc() padding offsets the column to those same boundaries so space-between
+ * places top/bottom buttons at the logo's actual visual edges.
+ */
+.mm-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-top: calc(var(--menu-logo-h) * 0.252);
+  padding-bottom: calc(var(--menu-logo-h) * 0.191);
+  box-sizing: border-box;
+}
+
+.mm-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* height: 100% resolves against the cell height = --menu-logo-h */
+.mm-logo-img {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* ── Nav buttons ─────────────────────────────────────────────────────────── */
+
+/* Compact, content-sized: padding drives height, not flex stretch */
+.mm-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--card);
+  border: 2px solid var(--border-medium);
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--text-primary);
+  width: 100%;
+  font-family: inherit;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.mm-nav-btn:hover {
+  background: var(--surface-active);
+  border-color: var(--border-strong);
+}
+
+.mm-icon-box {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: var(--card-subtle);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+  color: var(--icon-text);
+  line-height: 1;
+}
+
+.mm-btn-label {
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  flex: 1;
+}
+
+.mm-active-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--green);
+  color: var(--green-text);
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Portrait / narrow fallback ──────────────────────────────────────────── */
+
+@media (orientation: portrait), (max-width: 520px) {
+  .mm-root {
+    overflow: auto;
+  }
+
+  .mm-header {
+    flex: none;
+    padding: 56px 16px 16px; /* top pad reserves space for absolute options btn */
+    justify-content: center;
+  }
+
+  .mm-title {
+    font-size: 28px;
+  }
+
+  .mm-tagline {
+    font-size: 14px;
+  }
+
+  .mm-content {
+    flex: none;
+    height: auto;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "logo  logo"
+      "left  right";
+    grid-template-rows: auto auto; /* override the landscape explicit row height */
+    padding-bottom: 24px;
+  }
+
+  .mm-center {
+    grid-area: logo;
+    height: 90px;
+    padding: 8px 20px;
+  }
+
+  .mm-col:first-of-type { grid-area: left; }
+  .mm-col:last-of-type  { grid-area: right; }
+
+  /* Reset shared-height alignment — portrait uses a stacked flow instead */
+  .mm-col {
+    height: auto;
+    justify-content: flex-start;
+    padding-top: 0;
+    padding-bottom: 0;
+    gap: 8px;
+  }
+
+  .mm-logo-img {
+    height: 70px;
+    width: auto;
+  }
+
+  .mm-nav-btn {
+    padding: 9px 12px;
+  }
+
+  .mm-btn-label {
+    font-size: 14px;
+  }
+}

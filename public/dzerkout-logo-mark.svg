@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="dzerkout mark">
+  <defs>
+    <linearGradient id="dz-white" x1="178" y1="254" x2="842" y2="468" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f7f5ef"/>
+      <stop offset="0.42" stop-color="#ddd9d2"/>
+      <stop offset="0.72" stop-color="#f4f2ed"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="dz-green" x1="154" y1="828" x2="875" y2="438" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#47773f"/>
+      <stop offset="0.45" stop-color="#6b9b5d"/>
+      <stop offset="0.78" stop-color="#5f9055"/>
+      <stop offset="1" stop-color="#3c6e39"/>
+    </linearGradient>
+    <linearGradient id="dz-graphite" x1="318" y1="825" x2="774" y2="649" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#303238"/>
+      <stop offset="0.48" stop-color="#555861"/>
+      <stop offset="1" stop-color="#2b2d33"/>
+    </linearGradient>
+    <filter id="dz-shadow" x="-8%" y="-8%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#dz-shadow)">
+    <!-- Upper off-white angular plate. This preserves the broad top bar and left hook
+         from the selected 8D icon, without the rounded app-tile background. -->
+    <path
+      d="M260 258 H856 L637 456 L467 468 L572 378 H345 L331 438 L188 556 Z"
+      fill="url(#dz-white)"
+    />
+
+    <!-- Center green lightning stroke. -->
+    <path
+      d="M465 468 L878 438 L250 828 H145 L485 563 H363 Z"
+      fill="url(#dz-green)"
+    />
+
+    <!-- Lower graphite plate. -->
+    <path
+      d="M292 826 L478 710 H632 L704 602 H830 L704 826 Z"
+      fill="url(#dz-graphite)"
+    />
+  </g>
+</svg>

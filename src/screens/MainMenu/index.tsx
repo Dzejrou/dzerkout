@@ -1,197 +1,80 @@
+import "./MainMenu.css";
 import { useNavigate } from "react-router-dom";
 import { useSessionStore } from "../../store/sessionStore";
-import { tokens } from "../../theme/tokens";
 
-interface MenuItem {
+const LEFT_NAV = [
+  { to: "/exercises", label: "Exercises", icon: "⊞" },
+  { to: "/sets",      label: "Sets",      icon: "≡" },
+  { to: "/workouts",  label: "Workouts",  icon: "⊟" },
+];
+
+const RIGHT_NAV = [
+  { to: "/runner",  label: "Runner",  icon: "▶" },
+  { to: "/history", label: "History", icon: "↺" },
+  { to: "/stats",   label: "Stats",   icon: "◎" },
+];
+
+interface NavBtnProps {
   to: string;
   label: string;
-  desc: string;
   icon: string;
+  navigate: (to: string) => void;
+  activeBadge?: boolean;
 }
 
-const MENU_ITEMS: MenuItem[] = [
-  { to: "/exercises", label: "Exercises", desc: "Manage your exercise library.", icon: "⊞" },
-  { to: "/sets",      label: "Sets",      desc: "Create and organize your sets.", icon: "≡" },
-  { to: "/workouts",  label: "Workouts",  desc: "Build and edit your workout templates.", icon: "⊟" },
-  { to: "/runner",    label: "Runner",    desc: "Start and run your workouts.", icon: "▶" },
-  { to: "/history",   label: "History",   desc: "View your past workout sessions.", icon: "↺" },
-  { to: "/stats",     label: "Stats",     desc: "See aggregates across completed workouts.", icon: "◎" },
-];
+function NavBtn({ to, label, icon, navigate, activeBadge }: NavBtnProps) {
+  return (
+    <button className="mm-nav-btn" onClick={() => navigate(to)}>
+      <span className="mm-icon-box">{icon}</span>
+      <span className="mm-btn-label">{label}</span>
+      {activeBadge && <span className="mm-active-badge">Active</span>}
+    </button>
+  );
+}
 
 export default function MainMenu() {
   const navigate = useNavigate();
   const sessionId = useSessionStore((s) => s.sessionId);
+  const hasSession = !!sessionId;
 
   return (
-    <div style={rootStyle}>
-      {/* Options button */}
-      <div style={topBarStyle}>
-        <div style={{ flex: 1 }} />
-        <button style={optionsBtnStyle} onClick={() => navigate("/settings")}>
+    <div className="mm-root">
+      {/* Header: breathing space + title. Options button is absolute top-right. */}
+      <div className="mm-header">
+        <button className="mm-options-btn" onClick={() => navigate("/settings")}>
           ⚙ Options
         </button>
+        <div className="mm-title-area">
+          <h1 className="mm-title">dzerkout</h1>
+          <p className="mm-tagline">Build. Plan. Perform.</p>
+        </div>
       </div>
 
-      {/* Logo */}
-      <div style={logoAreaStyle}>
-        <h1 style={logoStyle}>dzerkout</h1>
-        <p style={taglineStyle}>Build. Plan. Perform.</p>
-      </div>
+      {/* Three-zone dashboard */}
+      <div className="mm-content">
+        <div className="mm-col">
+          {LEFT_NAV.map(({ to, label, icon }) => (
+            <NavBtn key={to} to={to} label={label} icon={icon} navigate={navigate} />
+          ))}
+        </div>
 
-      {/* Menu items */}
-      <div style={listStyle}>
-        {MENU_ITEMS.map(({ to, label, desc, icon }) => {
-          const isRunner = label === "Runner";
-          const hasSession = !!sessionId;
-          const showBadge = isRunner && hasSession;
+        <div className="mm-center">
+          <img src="/dzerkout-logo-mark.svg" alt="dzerkout" className="mm-logo-img" />
+        </div>
 
-          return (
-            <button
+        <div className="mm-col">
+          {RIGHT_NAV.map(({ to, label, icon }) => (
+            <NavBtn
               key={to}
-              onClick={() => navigate(to)}
-              style={itemStyle}
-            >
-              <div style={iconBoxStyle}>
-                <span style={iconTextStyle}>{icon}</span>
-              </div>
-              <div style={itemBodyStyle}>
-                <span style={itemLabelStyle}>{label}</span>
-                {showBadge && <span style={activeBadgeStyle}>Active</span>}
-                <span style={itemDescStyle}>{desc}</span>
-              </div>
-              <span style={chevronStyle}>›</span>
-            </button>
-          );
-        })}
+              to={to}
+              label={label}
+              icon={icon}
+              navigate={navigate}
+              activeBadge={label === "Runner" && hasSession}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const rootStyle: React.CSSProperties = {
-  minHeight: "100%",
-  background: tokens.bg,
-  color: tokens.textPrimary,
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-};
-
-const topBarStyle: React.CSSProperties = {
-  width: "100%",
-  maxWidth: 700,
-  display: "flex",
-  alignItems: "center",
-  padding: "14px 20px 0",
-  boxSizing: "border-box",
-};
-
-const optionsBtnStyle: React.CSSProperties = {
-  background: tokens.card,
-  border: `1px solid ${tokens.divider}`,
-  borderRadius: 8,
-  color: tokens.textFaint,
-  cursor: "pointer",
-  fontSize: 13,
-  fontWeight: 500,
-  padding: "6px 14px",
-};
-
-const logoAreaStyle: React.CSSProperties = {
-  textAlign: "center",
-  padding: "var(--menu-logo-pad-t) 20px var(--menu-logo-pad-b)",
-};
-
-const logoStyle: React.CSSProperties = {
-  fontSize: 48,
-  fontWeight: 800,
-  margin: 0,
-  color: tokens.textPrimary,
-  letterSpacing: "-0.02em",
-};
-
-const taglineStyle: React.CSSProperties = {
-  fontSize: 15,
-  color: tokens.textSecondary,
-  margin: "8px 0 0",
-};
-
-const listStyle: React.CSSProperties = {
-  width: "100%",
-  maxWidth: 700,
-  padding: "0 20px 32px",
-  boxSizing: "border-box",
-  display: "flex",
-  flexDirection: "column",
-  gap: 10,
-};
-
-const itemStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 16,
-  padding: "14px 16px",
-  background: tokens.card,
-  border: `1px solid ${tokens.divider}`,
-  borderRadius: 14,
-  cursor: "pointer",
-  textAlign: "left",
-  width: "100%",
-  color: "inherit",
-};
-
-const iconBoxStyle: React.CSSProperties = {
-  width: 46,
-  height: 46,
-  borderRadius: 10,
-  background: tokens.cardSubtle,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-};
-
-const iconTextStyle: React.CSSProperties = {
-  fontSize: 20,
-  color: tokens.iconText,
-  lineHeight: 1,
-};
-
-const itemBodyStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  gap: 3,
-  minWidth: 0,
-};
-
-const itemLabelStyle: React.CSSProperties = {
-  fontSize: 18,
-  fontWeight: 600,
-  color: tokens.textPrimary,
-};
-
-const itemDescStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: tokens.textSecondary,
-};
-
-const activeBadgeStyle: React.CSSProperties = {
-  alignSelf: "flex-start",
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  background: tokens.green,
-  color: tokens.greenText,
-  padding: "2px 7px",
-  borderRadius: 4,
-};
-
-const chevronStyle: React.CSSProperties = {
-  fontSize: 22,
-  color: tokens.textMuted,
-  flexShrink: 0,
-};
