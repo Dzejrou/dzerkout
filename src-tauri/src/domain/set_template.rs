@@ -42,8 +42,7 @@ pub async fn create(
         .map_err(Into::into)
 }
 
-/// Create a workout-local (owned) set template.  Used in tests and by the
-/// workout_template domain when forking/cloning sets.
+#[cfg(test)]
 pub async fn create_local(
     pool: &SqlitePool,
     name: &str,

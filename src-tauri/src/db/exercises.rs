@@ -127,20 +127,6 @@ pub async fn null_assignment_exercise_ids(
 
 // ── Tag helpers ───────────────────────────────────────────────────────────────
 
-/// Fetch tags for a single exercise, ordered alphabetically.
-pub async fn fetch_tags(
-    conn: &mut SqliteConnection,
-    exercise_id: &str,
-) -> Result<Vec<String>, sqlx::Error> {
-    let rows = sqlx::query!(
-        "SELECT tag FROM exercise_tags WHERE exercise_id = ? ORDER BY tag",
-        exercise_id
-    )
-    .fetch_all(conn)
-    .await?;
-    Ok(rows.into_iter().map(|r| r.tag).collect())
-}
-
 /// Fetch all tags for all exercises in one query.
 /// Returns a map from exercise_id to sorted tag list.
 pub async fn fetch_all_tags(pool: &SqlitePool) -> Result<HashMap<String, Vec<String>>, sqlx::Error> {

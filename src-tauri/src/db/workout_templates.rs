@@ -334,18 +334,3 @@ pub async fn validate_card_belongs_to_ref(
     }
 }
 
-pub async fn count_total_cards(
-    conn: &mut SqliteConnection,
-    workout_id: &str,
-) -> Result<i64, sqlx::Error> {
-    let row = sqlx::query!(
-        "SELECT COUNT(stc.id) AS cnt
-         FROM workout_template_set_refs wtsr
-         JOIN set_template_cards stc ON stc.set_template_id = wtsr.set_template_id
-         WHERE wtsr.workout_template_id = ?",
-        workout_id
-    )
-    .fetch_one(conn)
-    .await?;
-    Ok(row.cnt)
-}

@@ -16,25 +16,6 @@ pub async fn find_all(pool: &SqlitePool) -> Result<Vec<SetTemplateSummaryRow>, s
     .await
 }
 
-pub async fn find_local_for_workout(
-    conn: &mut SqliteConnection,
-    workout_id: &str,
-) -> Result<Vec<SetTemplateSummaryRow>, sqlx::Error> {
-    sqlx::query_as!(
-        SetTemplateSummaryRow,
-        "SELECT st.id, st.name, st.notes, st.owning_workout_template_id,
-                st.created_at, st.updated_at,
-                COUNT(stc.id) AS card_count
-         FROM set_templates st
-         LEFT JOIN set_template_cards stc ON stc.set_template_id = st.id
-         WHERE st.owning_workout_template_id = ?
-         GROUP BY st.id ORDER BY st.name",
-        workout_id
-    )
-    .fetch_all(conn)
-    .await
-}
-
 pub async fn find_by_id(
     conn: &mut SqliteConnection,
     id: &str,
@@ -254,23 +235,6 @@ pub async fn find_all_for_export(
         SetTemplateRow,
         "SELECT id, name, notes, owning_workout_template_id, created_at, updated_at
          FROM set_templates ORDER BY name"
-    )
-    .fetch_all(conn)
-    .await
-}
-
-/// Returns every set_template that appears in at least one workout_template_set_ref,
-/// ordered by name.  Used by the "workouts" export scope.
-pub async fn find_referenced_by_workouts(
-    conn: &mut SqliteConnection,
-) -> Result<Vec<SetTemplateRow>, sqlx::Error> {
-    sqlx::query_as!(
-        SetTemplateRow,
-        "SELECT DISTINCT st.id, st.name, st.notes, st.owning_workout_template_id,
-                st.created_at, st.updated_at
-         FROM set_templates st
-         JOIN workout_template_set_refs wtsr ON wtsr.set_template_id = st.id
-         ORDER BY st.name"
     )
     .fetch_all(conn)
     .await

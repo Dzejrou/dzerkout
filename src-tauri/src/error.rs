@@ -11,8 +11,6 @@ pub enum AppError {
     Validation(String),
     #[error("Conflict: {0}")]
     Conflict(String),
-    #[error("No active session")]
-    NoActiveSession,
     #[error("Database error: {0}")]
     Database(String),
 }
