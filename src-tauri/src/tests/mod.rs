@@ -485,7 +485,7 @@ async fn test_advance_across_set_boundary(pool: SqlitePool) {
 
 #[sqlx::test]
 async fn test_retreat_within_same_set(pool: SqlitePool) {
-    let (session_id, set_ids, ex_ids) = make_two_set_session(&pool).await;
+    let (session_id, _set_ids, _ex_ids) = make_two_set_session(&pool).await;
 
     // Advance to set1_ex1
     session::advance_exercise(&pool, &session_id).await.unwrap();
