@@ -42,7 +42,7 @@ export default function MainMenu() {
       {/* Header: breathing space + title. Options button is absolute top-right. */}
       <div className="mm-header">
         <button className="mm-options-btn" onClick={() => navigate("/settings")}>
-          ⚙ Options
+          ⚙ Settings
         </button>
         <div className="mm-title-area">
           <h1 className="mm-title">dzerkout</h1>

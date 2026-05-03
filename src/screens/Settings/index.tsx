@@ -17,6 +17,30 @@ import { saveJsonToFile, pickJsonFile, readJsonFile } from "../../api/fileExport
 import type { ImportResult } from "../../types/library";
 import { ConfirmModal } from "../../components/ConfirmModal";
 
+// ── Token aliases ─────────────────────────────────────────────────────────────
+
+const {
+  bg: BG,
+  bgElevated: BG_ELEVATED,
+  divider: DIVIDER,
+  textPrimary: TEXT_PRIMARY,
+  textMuted: TEXT_MUTED,
+  textDisabled: TEXT_DISABLED,
+  textLight: TEXT_LIGHT,
+  surfaceSelected: SURFACE_SELECTED,
+} = tokens;
+
+// ── Category definitions ──────────────────────────────────────────────────────
+
+type SettingsCategory = "appearance" | "runner" | "sound" | "data";
+
+const CATEGORIES: { value: SettingsCategory; label: string; desc: string }[] = [
+  { value: "appearance", label: "Appearance", desc: "Theme, font, and display"   },
+  { value: "runner",     label: "Runner",     desc: "Auto-advance and timing"    },
+  { value: "sound",      label: "Sound",      desc: "Cues and audio feedback"    },
+  { value: "data",       label: "Data",       desc: "Backup, import, and reset"  },
+];
+
 // ── Phase logging ─────────────────────────────────────────────────────────────
 
 function importLog(opId: number, phase: string, detail?: string) {
@@ -25,7 +49,6 @@ function importLog(opId: number, phase: string, detail?: string) {
 }
 
 // ── Shared data-op mutex ──────────────────────────────────────────────────────
-// Prevents import, clear, and reset from running concurrently.
 
 interface DataOpCtx {
   isDataBusy: boolean;
@@ -66,7 +89,7 @@ async function hydrateCoreLists(qc: QueryClient) {
   ]);
 }
 
-// ── Toggle ────────────────────────────────────────────────────────────────────
+// ── Shared UI primitives ──────────────────────────────────────────────────────
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -104,8 +127,6 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   );
 }
 
-// ── Setting row ───────────────────────────────────────────────────────────────
-
 interface SettingRowProps {
   label: string;
   description?: string;
@@ -125,8 +146,6 @@ function SettingRow({ label, description, control, disabled }: SettingRowProps) 
   );
 }
 
-// ── Section card ──────────────────────────────────────────────────────────────
-
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={sectionStyle}>
@@ -140,15 +159,12 @@ function ComingSoonBadge() {
   return <span style={comingSoonStyle}>Coming soon</span>;
 }
 
-// ── Slider control ────────────────────────────────────────────────────────────
-
 interface SliderControlProps {
   value: number;
   onChange: (v: number) => void;
   min: number;
   max: number;
   step: number;
-  /** Format the current value for display, e.g. (v) => `${Math.round(v * 100)}%` */
   format: (v: number) => string;
 }
 
@@ -169,12 +185,9 @@ function SliderControl({ value, onChange, min, max, step, format }: SliderContro
   );
 }
 
-// ── Font selector ─────────────────────────────────────────────────────────────
-
 function FontSelector() {
   const fontPreset = useSettingsStore((s) => s.fontPreset);
   const setFontPreset = useSettingsStore((s) => s.setFontPreset);
-
   return (
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
       {FONT_PRESET_KEYS.map((key: FontPresetKey) => {
@@ -192,7 +205,6 @@ function FontSelector() {
               cursor: "pointer",
               fontSize: 13,
               fontWeight: active ? 600 : 400,
-              /* Each chip previews its own font so the user can see the difference */
               fontFamily: fontPresets[key].stack,
               transition: "background 0.12s, border-color 0.12s, color 0.12s",
             }}
@@ -205,12 +217,9 @@ function FontSelector() {
   );
 }
 
-// ── Theme selector ────────────────────────────────────────────────────────────
-
 function ThemeSelector() {
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
-
   return (
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
       {THEME_KEYS.map((key: ThemeKey) => {
@@ -239,32 +248,119 @@ function ThemeSelector() {
   );
 }
 
-// ── Library section ───────────────────────────────────────────────────────────
+// ── Category view: Appearance ─────────────────────────────────────────────────
+
+function AppearanceCategoryView() {
+  const runnerCardSize = useSettingsStore((s) => s.runnerCardSize);
+  const setRunnerCardSize = useSettingsStore((s) => s.setRunnerCardSize);
+  return (
+    <SectionCard title="Appearance">
+      <SettingRow
+        label="Theme"
+        description="Color scheme used throughout the app."
+        control={<ThemeSelector />}
+      />
+      <div style={rowDividerStyle} />
+      <SettingRow
+        label="Font"
+        description="UI typeface applied across the entire app."
+        control={<FontSelector />}
+      />
+      <div style={rowDividerStyle} />
+      <SettingRow
+        label="Runner card size"
+        description="Height of exercise queue cards in the workout runner."
+        control={
+          <SliderControl
+            value={runnerCardSize}
+            onChange={setRunnerCardSize}
+            min={0.5}
+            max={2.0}
+            step={0.1}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+        }
+      />
+      <div style={rowDividerStyle} />
+      <SettingRow
+        label="Additional themes"
+        description="Light mode and custom palettes."
+        control={<ComingSoonBadge />}
+        disabled
+      />
+    </SectionCard>
+  );
+}
+
+// ── Category view: Runner ─────────────────────────────────────────────────────
+
+function RunnerCategoryView() {
+  const autoAdvance = useSettingsStore((s) => s.autoAdvance);
+  const setAutoAdvance = useSettingsStore((s) => s.setAutoAdvance);
+  const autoStartNextSet = useSettingsStore((s) => s.autoStartNextSet);
+  const setAutoStartNextSet = useSettingsStore((s) => s.setAutoStartNextSet);
+  return (
+    <SectionCard title="Runner">
+      <SettingRow
+        label="Auto-advance exercises"
+        description="When an exercise has a duration target, automatically move to the next exercise when time is up."
+        control={<Toggle value={autoAdvance} onChange={setAutoAdvance} />}
+      />
+      <div style={rowDividerStyle} />
+      <SettingRow
+        label="Auto-start next set"
+        description="Automatically start the next set when between-set rest reaches zero."
+        control={<Toggle value={autoStartNextSet} onChange={setAutoStartNextSet} />}
+      />
+    </SectionCard>
+  );
+}
+
+// ── Category view: Sound ──────────────────────────────────────────────────────
+
+function SoundCategoryView() {
+  const soundCues = useSettingsStore((s) => s.soundCues);
+  const setSoundCues = useSettingsStore((s) => s.setSoundCues);
+  return (
+    <SectionCard title="Sound">
+      <SettingRow
+        label="Sound cues"
+        description="Play countdown beeps near the end of timed exercises and between-set rest."
+        control={<Toggle value={soundCues} onChange={setSoundCues} />}
+      />
+      <div style={rowDividerStyle} />
+      <SettingRow
+        label="Preview cue"
+        description="Play the full countdown sequence right now so you know what to expect."
+        control={
+          <button onClick={playPreviewCue} style={previewBtnStyle}>
+            ▶ Preview
+          </button>
+        }
+      />
+    </SectionCard>
+  );
+}
+
+// ── Category view: Data ───────────────────────────────────────────────────────
+// Contains export/import (LibrarySection) and the Danger Zone.
 
 function LibrarySection() {
   const queryClient = useQueryClient();
   const { isDataBusy, tryAcquire, releaseDataBusy } = useDataOp();
 
-  // Clipboard export state
   const [exportStatus, setExportStatus] = useState<"idle" | "loading" | "copied" | "error">("idle");
   const [exportFallbackJson, setExportFallbackJson] = useState<string | null>(null);
-
-  // File export state
   const [fileExportStatus, setFileExportStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
-
-  // Clipboard import state
   const [importText, setImportText] = useState("");
   const [importStatus, setImportStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
-  // File import state — phases allow the label to reflect where we actually are
   type FileImportStatus = "idle" | "picking" | "reading" | "importing" | "refreshing" | "success" | "error";
   const [fileImportStatus, setFileImportStatus] = useState<FileImportStatus>("idle");
   const [fileImportResult, setFileImportResult] = useState<ImportResult | null>(null);
   const [fileImportError, setFileImportError] = useState<string | null>(null);
-  // Monotonically-increasing op-id: guards against stale async completions
-  // reaching setState after a cancel or a second tap on Android.
   const fileImportOpRef = useRef(0);
 
   async function handleExport() {
@@ -277,7 +373,6 @@ function LibrarySection() {
         setExportStatus("copied");
         setTimeout(() => setExportStatus("idle"), 2500);
       } catch {
-        // Clipboard write failed — show JSON inline so the user can copy it manually
         setExportFallbackJson(json);
         setExportStatus("error");
       }
@@ -292,10 +387,7 @@ function LibrarySection() {
     try {
       const json = await libraryApi.exportJson();
       const outcome = await saveJsonToFile(json);
-      if (outcome === "cancelled") {
-        setFileExportStatus("idle");
-        return;
-      }
+      if (outcome === "cancelled") { setFileExportStatus("idle"); return; }
       setFileExportStatus("saved");
       setTimeout(() => setFileExportStatus("idle"), 2500);
     } catch {
@@ -326,7 +418,6 @@ function LibrarySection() {
   }
 
   function cancelFileImport() {
-    // Bump op-id so any in-flight async chain becomes stale, then reset status.
     fileImportOpRef.current++;
     setFileImportStatus("idle");
     setFileImportError(null);
@@ -335,54 +426,35 @@ function LibrarySection() {
 
   async function handleFileImport() {
     if (!tryAcquire()) return;
-
     const opId = ++fileImportOpRef.current;
-    // owned() returns true only for the most-recent invocation.
     const owned = () => fileImportOpRef.current === opId;
-
     setFileImportResult(null);
     setFileImportError(null);
     setFileImportStatus("picking");
-
     try {
       importLog(opId, "picking", "entering picker");
       const filePath = await pickJsonFile();
       importLog(opId, "picker-returned", filePath ?? "null");
-
-      if (!owned()) {
-        importLog(opId, "stale", "discarding — newer op is active");
-        return;
-      }
-      if (filePath == null) {
-        importLog(opId, "cancelled", "picker returned null");
-        setFileImportStatus("idle");
-        return;
-      }
-
+      if (!owned()) { importLog(opId, "stale", "discarding — newer op is active"); return; }
+      if (filePath == null) { importLog(opId, "cancelled", "picker returned null"); setFileImportStatus("idle"); return; }
       setFileImportStatus("reading");
       importLog(opId, "reading", filePath);
       const json = await readJsonFile(filePath);
       importLog(opId, "reading-done", `${json.length} chars`);
-
       if (!owned()) return;
       const trimmed = json.trim();
       if (!trimmed) throw new Error("Selected file is empty");
-
       setFileImportStatus("importing");
       importLog(opId, "importing");
       const result = await libraryApi.importJson(trimmed);
       importLog(opId, "importing-done", `ex+${result.exercises_created}/upd${result.exercises_updated}`);
-
       if (!owned()) return;
-
       setFileImportStatus("refreshing");
       importLog(opId, "refreshing");
       removeAllAppDataQueries(queryClient);
       await hydrateCoreLists(queryClient);
       importLog(opId, "hydration-done");
-
       if (!owned()) return;
-
       setFileImportResult(result);
       setFileImportStatus("success");
       importLog(opId, "success");
@@ -393,8 +465,6 @@ function LibrarySection() {
         setFileImportStatus("error");
       }
     } finally {
-      // Safety net: if the op is still current and somehow still in a transient
-      // phase (e.g. owned() returned early without updating status), force idle.
       if (owned()) {
         setFileImportStatus((prev) => {
           if (prev === "picking" || prev === "reading" || prev === "importing" || prev === "refreshing") {
@@ -422,11 +492,11 @@ function LibrarySection() {
     : "Export to file";
 
   const fileImportLabel =
-    fileImportStatus === "picking"    ? "Picking file…"
-    : fileImportStatus === "reading"  ? "Reading…"
+    fileImportStatus === "picking"     ? "Picking file…"
+    : fileImportStatus === "reading"   ? "Reading…"
     : fileImportStatus === "importing" ? "Importing…"
     : fileImportStatus === "refreshing" ? "Updating…"
-    : fileImportStatus === "success"  ? "Imported!"
+    : fileImportStatus === "success"   ? "Imported!"
     : "Import from file";
 
   const fileImportBusy =
@@ -440,7 +510,7 @@ function LibrarySection() {
 
   return (
     <div style={sectionStyle}>
-      <h2 style={sectionTitleStyle}>Data</h2>
+      <h2 style={sectionTitleStyle}>Backup</h2>
       <div style={sectionCardStyle}>
         {/* Export row */}
         <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -510,7 +580,7 @@ function LibrarySection() {
               setImportText(e.target.value);
               if (importStatus !== "idle") { setImportStatus("idle"); setImportError(null); setImportResult(null); }
             }}
-            placeholder='Paste exported JSON here…'
+            placeholder="Paste exported JSON here…"
             rows={6}
             style={importTextareaStyle}
           />
@@ -530,20 +600,14 @@ function LibrarySection() {
             <button
               onClick={handleImport}
               disabled={anyImportBusy || isDataBusy || !importText.trim()}
-              style={{
-                ...libBtnStyle,
-                opacity: anyImportBusy || isDataBusy || !importText.trim() ? 0.5 : 1,
-              }}
+              style={{ ...libBtnStyle, opacity: anyImportBusy || isDataBusy || !importText.trim() ? 0.5 : 1 }}
             >
               {importStatus === "loading" ? "Importing…" : "Import from clipboard"}
             </button>
             <button
               onClick={handleFileImport}
               disabled={anyImportBusy || isDataBusy}
-              style={{
-                ...libBtnStyle,
-                opacity: (anyImportBusy && !fileImportBusy) || (isDataBusy && !fileImportBusy) ? 0.5 : 1,
-              }}
+              style={{ ...libBtnStyle, opacity: (anyImportBusy && !fileImportBusy) || (isDataBusy && !fileImportBusy) ? 0.5 : 1 }}
             >
               {fileImportLabel}
             </button>
@@ -574,32 +638,19 @@ function LibrarySection() {
   );
 }
 
-// ── Danger Zone section ───────────────────────────────────────────────────────
-
 type DangerAction = "reset" | "clear" | null;
 
 function DangerZoneSection() {
   const queryClient = useQueryClient();
   const clearSession = useSessionStore((s) => s.clear);
   const { isDataBusy, tryAcquire, releaseDataBusy } = useDataOp();
-
   const [confirming, setConfirming] = useState<DangerAction>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  function openConfirm(action: DangerAction) {
-    setError(null);
-    setSuccessMsg(null);
-    setConfirming(action);
-  }
-
-  function closeConfirm() {
-    if (!loading) {
-      setConfirming(null);
-      setError(null);
-    }
-  }
+  function openConfirm(action: DangerAction) { setError(null); setSuccessMsg(null); setConfirming(action); }
+  function closeConfirm() { if (!loading) { setConfirming(null); setError(null); } }
 
   async function handleReset() {
     if (!tryAcquire()) return;
@@ -644,7 +695,6 @@ function DangerZoneSection() {
     <div style={sectionStyle}>
       <h2 style={sectionTitleStyle}>Danger Zone</h2>
       <div style={sectionCardStyle}>
-        {/* Reset to default library */}
         <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={rowBodyStyle}>
             <span style={rowLabelStyle}>Reset to default library</span>
@@ -661,7 +711,6 @@ function DangerZoneSection() {
           </button>
         </div>
         <div style={rowDividerStyle} />
-        {/* Clear local data */}
         <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={rowBodyStyle}>
             <span style={rowLabelStyle}>Clear local data</span>
@@ -679,9 +728,7 @@ function DangerZoneSection() {
           </button>
         </div>
       </div>
-      {successMsg && (
-        <div style={{ ...importSuccessStyle, marginTop: 10 }}>{successMsg}</div>
-      )}
+      {successMsg && <div style={{ ...importSuccessStyle, marginTop: 10 }}>{successMsg}</div>}
       {confirming === "reset" && (
         <ConfirmModal
           title="Reset to default library?"
@@ -710,20 +757,37 @@ function DangerZoneSection() {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+function DataCategoryView() {
+  return (
+    <>
+      <LibrarySection />
+      <DangerZoneSection />
+    </>
+  );
+}
+
+// ── Left panel: category card ─────────────────────────────────────────────────
+
+function CategoryCard({
+  label, desc, selected, onClick,
+}: { label: string; desc: string; selected: boolean; onClick: () => void }) {
+  return (
+    <div onClick={onClick} style={categoryCardStyle(selected)}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={cardNameStyle}>{label}</p>
+        <p style={cardMetaStyle}>{desc}</p>
+      </div>
+      <span style={cardChevronStyle}>›</span>
+    </div>
+  );
+}
+
+// ── Page root ─────────────────────────────────────────────────────────────────
 
 export default function Settings() {
   const navigate = useNavigate();
-  const autoAdvance = useSettingsStore((s) => s.autoAdvance);
-  const setAutoAdvance = useSettingsStore((s) => s.setAutoAdvance);
-  const soundCues = useSettingsStore((s) => s.soundCues);
-  const setSoundCues = useSettingsStore((s) => s.setSoundCues);
-  const runnerCardSize = useSettingsStore((s) => s.runnerCardSize);
-  const setRunnerCardSize = useSettingsStore((s) => s.setRunnerCardSize);
-  const autoStartNextSet = useSettingsStore((s) => s.autoStartNextSet);
-  const setAutoStartNextSet = useSettingsStore((s) => s.setAutoStartNextSet);
+  const [category, setCategory] = useState<SettingsCategory>("appearance");
 
-  // Shared mutex — prevents import, reset, and clear from running concurrently.
   const dataBusyRef = useRef(false);
   const [isDataBusy, setIsDataBusy] = useState(false);
   const tryAcquire = useCallback(() => {
@@ -739,133 +803,153 @@ export default function Settings() {
 
   return (
     <DataOpContext.Provider value={{ isDataBusy, tryAcquire, releaseDataBusy }}>
-    <div style={rootStyle}>
-      <div style={contentStyle}>
-        <button onClick={() => navigate("/")} style={backBtnStyle}>← Back</button>
-        <h1 style={pageTitleStyle}>Settings</h1>
+      <div style={rootStyle}>
 
-        {/* ── Appearance ─────────────────────────────────────────────────── */}
-        <SectionCard title="Appearance">
-          <SettingRow
-            label="Theme"
-            description="Color scheme used throughout the app."
-            control={<ThemeSelector />}
-          />
-          <div style={rowDividerStyle} />
-          <SettingRow
-            label="Font"
-            description="UI typeface applied across the entire app."
-            control={<FontSelector />}
-          />
-          <div style={rowDividerStyle} />
-          <SettingRow
-            label="Runner card size"
-            description="Height of exercise queue cards in the workout runner."
-            control={
-              <SliderControl
-                value={runnerCardSize}
-                onChange={setRunnerCardSize}
-                min={0.5}
-                max={2.0}
-                step={0.1}
-                format={(v) => `${Math.round(v * 100)}%`}
+        {/* ── Left panel ── */}
+        <div style={leftPanelStyle}>
+          <div style={leftHeaderStyle}>
+            <button onClick={() => navigate("/")} style={backBtnStyle}>← Back</button>
+            <h1 style={pageTitleStyle}>Settings</h1>
+            <p style={pageSubtitleStyle}>Customize your experience.</p>
+          </div>
+          <div style={listStyle}>
+            {CATEGORIES.map(({ value, label, desc }) => (
+              <CategoryCard
+                key={value}
+                label={label}
+                desc={desc}
+                selected={category === value}
+                onClick={() => setCategory(value)}
               />
-            }
-          />
-          <div style={rowDividerStyle} />
-          <SettingRow
-            label="Additional themes"
-            description="Light mode and custom palettes."
-            control={<ComingSoonBadge />}
-            disabled
-          />
-        </SectionCard>
+            ))}
+          </div>
+        </div>
 
-        {/* ── Workout behavior ───────────────────────────────────────────── */}
-        <SectionCard title="Workout Behavior">
-          <SettingRow
-            label="Auto-advance exercises"
-            description="When an exercise has a duration target, automatically move to the next exercise when time is up."
-            control={
-              <Toggle value={autoAdvance} onChange={setAutoAdvance} />
-            }
-          />
-          <div style={rowDividerStyle} />
-          <SettingRow
-            label="Auto-start next set"
-            description="Automatically start the next set when between-set rest reaches zero."
-            control={
-              <Toggle value={autoStartNextSet} onChange={setAutoStartNextSet} />
-            }
-          />
-        </SectionCard>
+        {/* ── Right panel ── */}
+        <div style={rightPanelStyle}>
+          <div style={detailScrollStyle}>
+            {category === "appearance" && <AppearanceCategoryView />}
+            {category === "runner"     && <RunnerCategoryView />}
+            {category === "sound"      && <SoundCategoryView />}
+            {category === "data"       && <DataCategoryView />}
+          </div>
+        </div>
 
-        {/* ── Sound cues ─────────────────────────────────────────────────── */}
-        <SectionCard title="Sound Cues">
-          <SettingRow
-            label="Sound cues"
-            description="Play countdown beeps near the end of timed exercises and between-set rest."
-            control={<Toggle value={soundCues} onChange={setSoundCues} />}
-          />
-          <div style={rowDividerStyle} />
-          <SettingRow
-            label="Preview cue"
-            description="Play the full countdown sequence right now so you know what to expect."
-            control={
-              <button onClick={playPreviewCue} style={previewBtnStyle}>
-                ▶ Preview
-              </button>
-            }
-          />
-        </SectionCard>
-
-        {/* ── Library ────────────────────────────────────────────────────── */}
-        <LibrarySection />
-
-        {/* ── Danger Zone ────────────────────────────────────────────────── */}
-        <DangerZoneSection />
-
-        <p style={footerStyle}>More options will appear here as features ship.</p>
       </div>
-    </div>
     </DataOpContext.Provider>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
+// Root / layout
+
 const rootStyle: React.CSSProperties = {
-  minHeight: "100%",
-  background: tokens.bg,
-  color: tokens.textPrimary,
+  display: "flex",
+  height: "100%",
+  background: BG,
+  color: TEXT_PRIMARY,
+  overflow: "hidden",
 };
 
-const contentStyle: React.CSSProperties = {
-  maxWidth: 640,
-  margin: "0 auto",
-  padding: "16px 20px 48px",
+const leftPanelStyle: React.CSSProperties = {
+  width: "var(--left-panel-w)",
+  flexShrink: 0,
+  display: "flex",
+  flexDirection: "column",
+  borderRight: `1px solid ${DIVIDER}`,
+  overflow: "hidden",
 };
+
+const leftHeaderStyle: React.CSSProperties = {
+  padding: "14px 20px 10px",
+  flexShrink: 0,
+  borderBottom: `1px solid ${DIVIDER}`,
+};
+
+const listStyle: React.CSSProperties = {
+  flex: 1,
+  overflowY: "auto",
+  padding: "8px 0",
+};
+
+const rightPanelStyle: React.CSSProperties = {
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  background: BG_ELEVATED,
+};
+
+const detailScrollStyle: React.CSSProperties = {
+  flex: 1,
+  overflowY: "auto",
+  padding: "24px 32px 48px",
+};
+
+// Left panel elements
 
 const backBtnStyle: React.CSSProperties = {
   background: tokens.surfaceActive,
   border: `1px solid ${tokens.borderStrong}`,
   borderRadius: 8,
-  color: tokens.textLight,
+  color: TEXT_LIGHT,
   cursor: "pointer",
   fontSize: 13,
   fontWeight: 500,
   padding: "6px 14px",
   display: "block",
-  marginBottom: 14,
+  marginBottom: 10,
 };
 
 const pageTitleStyle: React.CSSProperties = {
   fontSize: 34,
   fontWeight: 800,
-  margin: "0 0 28px",
+  margin: "0 0 4px",
   letterSpacing: "-0.02em",
-  color: tokens.textPrimary,
+  color: TEXT_PRIMARY,
 };
+
+const pageSubtitleStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: TEXT_MUTED,
+  margin: 0,
+};
+
+function categoryCardStyle(selected: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    padding: "14px 20px",
+    cursor: "pointer",
+    background: selected ? SURFACE_SELECTED : "transparent",
+    boxShadow: selected ? `inset 3px 0 0 ${tokens.greenBadgeText}` : "none",
+    borderBottom: `1px solid ${DIVIDER}`,
+    transition: "background 0.1s",
+  };
+}
+
+const cardNameStyle: React.CSSProperties = {
+  margin: 0,
+  fontWeight: 700,
+  fontSize: 16,
+  color: TEXT_PRIMARY,
+};
+
+const cardMetaStyle: React.CSSProperties = {
+  margin: "2px 0 0",
+  fontSize: 12,
+  color: TEXT_MUTED,
+};
+
+const cardChevronStyle: React.CSSProperties = {
+  fontSize: 20,
+  color: TEXT_DISABLED,
+  marginLeft: 12,
+  flexShrink: 0,
+};
+
+// Section / row primitives (used by all category views)
 
 const sectionStyle: React.CSSProperties = {
   marginBottom: 28,
@@ -924,7 +1008,6 @@ const rowDividerStyle: React.CSSProperties = {
   margin: "0 18px",
 };
 
-
 const comingSoonStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
@@ -955,13 +1038,6 @@ const previewBtnStyle: React.CSSProperties = {
   cursor: "pointer",
   fontSize: 13,
   fontWeight: 600,
-};
-
-const footerStyle: React.CSSProperties = {
-  textAlign: "center",
-  fontSize: 12,
-  color: tokens.textMuted,
-  marginTop: 8,
 };
 
 const libBtnStyle: React.CSSProperties = {

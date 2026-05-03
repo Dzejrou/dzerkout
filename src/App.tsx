@@ -50,7 +50,7 @@ function AppShell() {
   const confirmModal = useUiStore((s) => s.confirmModal);
   const closeConfirmModal = useUiStore((s) => s.closeConfirmModal);
   const location = useLocation();
-  const noScroll = ["/runner", "/workouts", "/history", "/sets", "/exercises", "/stats"].includes(location.pathname);
+  const noScroll = ["/runner", "/workouts", "/history", "/sets", "/exercises", "/stats", "/settings"].includes(location.pathname);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
