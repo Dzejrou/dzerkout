@@ -16,6 +16,7 @@ dist-ssr/
 .vite/
 .pnpm-store/
 vendor/
+scripts/generated/
 
 logs/
 *.log
