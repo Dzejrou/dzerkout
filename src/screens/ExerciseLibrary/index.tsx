@@ -54,6 +54,9 @@ function DetailPane({
       <div style={detailHeaderStyle}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={detailTitleStyle}>{exercise.name}</h1>
+          {exercise.is_catalog && (
+            <span style={catalogBadgeDetailStyle}>Catalog</span>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
           <button onClick={onEdit} style={editBtnStyle}>
@@ -161,6 +164,14 @@ function DetailPane({
               )}
             </>
           )}
+          {exercise.is_catalog && exercise.catalog_source && (
+            <>
+              <DetailRow icon="📦" label="Source" value={exercise.catalog_source} />
+              {exercise.catalog_id && (
+                <DetailRow icon="#" label="Catalog ID" value={exercise.catalog_id} />
+              )}
+            </>
+          )}
           <DetailRow icon="📅" label="Created" value={formatDateFull(exercise.created_at)} />
           <DetailRow icon="✏" label="Last updated" value={formatDateFull(exercise.updated_at)} />
         </div>
@@ -229,6 +240,7 @@ export default function ExerciseLibrary() {
   const [modal, setModal] = useState<Modal | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [filterSource, setFilterSource] = useState<"" | "user" | "catalog">("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterEquipment, setFilterEquipment] = useState("");
   const [filterLevel, setFilterLevel] = useState("");
@@ -248,6 +260,8 @@ export default function ExerciseLibrary() {
 
   const filtered = exercises.filter((e) => {
     if (!e.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterSource === "user" && e.is_catalog) return false;
+    if (filterSource === "catalog" && !e.is_catalog) return false;
     if (filterCategory && e.category !== filterCategory) return false;
     if (filterEquipment && e.equipment !== filterEquipment) return false;
     if (filterLevel && e.level !== filterLevel) return false;
@@ -345,6 +359,22 @@ export default function ExerciseLibrary() {
             </button>
           </div>
 
+          {/* Source toggle */}
+          <div style={sourceToggleRowStyle}>
+            {(["", "user", "catalog"] as const).map((src) => (
+              <button
+                key={src || "all"}
+                onClick={() => setFilterSource(src)}
+                style={{
+                  ...sourceToggleBtnStyle,
+                  ...(filterSource === src ? sourceToggleActiveBtnStyle : {}),
+                }}
+              >
+                {src === "" ? "All" : src === "user" ? "My exercises" : "Catalog"}
+              </button>
+            ))}
+          </div>
+
           {/* Filters toggle row */}
           <div style={filterToggleRowStyle}>
             <button
@@ -428,15 +458,17 @@ export default function ExerciseLibrary() {
               >
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                   <div style={exNameStyle}>{ex.name}</div>
-                  {ex.tags.length > 0 ? (
-                    <div style={exTagsRowStyle}>
-                      {ex.tags.map((t) => (
-                        <span key={t} style={exTagChipStyle}>{t}</span>
-                      ))}
-                    </div>
-                  ) : ex.notes ? (
-                    <div style={exNotesStyle}>{ex.notes}</div>
-                  ) : null}
+                  <div style={exTagsRowStyle}>
+                    {ex.is_catalog && (
+                      <span style={catalogBadgeStyle}>Catalog</span>
+                    )}
+                    {ex.tags.map((t) => (
+                      <span key={t} style={exTagChipStyle}>{t}</span>
+                    ))}
+                    {!ex.is_catalog && ex.tags.length === 0 && ex.notes && (
+                      <span style={exNotesStyle}>{ex.notes}</span>
+                    )}
+                  </div>
                 </div>
                 <span style={chevronStyle}>›</span>
               </button>
@@ -457,7 +489,7 @@ export default function ExerciseLibrary() {
             onDelete={() => handleDeleteClick(selected)}
           />
         ) : (
-          <EmptyState isFiltered={!!search || activeFilterCount > 0} />
+          <EmptyState isFiltered={!!search || !!filterSource || activeFilterCount > 0} />
         )}
       </div>
 
@@ -931,4 +963,58 @@ const filterSelectStyle: React.CSSProperties = {
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238e8e93' d='M5 6L0 0h10z'/%3E%3C/svg%3E")`,
   backgroundRepeat: "no-repeat",
   backgroundPosition: "right 7px center",
+};
+
+const sourceToggleRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 4,
+  marginTop: 10,
+  marginBottom: 2,
+};
+
+const sourceToggleBtnStyle: React.CSSProperties = {
+  flex: 1,
+  padding: "5px 0",
+  borderRadius: 6,
+  border: `1px solid ${BORDER}`,
+  background: "transparent",
+  color: TEXT_SECONDARY,
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 500,
+  textAlign: "center",
+};
+
+const sourceToggleActiveBtnStyle: React.CSSProperties = {
+  background: tokens.purpleBg,
+  border: `1px solid ${tokens.purpleBorder}`,
+  color: tokens.purple,
+  fontWeight: 700,
+};
+
+const catalogBadgeStyle: React.CSSProperties = {
+  display: "inline-block",
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: tokens.purple,
+  background: tokens.purpleBg,
+  border: `1px solid ${tokens.purpleBorder}`,
+  borderRadius: 4,
+  padding: "1px 6px",
+};
+
+const catalogBadgeDetailStyle: React.CSSProperties = {
+  display: "inline-block",
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: tokens.purple,
+  background: tokens.purpleBg,
+  border: `1px solid ${tokens.purpleBorder}`,
+  borderRadius: 5,
+  padding: "2px 8px",
+  marginTop: 6,
 };
