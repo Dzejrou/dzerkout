@@ -19,6 +19,94 @@ pub const VALID_EXERCISE_TAGS: &[&str] = &[
     "eccentric",
 ];
 
+// ── Exercise catalog metadata constants ───────────────────────────────────────
+
+pub const VALID_EXERCISE_CATEGORIES: &[&str] = &[
+    "strength",
+    "stretching",
+    "cardio",
+    "plyometrics",
+    "powerlifting",
+    "olympic weightlifting",
+    "strongman",
+    "yoga",
+];
+
+pub const VALID_EXERCISE_EQUIPMENT: &[&str] = &[
+    "none",
+    "body only",
+    "barbell",
+    "dumbbell",
+    "cable",
+    "machine",
+    "kettlebells",
+    "bands",
+    "medicine ball",
+    "exercise ball",
+    "foam roll",
+    "e-z curl bar",
+    "other",
+];
+
+pub const VALID_EXERCISE_LEVELS: &[&str] = &["beginner", "intermediate", "expert"];
+pub const VALID_EXERCISE_MECHANICS: &[&str] = &["compound", "isolation"];
+pub const VALID_EXERCISE_FORCES: &[&str] = &["push", "pull", "static"];
+
+pub const VALID_EXERCISE_MUSCLES: &[&str] = &[
+    "abdominals",
+    "abductors",
+    "adductors",
+    "biceps",
+    "calves",
+    "chest",
+    "forearms",
+    "glutes",
+    "hamstrings",
+    "lats",
+    "lower back",
+    "middle back",
+    "neck",
+    "quadriceps",
+    "shoulders",
+    "traps",
+    "triceps",
+];
+
+// ── Exercise catalog input types ──────────────────────────────────────────────
+
+/// Optional catalog metadata for create/update.
+/// All fields default to None / false so existing callers that omit it are unaffected.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ExerciseMeta {
+    #[serde(default)]
+    pub catalog_source: Option<String>,
+    #[serde(default)]
+    pub catalog_id: Option<String>,
+    #[serde(default)]
+    pub is_catalog: bool,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub equipment: Option<String>,
+    #[serde(default)]
+    pub level: Option<String>,
+    #[serde(default)]
+    pub mechanic: Option<String>,
+    #[serde(default)]
+    pub force: Option<String>,
+    /// JSON array of instruction strings, e.g. `["Step 1", "Step 2"]`.
+    /// Validated in the domain layer before writing.
+    #[serde(default)]
+    pub instructions_json: Option<String>,
+}
+
+/// One muscle assignment for an exercise.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExerciseMuscleInput {
+    pub muscle: String,
+    pub role: String,
+}
+
 // ── Row types returned from DB queries ─────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -27,12 +115,20 @@ pub struct ExerciseRow {
     pub name: String,
     pub notes: Option<String>,
     pub image_url: Option<String>,
+    pub catalog_source: Option<String>,
+    pub catalog_id: Option<String>,
+    pub is_catalog: i64,
+    pub category: Option<String>,
+    pub equipment: Option<String>,
+    pub level: Option<String>,
+    pub mechanic: Option<String>,
+    pub force: Option<String>,
+    pub instructions_json: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
 
-/// Enriched exercise returned to callers — includes the `tags` vec that cannot
-/// be expressed as a plain `sqlx::FromRow` field.
+/// Enriched exercise returned to callers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Exercise {
     pub id: String,
@@ -40,18 +136,45 @@ pub struct Exercise {
     pub notes: Option<String>,
     pub image_url: Option<String>,
     pub tags: Vec<String>,
+    pub catalog_source: Option<String>,
+    pub catalog_id: Option<String>,
+    pub is_catalog: bool,
+    pub category: Option<String>,
+    pub equipment: Option<String>,
+    pub level: Option<String>,
+    pub mechanic: Option<String>,
+    pub force: Option<String>,
+    pub instructions_json: Option<String>,
+    pub primary_muscles: Vec<String>,
+    pub secondary_muscles: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
 }
 
 impl Exercise {
-    pub fn from_row_and_tags(row: ExerciseRow, tags: Vec<String>) -> Self {
+    pub fn from_parts(
+        row: ExerciseRow,
+        tags: Vec<String>,
+        primary_muscles: Vec<String>,
+        secondary_muscles: Vec<String>,
+    ) -> Self {
         Self {
             id: row.id,
             name: row.name,
             notes: row.notes,
             image_url: row.image_url,
             tags,
+            catalog_source: row.catalog_source,
+            catalog_id: row.catalog_id,
+            is_catalog: row.is_catalog != 0,
+            category: row.category,
+            equipment: row.equipment,
+            level: row.level,
+            mechanic: row.mechanic,
+            force: row.force,
+            instructions_json: row.instructions_json,
+            primary_muscles,
+            secondary_muscles,
             created_at: row.created_at,
             updated_at: row.updated_at,
         }

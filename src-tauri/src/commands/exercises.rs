@@ -1,7 +1,7 @@
 use sqlx::SqlitePool;
 use tauri::State;
 use crate::{
-    domain::{exercise, types::{Exercise, ExerciseReferences}},
+    domain::{exercise, types::{Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences}},
     error::AppError,
 };
 
@@ -16,8 +16,18 @@ pub async fn create_exercise(
     name: String,
     notes: Option<String>,
     tags: Vec<String>,
+    meta: Option<ExerciseMeta>,
+    muscles: Option<Vec<ExerciseMuscleInput>>,
 ) -> Result<Exercise, AppError> {
-    exercise::create(&pool, &name, notes.as_deref(), &tags).await
+    exercise::create(
+        &pool,
+        &name,
+        notes.as_deref(),
+        &tags,
+        meta.as_ref(),
+        muscles.as_deref(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -27,8 +37,17 @@ pub async fn update_exercise(
     name: String,
     notes: Option<String>,
     tags: Vec<String>,
+    muscles: Option<Vec<ExerciseMuscleInput>>,
 ) -> Result<Exercise, AppError> {
-    exercise::update(&pool, &id, &name, notes.as_deref(), &tags).await
+    exercise::update(
+        &pool,
+        &id,
+        &name,
+        notes.as_deref(),
+        &tags,
+        muscles.as_deref(),
+    )
+    .await
 }
 
 #[tauri::command]

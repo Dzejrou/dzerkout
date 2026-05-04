@@ -6,7 +6,11 @@ use sqlx::{Row, SqlitePool};
 
 use crate::{
     db::{exercises as db_ex, set_templates as db_sets, workout_templates as db_wt},
-    domain::types::VALID_EXERCISE_TAGS,
+    domain::types::{
+        VALID_EXERCISE_CATEGORIES, VALID_EXERCISE_EQUIPMENT, VALID_EXERCISE_FORCES,
+        VALID_EXERCISE_LEVELS, VALID_EXERCISE_MECHANICS, VALID_EXERCISE_MUSCLES,
+        VALID_EXERCISE_TAGS,
+    },
     error::AppError,
 };
 
@@ -35,6 +39,31 @@ pub struct ExportedExercise {
     pub name: String,
     pub notes: Option<String>,
     pub tags: Vec<String>,
+    /// Absent in older exports — defaults on deserialise.
+    #[serde(default)]
+    pub image_url: Option<String>,
+    #[serde(default)]
+    pub catalog_source: Option<String>,
+    #[serde(default)]
+    pub catalog_id: Option<String>,
+    #[serde(default)]
+    pub is_catalog: bool,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub equipment: Option<String>,
+    #[serde(default)]
+    pub level: Option<String>,
+    #[serde(default)]
+    pub mechanic: Option<String>,
+    #[serde(default)]
+    pub force: Option<String>,
+    #[serde(default)]
+    pub instructions_json: Option<String>,
+    #[serde(default)]
+    pub primary_muscles: Vec<String>,
+    #[serde(default)]
+    pub secondary_muscles: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,6 +204,29 @@ pub struct SeedResult {
 }
 
 // ── First-run seed ────────────────────────────────────────────────────────────
+
+// ── Shared validation helpers ─────────────────────────────────────────────────
+
+fn validate_instructions_json(json: &str, exercise_name: &str) -> Result<(), AppError> {
+    match serde_json::from_str::<serde_json::Value>(json) {
+        Ok(serde_json::Value::Array(arr)) => {
+            for item in &arr {
+                if !item.is_string() {
+                    return Err(AppError::Validation(format!(
+                        "exercise '{exercise_name}': instructions_json must be an array of strings"
+                    )));
+                }
+            }
+            Ok(())
+        }
+        Ok(_) => Err(AppError::Validation(format!(
+            "exercise '{exercise_name}': instructions_json must be a JSON array"
+        ))),
+        Err(_) => Err(AppError::Validation(format!(
+            "exercise '{exercise_name}': instructions_json is not valid JSON"
+        ))),
+    }
+}
 
 /// Import `seed_json` only when the template library is completely empty
 /// (no exercises, no set_templates, no workout_templates).  Session / history
@@ -383,13 +435,31 @@ async fn fetch_session_exercises_for_export(pool: &SqlitePool) -> Result<Vec<Exp
 pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> {
     let all_exercise_rows = db_ex::find_all(pool).await?;
     let mut tags_map = db_ex::fetch_all_tags(pool).await?;
+    let mut muscles_map = db_ex::fetch_all_muscles(pool).await?;
     let exercises: Vec<ExportedExercise> = all_exercise_rows
         .into_iter()
-        .map(|row| ExportedExercise {
-            tags: tags_map.remove(&row.id).unwrap_or_default(),
-            id: row.id,
-            name: row.name,
-            notes: row.notes,
+        .map(|row| {
+            let tags = tags_map.remove(&row.id).unwrap_or_default();
+            let (primary_muscles, secondary_muscles) =
+                muscles_map.remove(&row.id).unwrap_or_default();
+            ExportedExercise {
+                tags,
+                image_url: row.image_url,
+                catalog_source: row.catalog_source,
+                catalog_id: row.catalog_id,
+                is_catalog: row.is_catalog != 0,
+                category: row.category,
+                equipment: row.equipment,
+                level: row.level,
+                mechanic: row.mechanic,
+                force: row.force,
+                instructions_json: row.instructions_json,
+                primary_muscles,
+                secondary_muscles,
+                id: row.id,
+                name: row.name,
+                notes: row.notes,
+            }
         })
         .collect();
 
@@ -462,7 +532,7 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
         }
     }
 
-    // Validate exercise tags
+    // Validate exercise tags and catalog metadata
     for ex in &lib.exercises {
         for tag in &ex.tags {
             if !VALID_EXERCISE_TAGS.contains(&tag.as_str()) {
@@ -470,6 +540,65 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
                     "exercise '{}': invalid tag '{tag}'. Valid tags: {}",
                     ex.name,
                     VALID_EXERCISE_TAGS.join(", ")
+                )));
+            }
+        }
+        if let Some(v) = &ex.category {
+            if !VALID_EXERCISE_CATEGORIES.contains(&v.as_str()) {
+                return Err(AppError::Validation(format!(
+                    "exercise '{}': invalid category '{v}'",
+                    ex.name
+                )));
+            }
+        }
+        if let Some(v) = &ex.equipment {
+            if !VALID_EXERCISE_EQUIPMENT.contains(&v.as_str()) {
+                return Err(AppError::Validation(format!(
+                    "exercise '{}': invalid equipment '{v}'",
+                    ex.name
+                )));
+            }
+        }
+        if let Some(v) = &ex.level {
+            if !VALID_EXERCISE_LEVELS.contains(&v.as_str()) {
+                return Err(AppError::Validation(format!(
+                    "exercise '{}': invalid level '{v}'",
+                    ex.name
+                )));
+            }
+        }
+        if let Some(v) = &ex.mechanic {
+            if !VALID_EXERCISE_MECHANICS.contains(&v.as_str()) {
+                return Err(AppError::Validation(format!(
+                    "exercise '{}': invalid mechanic '{v}'",
+                    ex.name
+                )));
+            }
+        }
+        if let Some(v) = &ex.force {
+            if !VALID_EXERCISE_FORCES.contains(&v.as_str()) {
+                return Err(AppError::Validation(format!(
+                    "exercise '{}': invalid force '{v}'",
+                    ex.name
+                )));
+            }
+        }
+        if let Some(json) = &ex.instructions_json {
+            validate_instructions_json(json, &ex.name)?;
+        }
+        for m in &ex.primary_muscles {
+            if !VALID_EXERCISE_MUSCLES.contains(&m.as_str()) {
+                return Err(AppError::Validation(format!(
+                    "exercise '{}': invalid primary muscle '{m}'",
+                    ex.name
+                )));
+            }
+        }
+        for m in &ex.secondary_muscles {
+            if !VALID_EXERCISE_MUSCLES.contains(&m.as_str()) {
+                return Err(AppError::Validation(format!(
+                    "exercise '{}': invalid secondary muscle '{m}'",
+                    ex.name
                 )));
             }
         }
@@ -655,17 +784,44 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
     // 1. Exercises
     for ex in &lib.exercises {
         let existed = existing_exercise_ids.contains(&ex.id);
+        let is_catalog = ex.is_catalog as i64;
         sqlx::query!(
-            "INSERT INTO exercises (id, name, notes) VALUES (?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET name = excluded.name, notes = excluded.notes",
+            "INSERT INTO exercises
+                 (id, name, notes, image_url,
+                  catalog_source, catalog_id, is_catalog,
+                  category, equipment, level, mechanic, force, instructions_json)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               name              = excluded.name,
+               notes             = excluded.notes,
+               image_url         = excluded.image_url,
+               catalog_source    = excluded.catalog_source,
+               catalog_id        = excluded.catalog_id,
+               is_catalog        = excluded.is_catalog,
+               category          = excluded.category,
+               equipment         = excluded.equipment,
+               level             = excluded.level,
+               mechanic          = excluded.mechanic,
+               force             = excluded.force,
+               instructions_json = excluded.instructions_json",
             ex.id,
             ex.name,
-            ex.notes
+            ex.notes,
+            ex.image_url,
+            ex.catalog_source,
+            ex.catalog_id,
+            is_catalog,
+            ex.category,
+            ex.equipment,
+            ex.level,
+            ex.mechanic,
+            ex.force,
+            ex.instructions_json
         )
         .execute(&mut *tx)
         .await?;
 
-        // Replace tags wholesale (same as the domain update path)
+        // Replace tags wholesale
         sqlx::query!("DELETE FROM exercise_tags WHERE exercise_id = ?", ex.id)
             .execute(&mut *tx)
             .await?;
@@ -674,6 +830,33 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
                 "INSERT INTO exercise_tags (exercise_id, tag) VALUES (?, ?)",
                 ex.id,
                 tag
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        // Replace muscles wholesale
+        sqlx::query!("DELETE FROM exercise_muscles WHERE exercise_id = ?", ex.id)
+            .execute(&mut *tx)
+            .await?;
+        for m in &ex.primary_muscles {
+            let role = "primary";
+            sqlx::query!(
+                "INSERT INTO exercise_muscles (exercise_id, muscle, role) VALUES (?, ?, ?)",
+                ex.id,
+                m,
+                role
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        for m in &ex.secondary_muscles {
+            let role = "secondary";
+            sqlx::query!(
+                "INSERT INTO exercise_muscles (exercise_id, muscle, role) VALUES (?, ?, ?)",
+                ex.id,
+                m,
+                role
             )
             .execute(&mut *tx)
             .await?;

@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT muscle, role\n         FROM exercise_muscles\n         WHERE exercise_id = ?\n         ORDER BY role, muscle",
+  "describe": {
+    "columns": [
+      {
+        "name": "muscle",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "role",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6e5d1dd9705fdc27f9ede65096dd65b536a5fcd7fb388083f18c22a89587d920"
+}

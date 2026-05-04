@@ -1,0 +1,104 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, name, notes, image_url,\n                catalog_source, catalog_id, is_catalog,\n                category, equipment, level, mechanic, force, instructions_json,\n                created_at, updated_at\n         FROM exercises WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "image_url",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "catalog_source",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "catalog_id",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_catalog",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "category",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "equipment",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "level",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "mechanic",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "force",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "instructions_json",
+        "ordinal": 12,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 13,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 14,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "55f4d133171c01ff127ac72a00aa9be6bcaf3fcc709c904112d8a705db21e78a"
+}
