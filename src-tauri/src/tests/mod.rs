@@ -1395,12 +1395,12 @@ async fn test_update_exercise_replaces_tags(pool: SqlitePool) {
     let updated = exercise::update(
         &pool, &ex.id, "Squat", None,
         &["legs".to_string(), "isotonic".to_string()]
-    , None).await.unwrap();
+    , None, None).await.unwrap();
     assert_eq!(updated.tags, vec!["isotonic".to_string(), "legs".to_string()],
         "update replaces tags (sorted alphabetically)");
 
     // Clear tags
-    let cleared = exercise::update(&pool, &ex.id, "Squat", None, &[], None).await.unwrap();
+    let cleared = exercise::update(&pool, &ex.id, "Squat", None, &[], None, None).await.unwrap();
     assert!(cleared.tags.is_empty(), "updating with empty vec clears all tags");
 }
 

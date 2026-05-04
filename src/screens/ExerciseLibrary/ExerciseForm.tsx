@@ -1,17 +1,42 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import type { Exercise } from "../../types/exercise";
-import { EXERCISE_TAGS } from "../../types/exercise";
+import type {
+  Exercise,
+  ExerciseMeta,
+  ExerciseMuscle,
+  ExerciseMuscleInput,
+} from "../../types/exercise";
+import {
+  EXERCISE_TAGS,
+  EXERCISE_CATEGORIES,
+  EXERCISE_EQUIPMENT,
+  EXERCISE_LEVELS,
+  EXERCISE_MECHANICS,
+  EXERCISE_FORCES,
+  EXERCISE_MUSCLES,
+} from "../../types/exercise";
 import { tokens } from "../../theme/tokens";
 
 interface FormValues {
   name: string;
   notes: string;
+  category: string;
+  equipment: string;
+  level: string;
+  mechanic: string;
+  force: string;
+  instructions: string;
 }
 
 interface Props {
   initial?: Exercise;
-  onSave: (name: string, notes: string | null, tags: string[]) => void;
+  onSave: (
+    name: string,
+    notes: string | null,
+    tags: string[],
+    meta: ExerciseMeta,
+    muscles: ExerciseMuscleInput[],
+  ) => void;
   onCancel: () => void;
   saving?: boolean;
 }
@@ -22,23 +47,65 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<FormValues>({ defaultValues: { name: "", notes: "" } });
+  } = useForm<FormValues>({
+    defaultValues: {
+      name: "",
+      notes: "",
+      category: "",
+      equipment: "",
+      level: "",
+      mechanic: "",
+      force: "",
+      instructions: "",
+    },
+  });
 
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [muscleRoles, setMuscleRoles] = useState<Map<string, "primary" | "secondary">>(new Map());
 
   useEffect(() => {
-    reset({ name: initial?.name ?? "", notes: initial?.notes ?? "" });
+    let instructions = "";
+    if (initial?.instructions_json) {
+      try {
+        const arr = JSON.parse(initial.instructions_json) as string[];
+        instructions = arr.join("\n");
+      } catch {
+        // ignore malformed json
+      }
+    }
+    reset({
+      name: initial?.name ?? "",
+      notes: initial?.notes ?? "",
+      category: initial?.category ?? "",
+      equipment: initial?.equipment ?? "",
+      level: initial?.level ?? "",
+      mechanic: initial?.mechanic ?? "",
+      force: initial?.force ?? "",
+      instructions,
+    });
     setSelectedTags(new Set(initial?.tags ?? []));
+    const roles = new Map<string, "primary" | "secondary">();
+    for (const m of initial?.primary_muscles ?? []) roles.set(m, "primary");
+    for (const m of initial?.secondary_muscles ?? []) roles.set(m, "secondary");
+    setMuscleRoles(roles);
   }, [initial, reset]);
 
   function toggleTag(tag: string) {
     setSelectedTags((prev) => {
       const next = new Set(prev);
-      if (next.has(tag)) {
-        next.delete(tag);
-      } else {
-        next.add(tag);
-      }
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  }
+
+  function cycleMuscle(muscle: string) {
+    setMuscleRoles((prev) => {
+      const next = new Map(prev);
+      const current = next.get(muscle);
+      if (!current) next.set(muscle, "primary");
+      else if (current === "primary") next.set(muscle, "secondary");
+      else next.delete(muscle);
       return next;
     });
   }
@@ -47,13 +114,36 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
     const tags = Array.from(selectedTags);
     const normalizedTags =
       tags.length > 1 && tags.includes("unspecified")
-        ? tags.filter((tag) => tag !== "unspecified")
+        ? tags.filter((t) => t !== "unspecified")
         : tags;
-    onSave(values.name.trim(), values.notes.trim() || null, normalizedTags);
+
+    const instructionLines = values.instructions
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    const meta: ExerciseMeta = {
+      category: (values.category as ExerciseMeta["category"]) || null,
+      equipment: (values.equipment as ExerciseMeta["equipment"]) || null,
+      level: (values.level as ExerciseMeta["level"]) || null,
+      mechanic: (values.mechanic as ExerciseMeta["mechanic"]) || null,
+      force: (values.force as ExerciseMeta["force"]) || null,
+      instructions_json: instructionLines.length > 0 ? JSON.stringify(instructionLines) : null,
+    };
+
+    const muscles: ExerciseMuscleInput[] = Array.from(muscleRoles.entries()).map(
+      ([muscle, role]) => ({ muscle: muscle as ExerciseMuscle, role }),
+    );
+
+    onSave(values.name.trim(), values.notes.trim() || null, normalizedTags, meta, muscles);
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      style={{ display: "flex", flexDirection: "column", gap: 14 }}
+    >
+      {/* Name */}
       <div>
         <label style={labelStyle}>Name</label>
         <input
@@ -64,17 +154,21 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
         />
         {errors.name && <p style={errorStyle}>{errors.name.message}</p>}
       </div>
+
+      {/* Notes */}
       <div>
         <label style={labelStyle}>Notes (optional)</label>
         <textarea
           {...register("notes")}
-          style={{ ...inputStyle, height: 72, resize: "vertical" }}
+          style={{ ...inputStyle, height: 60, resize: "vertical" }}
           placeholder="Cues, tempo, etc."
         />
       </div>
+
+      {/* Tags */}
       <div>
         <label style={labelStyle}>Tags</label>
-        <div style={tagGridStyle}>
+        <div style={chipGridStyle}>
           {EXERCISE_TAGS.map((tag) => {
             const active = selectedTags.has(tag);
             return (
@@ -83,15 +177,11 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
                 type="button"
                 onClick={() => toggleTag(tag)}
                 style={{
-                  padding: "4px 10px",
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: active ? 600 : 400,
+                  ...chipBtnBase,
                   border: `1px solid ${active ? tokens.green : tokens.border}`,
                   background: active ? tokens.green : tokens.cardSubtle,
                   color: active ? tokens.greenText : tokens.textSecondary,
-                  cursor: "pointer",
-                  transition: "background 0.1s, border-color 0.1s, color 0.1s",
+                  fontWeight: active ? 600 : 400,
                 }}
               >
                 {tag}
@@ -100,6 +190,122 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
           })}
         </div>
       </div>
+
+      <div style={dividerStyle} />
+
+      {/* Category + Equipment */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div>
+          <label style={labelStyle}>Category</label>
+          <select {...register("category")} style={selectStyle}>
+            <option value="">—</option>
+            {EXERCISE_CATEGORIES.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Equipment</label>
+          <select {...register("equipment")} style={selectStyle}>
+            <option value="">—</option>
+            {EXERCISE_EQUIPMENT.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Level + Mechanic + Force */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        <div>
+          <label style={labelStyle}>Level</label>
+          <select {...register("level")} style={selectStyle}>
+            <option value="">—</option>
+            {EXERCISE_LEVELS.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Mechanic</label>
+          <select {...register("mechanic")} style={selectStyle}>
+            <option value="">—</option>
+            {EXERCISE_MECHANICS.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Force</label>
+          <select {...register("force")} style={selectStyle}>
+            <option value="">—</option>
+            {EXERCISE_FORCES.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Muscles */}
+      <div>
+        <label style={labelStyle}>
+          Muscles{" "}
+          <span style={{ color: tokens.textMuted, fontWeight: 400, fontSize: 11 }}>
+            tap: none → primary → secondary
+          </span>
+        </label>
+        <div style={chipGridStyle}>
+          {EXERCISE_MUSCLES.map((muscle) => {
+            const role = muscleRoles.get(muscle);
+            const isPrimary = role === "primary";
+            const isSecondary = role === "secondary";
+            return (
+              <button
+                key={muscle}
+                type="button"
+                onClick={() => cycleMuscle(muscle)}
+                style={{
+                  ...chipBtnBase,
+                  border: `1px solid ${
+                    isPrimary ? tokens.green : isSecondary ? tokens.blue : tokens.border
+                  }`,
+                  background: isPrimary
+                    ? tokens.green
+                    : isSecondary
+                      ? tokens.blueBadgeBg
+                      : tokens.cardSubtle,
+                  color: isPrimary
+                    ? tokens.greenText
+                    : isSecondary
+                      ? tokens.blue
+                      : tokens.textSecondary,
+                  fontWeight: role ? 600 : 400,
+                }}
+              >
+                {muscle}
+                {isPrimary ? " P" : isSecondary ? " S" : ""}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Instructions */}
+      <div>
+        <label style={labelStyle}>
+          Instructions{" "}
+          <span style={{ color: tokens.textMuted, fontWeight: 400, fontSize: 11 }}>
+            one step per line
+          </span>
+        </label>
+        <textarea
+          {...register("instructions")}
+          style={{ ...inputStyle, height: 76, resize: "vertical", fontFamily: "inherit" }}
+          placeholder={"Stand with feet shoulder-width apart.\nLower until thighs are parallel."}
+        />
+      </div>
+
+      {/* Actions */}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button type="button" onClick={onCancel} style={cancelBtnStyle} disabled={saving}>
           Cancel
@@ -114,10 +320,11 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
 
 const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: 13,
-  fontWeight: 500,
-  marginBottom: 4,
-  color: tokens.textMuted,
+  fontSize: 12,
+  fontWeight: 600,
+  marginBottom: 5,
+  color: tokens.textSecondary,
+  letterSpacing: "0.02em",
 };
 
 const inputStyle: React.CSSProperties = {
@@ -132,17 +339,44 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
 };
 
+const selectStyle: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "7px 10px",
+  border: `1px solid ${tokens.borderMedium}`,
+  borderRadius: 8,
+  fontSize: 13,
+  background: tokens.bg,
+  color: tokens.textPrimary,
+  outline: "none",
+  cursor: "pointer",
+};
+
+const chipGridStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 5,
+  marginTop: 2,
+};
+
+const chipBtnBase: React.CSSProperties = {
+  padding: "3px 9px",
+  borderRadius: 6,
+  fontSize: 12,
+  cursor: "pointer",
+  transition: "background 0.1s, border-color 0.1s, color 0.1s",
+};
+
+const dividerStyle: React.CSSProperties = {
+  height: 1,
+  background: tokens.divider,
+  margin: "0 -2px",
+};
+
 const errorStyle: React.CSSProperties = {
   color: tokens.red,
   fontSize: 12,
   marginTop: 4,
-};
-
-const tagGridStyle: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 6,
-  marginTop: 2,
 };
 
 const cancelBtnStyle: React.CSSProperties = {

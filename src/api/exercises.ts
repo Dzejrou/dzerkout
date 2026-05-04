@@ -24,6 +24,7 @@ export const exercisesApi = {
     name: string,
     notes: string | null,
     tags: string[] = [],
+    meta?: ExerciseMeta,
     muscles?: ExerciseMuscleInput[],
   ) =>
     invoke<Exercise>("update_exercise", {
@@ -32,6 +33,7 @@ export const exercisesApi = {
       notes,
       tags,
       muscles: muscles ?? null,
+      meta: meta ?? null,
     }),
 
   getReferences: (id: string) =>

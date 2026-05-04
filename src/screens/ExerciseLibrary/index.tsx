@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { exercisesApi } from "../../api/exercises";
-import type { Exercise } from "../../types/exercise";
+import type { Exercise, ExerciseMeta, ExerciseMuscleInput } from "../../types/exercise";
 import ExerciseForm from "./ExerciseForm";
 import { ConfirmModal } from "../../components/ConfirmModal";
 
@@ -30,6 +30,20 @@ function DetailPane({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const hasMuscles = exercise.primary_muscles.length > 0 || exercise.secondary_muscles.length > 0;
+  const hasMetaRow =
+    exercise.category || exercise.equipment || exercise.level ||
+    exercise.mechanic || exercise.force;
+
+  let instructions: string[] | null = null;
+  if (exercise.instructions_json) {
+    try {
+      instructions = JSON.parse(exercise.instructions_json) as string[];
+    } catch {
+      // ignore
+    }
+  }
+
   return (
     <div style={detailRootStyle}>
       {/* Header */}
@@ -75,10 +89,74 @@ function DetailPane({
         </>
       )}
 
+      {/* Muscles section */}
+      {hasMuscles && (
+        <>
+          <section style={detailSectionStyle}>
+            <h2 style={sectionHeadingStyle}>Muscles</h2>
+            {exercise.primary_muscles.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <span style={muscleLabelStyle}>Primary</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 4 }}>
+                  {exercise.primary_muscles.map((m) => (
+                    <span key={m} style={muscleChipPrimaryStyle}>{m}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {exercise.secondary_muscles.length > 0 && (
+              <div>
+                <span style={muscleLabelStyle}>Secondary</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 4 }}>
+                  {exercise.secondary_muscles.map((m) => (
+                    <span key={m} style={muscleChipSecondaryStyle}>{m}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+          <div style={detailDividerStyle} />
+        </>
+      )}
+
+      {/* Instructions section */}
+      {instructions && instructions.length > 0 && (
+        <>
+          <section style={detailSectionStyle}>
+            <h2 style={sectionHeadingStyle}>Instructions</h2>
+            <ol style={instructionsListStyle}>
+              {instructions.map((step, i) => (
+                <li key={i} style={instructionItemStyle}>{step}</li>
+              ))}
+            </ol>
+          </section>
+          <div style={detailDividerStyle} />
+        </>
+      )}
+
       {/* Details section */}
       <section style={detailSectionStyle}>
         <h2 style={sectionHeadingStyle}>Details</h2>
         <div style={detailRowsStyle}>
+          {hasMetaRow && (
+            <>
+              {exercise.category && (
+                <DetailRow icon="🏷" label="Category" value={exercise.category} />
+              )}
+              {exercise.equipment && (
+                <DetailRow icon="🏋" label="Equipment" value={exercise.equipment} />
+              )}
+              {exercise.level && (
+                <DetailRow icon="📊" label="Level" value={exercise.level} />
+              )}
+              {exercise.mechanic && (
+                <DetailRow icon="⚙" label="Mechanic" value={exercise.mechanic} />
+              )}
+              {exercise.force && (
+                <DetailRow icon="↕" label="Force" value={exercise.force} />
+              )}
+            </>
+          )}
           <DetailRow icon="📅" label="Created" value={formatDateFull(exercise.created_at)} />
           <DetailRow icon="✏" label="Last updated" value={formatDateFull(exercise.updated_at)} />
         </div>
@@ -139,8 +217,12 @@ export default function ExerciseLibrary() {
   }, [filtered, selectedId]);
 
   const createMut = useMutation({
-    mutationFn: ({ name, notes, tags }: { name: string; notes: string | null; tags: string[] }) =>
-      exercisesApi.create(name, notes, tags),
+    mutationFn: ({
+      name, notes, tags, meta, muscles,
+    }: {
+      name: string; notes: string | null; tags: string[];
+      meta: ExerciseMeta; muscles: ExerciseMuscleInput[];
+    }) => exercisesApi.create(name, notes, tags, meta, muscles),
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["exercises"] });
       setSelectedId(created.id);
@@ -149,8 +231,12 @@ export default function ExerciseLibrary() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, name, notes, tags }: { id: string; name: string; notes: string | null; tags: string[] }) =>
-      exercisesApi.update(id, name, notes, tags),
+    mutationFn: ({
+      id, name, notes, tags, meta, muscles,
+    }: {
+      id: string; name: string; notes: string | null; tags: string[];
+      meta: ExerciseMeta; muscles: ExerciseMuscleInput[];
+    }) => exercisesApi.update(id, name, notes, tags, meta, muscles),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["exercises"] }); setModal(null); },
   });
 
@@ -261,11 +347,11 @@ export default function ExerciseLibrary() {
               initial={modal.type === "edit" ? modal.exercise : undefined}
               saving={createMut.isPending || updateMut.isPending}
               onCancel={() => setModal(null)}
-              onSave={(name, notes, tags) => {
+              onSave={(name, notes, tags, meta, muscles) => {
                 if (modal.type === "create") {
-                  createMut.mutate({ name, notes, tags });
+                  createMut.mutate({ name, notes, tags, meta, muscles });
                 } else {
-                  updateMut.mutate({ id: modal.exercise.id, name, notes, tags });
+                  updateMut.mutate({ id: modal.exercise.id, name, notes, tags, meta, muscles });
                 }
               }}
             />
@@ -554,6 +640,50 @@ const notesTextStyle: React.CSSProperties = {
   lineHeight: 1.6,
 };
 
+const muscleLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: TEXT_SECONDARY,
+};
+
+const muscleChipBase: React.CSSProperties = {
+  display: "inline-block",
+  fontSize: 12,
+  fontWeight: 500,
+  borderRadius: 5,
+  padding: "2px 8px",
+};
+
+const muscleChipPrimaryStyle: React.CSSProperties = {
+  ...muscleChipBase,
+  color: tokens.greenBadgeText,
+  background: tokens.greenBadgeBg,
+  border: `1px solid ${tokens.greenBadgeBorder}`,
+};
+
+const muscleChipSecondaryStyle: React.CSSProperties = {
+  ...muscleChipBase,
+  color: tokens.blue,
+  background: tokens.blueBadgeBg,
+  border: `1px solid ${tokens.blueBadgeBorder}`,
+};
+
+const instructionsListStyle: React.CSSProperties = {
+  margin: 0,
+  paddingLeft: 20,
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+};
+
+const instructionItemStyle: React.CSSProperties = {
+  fontSize: 14,
+  color: TEXT_SECONDARY,
+  lineHeight: 1.5,
+};
+
 const detailRowsStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -615,7 +745,9 @@ const modalStyle: React.CSSProperties = {
   background: CARD,
   borderRadius: 16,
   padding: "24px 24px 20px",
-  width: 400,
+  width: 460,
+  maxHeight: "88vh",
+  overflowY: "auto",
   boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
   border: `1px solid ${BORDER}`,
 };

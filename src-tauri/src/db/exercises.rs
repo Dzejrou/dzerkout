@@ -94,6 +94,29 @@ pub async fn update(
     .await
 }
 
+pub async fn update_meta(
+    conn: &mut SqliteConnection,
+    id: &str,
+    meta: &ExerciseMeta,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE exercises
+         SET category = ?, equipment = ?, level = ?, mechanic = ?, force = ?,
+             instructions_json = ?
+         WHERE id = ?",
+        meta.category,
+        meta.equipment,
+        meta.level,
+        meta.mechanic,
+        meta.force,
+        meta.instructions_json,
+        id
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
 pub async fn delete(conn: &mut SqliteConnection, id: &str) -> Result<(), sqlx::Error> {
     sqlx::query!("DELETE FROM exercises WHERE id = ?", id)
         .execute(conn)

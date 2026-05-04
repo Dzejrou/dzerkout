@@ -201,6 +201,7 @@ pub async fn update(
     name: &str,
     notes: Option<&str>,
     tags: &[String],
+    meta: Option<&ExerciseMeta>,
     muscles: Option<&[ExerciseMuscleInput]>,
 ) -> Result<Exercise, AppError> {
     if name.trim().is_empty() {
@@ -208,13 +209,17 @@ pub async fn update(
     }
     validate_tags(tags)?;
 
+    if let Some(m) = meta {
+        validate_meta(m)?;
+    }
+
     if let Some(ms) = muscles {
         validate_muscles(ms)?;
     }
 
     let mut tx = pool.begin().await?;
 
-    let row = exercises::update(&mut tx, id, name, notes)
+    let mut row = exercises::update(&mut tx, id, name, notes)
         .await
         .map_err(|e| match &e {
             sqlx::Error::Database(db) if db.is_unique_violation() => {
@@ -225,6 +230,16 @@ pub async fn update(
         })?;
 
     exercises::set_tags(&mut tx, id, tags).await?;
+
+    if let Some(m) = meta {
+        exercises::update_meta(&mut tx, id, m).await?;
+        row.category = m.category.clone();
+        row.equipment = m.equipment.clone();
+        row.level = m.level.clone();
+        row.mechanic = m.mechanic.clone();
+        row.force = m.force.clone();
+        row.instructions_json = m.instructions_json.clone();
+    }
 
     if let Some(ms) = muscles {
         exercises::set_muscles(&mut tx, id, ms).await?;

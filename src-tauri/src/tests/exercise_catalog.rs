@@ -85,6 +85,7 @@ async fn test_update_exercise_replaces_muscles(pool: SqlitePool) {
 
     let updated = exercise::update(
         &pool, &ex.id, "Squat", None, &[],
+        None,
         Some(&muscles(&[("hamstrings", "primary"), ("calves", "secondary")])),
     )
     .await
@@ -106,7 +107,7 @@ async fn test_update_exercise_no_muscles_preserves_existing(pool: SqlitePool) {
     .await
     .unwrap();
 
-    let updated = exercise::update(&pool, &ex.id, "Deadlift", Some("cue"), &[], None)
+    let updated = exercise::update(&pool, &ex.id, "Deadlift", Some("cue"), &[], None, None)
         .await
         .unwrap();
 

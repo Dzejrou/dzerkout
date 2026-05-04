@@ -38,6 +38,7 @@ pub async fn update_exercise(
     notes: Option<String>,
     tags: Vec<String>,
     muscles: Option<Vec<ExerciseMuscleInput>>,
+    meta: Option<ExerciseMeta>,
 ) -> Result<Exercise, AppError> {
     exercise::update(
         &pool,
@@ -45,6 +46,7 @@ pub async fn update_exercise(
         &name,
         notes.as_deref(),
         &tags,
+        meta.as_ref(),
         muscles.as_deref(),
     )
     .await
