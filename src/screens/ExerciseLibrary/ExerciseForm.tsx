@@ -343,6 +343,7 @@ const selectStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "7px 10px",
+  paddingRight: 30,
   border: `1px solid ${tokens.borderMedium}`,
   borderRadius: 8,
   fontSize: 13,
@@ -350,6 +351,11 @@ const selectStyle: React.CSSProperties = {
   color: tokens.textPrimary,
   outline: "none",
   cursor: "pointer",
+  appearance: "none",
+  WebkitAppearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238e8e93' d='M6 8L0 0h12z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 10px center",
 };
 
 const chipGridStyle: React.CSSProperties = {
