@@ -15,6 +15,7 @@ dist/
 dist-ssr/
 .vite/
 .pnpm-store/
+vendor/
 
 logs/
 *.log
