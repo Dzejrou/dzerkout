@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { exercisesApi } from "../../api/exercises";
 import type { Exercise, ExerciseMeta, ExerciseMuscleInput } from "../../types/exercise";
+import {
+  EXERCISE_CATEGORIES, EXERCISE_EQUIPMENT, EXERCISE_LEVELS,
+  EXERCISE_MUSCLES, EXERCISE_TAGS, EXERCISE_FORCES,
+} from "../../types/exercise";
 import ExerciseForm from "./ExerciseForm";
 import { ConfirmModal } from "../../components/ConfirmModal";
 
@@ -175,11 +179,43 @@ function DetailRow({ icon, label, value }: { icon: string; label: string; value:
   );
 }
 
-function EmptyState({ hasSearch }: { hasSearch: boolean }) {
+function FilterSelect({
+  value,
+  onChange,
+  placeholder,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  options: readonly string[];
+}) {
+  const active = !!value;
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        ...filterSelectStyle,
+        border: `1px solid ${active ? tokens.greenBadgeBorder : BORDER}`,
+        color: active ? TEXT_PRIMARY : TEXT_SECONDARY,
+      }}
+    >
+      <option value="">{placeholder}</option>
+      {options.map((v) => (
+        <option key={v} value={v}>{v}</option>
+      ))}
+    </select>
+  );
+}
+
+function EmptyState({ isFiltered }: { isFiltered: boolean }) {
   return (
     <div style={emptyDetailStyle}>
       <p style={{ color: TEXT_SECONDARY, fontSize: 15 }}>
-        {hasSearch ? "No exercises match your search." : "No exercises yet. Create one to get started."}
+        {isFiltered
+          ? "No exercises match your filters."
+          : "No exercises yet. Create one to get started."}
       </p>
     </div>
   );
@@ -193,14 +229,42 @@ export default function ExerciseLibrary() {
   const [modal, setModal] = useState<Modal | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterEquipment, setFilterEquipment] = useState("");
+  const [filterLevel, setFilterLevel] = useState("");
+  const [filterMuscle, setFilterMuscle] = useState("");
+  const [filterTag, setFilterTag] = useState("");
+  const [filterForce, setFilterForce] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   const { data: exercises = [], isLoading } = useQuery({
     queryKey: ["exercises"],
     queryFn: exercisesApi.list,
   });
 
-  const filtered = exercises.filter((e) =>
-    e.name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const activeFilterCount = [
+    filterCategory, filterEquipment, filterLevel, filterMuscle, filterTag, filterForce,
+  ].filter(Boolean).length;
+
+  const filtered = exercises.filter((e) => {
+    if (!e.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterCategory && e.category !== filterCategory) return false;
+    if (filterEquipment && e.equipment !== filterEquipment) return false;
+    if (filterLevel && e.level !== filterLevel) return false;
+    if (filterMuscle && !e.primary_muscles.includes(filterMuscle)) return false;
+    if (filterTag && !e.tags.includes(filterTag)) return false;
+    if (filterForce && e.force !== filterForce) return false;
+    return true;
+  });
+
+  function clearFilters() {
+    setFilterCategory("");
+    setFilterEquipment("");
+    setFilterLevel("");
+    setFilterMuscle("");
+    setFilterTag("");
+    setFilterForce("");
+  }
 
   const selected = filtered.find((e) => e.id === selectedId) ?? null;
 
@@ -280,13 +344,74 @@ export default function ExerciseLibrary() {
               + New Exercise
             </button>
           </div>
+
+          {/* Filters toggle row */}
+          <div style={filterToggleRowStyle}>
+            <button
+              onClick={() => setFiltersOpen((v) => !v)}
+              style={{
+                ...filterToggleBtnStyle,
+                color: activeFilterCount > 0 ? tokens.greenBadgeText : TEXT_SECONDARY,
+                background: activeFilterCount > 0 ? tokens.greenBadgeBg : "transparent",
+                border: `1px solid ${activeFilterCount > 0 ? tokens.greenBadgeBorder : BORDER}`,
+              }}
+            >
+              {filtersOpen ? "▾" : "▸"} Filters
+              {activeFilterCount > 0 && ` (${activeFilterCount})`}
+            </button>
+            {activeFilterCount > 0 && (
+              <button onClick={clearFilters} style={clearFiltersBtnStyle}>Clear</button>
+            )}
+          </div>
+
+          {/* Filter selects */}
+          {filtersOpen && (
+            <div style={filtersGridStyle}>
+              <FilterSelect
+                value={filterCategory}
+                onChange={setFilterCategory}
+                placeholder="Category"
+                options={EXERCISE_CATEGORIES}
+              />
+              <FilterSelect
+                value={filterEquipment}
+                onChange={setFilterEquipment}
+                placeholder="Equipment"
+                options={EXERCISE_EQUIPMENT}
+              />
+              <FilterSelect
+                value={filterLevel}
+                onChange={setFilterLevel}
+                placeholder="Level"
+                options={EXERCISE_LEVELS}
+              />
+              <FilterSelect
+                value={filterMuscle}
+                onChange={setFilterMuscle}
+                placeholder="Muscle"
+                options={EXERCISE_MUSCLES}
+              />
+              <FilterSelect
+                value={filterForce}
+                onChange={setFilterForce}
+                placeholder="Force"
+                options={EXERCISE_FORCES}
+              />
+              <FilterSelect
+                value={filterTag}
+                onChange={setFilterTag}
+                placeholder="Tag"
+                options={EXERCISE_TAGS}
+              />
+            </div>
+          )}
         </div>
 
         <div style={listStyle}>
           {isLoading && <p style={{ color: TEXT_SECONDARY, padding: "16px 20px" }}>Loading…</p>}
           {!isLoading && filtered.length === 0 && (
             <p style={{ color: TEXT_SECONDARY, padding: "16px 20px", textAlign: "center" }}>
-              {search ? "No matches" : "No exercises yet"}
+              {search || activeFilterCount > 0 ? "No matches" : "No exercises yet"}
             </p>
           )}
           {filtered.map((ex) => {
@@ -332,7 +457,7 @@ export default function ExerciseLibrary() {
             onDelete={() => handleDeleteClick(selected)}
           />
         ) : (
-          <EmptyState hasSearch={!!search} />
+          <EmptyState isFiltered={!!search || activeFilterCount > 0} />
         )}
       </div>
 
@@ -757,4 +882,53 @@ const modalTitleStyle: React.CSSProperties = {
   fontSize: 18,
   fontWeight: 700,
   color: TEXT_PRIMARY,
+};
+
+const filterToggleRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  marginTop: 8,
+};
+
+const filterToggleBtnStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  borderRadius: 6,
+  cursor: "pointer",
+  padding: "4px 10px",
+  letterSpacing: "0.01em",
+};
+
+const clearFiltersBtnStyle: React.CSSProperties = {
+  fontSize: 11,
+  padding: "3px 10px",
+  borderRadius: 6,
+  border: `1px solid ${BORDER}`,
+  background: "transparent",
+  color: TEXT_SECONDARY,
+  cursor: "pointer",
+};
+
+const filtersGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 5,
+  marginTop: 7,
+};
+
+const filterSelectStyle: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "5px 22px 5px 8px",
+  borderRadius: 6,
+  fontSize: 12,
+  background: BG,
+  outline: "none",
+  cursor: "pointer",
+  appearance: "none",
+  WebkitAppearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238e8e93' d='M5 6L0 0h10z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 7px center",
 };
