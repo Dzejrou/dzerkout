@@ -1,7 +1,7 @@
 # dzerkout — Technical Architecture
 
-**Version**: 1.0  
-**Date**: 2026-04-22  
+**Version**: 1.1
+**Date**: 2026-05-05
 **Stack**: Tauri v2 · React · TypeScript · Vite · Rust · SQLite  
 **Spec**: [SPEC.md](SPEC.md)
 
@@ -18,9 +18,9 @@ source of truth.
 graph TD
     UI["React UI\n(screens, components)"]
     RQ["TanStack Query\n(DB-backed cache)"]
-    ZS["Zustand\n(active session + timer)"]
+    ZS["Zustand\n(session + settings)"]
     CMD["Tauri Commands\n(thin IPC handlers)"]
-    SVC["Domain Services\n(session, exercise, template)"]
+    SVC["Domain Services\n(session, exercise, template, library, stats)"]
     DB_REPOS["DB Repositories\n(sqlx SQL functions)"]
     DB[(SQLite)]
 
@@ -54,9 +54,10 @@ graph TD
 | All UI rendering | React | — |
 | Form state, search, modals | React local state | No |
 | Exercise/template/history data | TanStack Query (fetches via Rust) | On mutation |
-| Active session snapshot | Zustand (loaded from DB) | On every command |
+| Active session snapshot | Zustand `sessionStore` (loaded from DB) | On every command |
 | Timer display value | React (derived from Zustand base values) | Never persisted |
 | Timer base values (started_at, paused_at, paused_total_sec) | Zustand | On Pause / Resume / Next set crossing |
+| User preferences (theme, auto-advance, sound, etc.) | Zustand `settingsStore` (persisted to localStorage) | On every change |
 | All SQL — snapshot, transitions, corrective Prev | Rust domain services | Yes, in transactions |
 | UUID generation | Rust | Yes |
 | Schema migrations | Rust (startup) | Yes |
@@ -78,50 +79,74 @@ dzerkout/
 │   ├── build.rs
 │   ├── migrations/
 │   │   ├── 001_initial_schema.sql
-│   │   └── (future numbered files)
+│   │   ├── 002_fork_provenance.sql
+│   │   ├── 003_workout_local_sets.sql
+│   │   ├── 004_exercise_performed_duration.sql
+│   │   ├── 005_rest_between_sets.sql
+│   │   ├── 006_exercise_tags.sql
+│   │   └── 007_exercise_catalog_metadata.sql
+│   ├── seeds/
+│   │   └── default_library.json      # bundled via include_str! in lib.rs
 │   └── src/
-│       ├── main.rs                   # Tauri app builder entry point
-│       ├── lib.rs                    # Plugin + command registration
+│       ├── main.rs                   # Tauri app entry point
+│       ├── lib.rs                    # Plugin + command registration; calls seed_if_empty
 │       ├── error.rs                  # AppError enum, thiserror + serde
 │       ├── db/
-│       │   ├── mod.rs                # SqlitePool init, PRAGMA setup
-│       │   ├── exercises.rs          # SQL functions for exercises
+│       │   ├── mod.rs                # SqlitePool init, after_connect pragmas
+│       │   ├── exercises.rs          # SQL functions for exercises + tags + muscles
 │       │   ├── set_templates.rs      # SQL functions for templates + cards
 │       │   ├── workout_templates.rs  # SQL for templates, set refs, assignments
 │       │   ├── sessions.rs           # SQL for sessions, sets, exercises
-│       │   └── history.rs            # SQL for history queries
+│       │   ├── history.rs            # SQL for history queries
+│       │   └── stats.rs              # SQL for stats aggregation queries
 │       ├── domain/
 │       │   ├── mod.rs
-│       │   ├── types.rs              # Shared types: PlaceholderTag, SessionStatus
+│       │   ├── types.rs              # Shared structs + validation constants
 │       │   ├── exercise.rs           # Exercise service (unlink logic)
 │       │   ├── set_template.rs       # SetTemplate service (clone, reorder)
 │       │   ├── workout_template.rs   # WorkoutTemplate service (assignments)
-│       │   └── session.rs            # Session service (snapshot, all transitions)
+│       │   ├── session.rs            # Session service (snapshot, all transitions)
+│       │   ├── library.rs            # Export, import, seed, clear, reset
+│       │   └── stats.rs              # Stats aggregation; StatsRange, StatsPayload
 │       └── commands/
 │           ├── mod.rs
 │           ├── exercises.rs
 │           ├── set_templates.rs
 │           ├── workout_templates.rs
 │           ├── sessions.rs
-│           └── history.rs
+│           ├── history.rs
+│           ├── stats.rs              # get_stats command
+│           ├── library.rs            # export/import/reset/clear commands
+│           └── file_io.rs            # write_text_to_uri, read_text_from_uri
 │
 ├── src/
 │   ├── main.tsx
-│   ├── App.tsx                       # Shell: tab bar + RouterProvider
-│   ├── router.tsx                    # createBrowserRouter config
+│   ├── App.tsx                       # HashRouter shell; AppShell with Routes
 │   ├── api/                          # Typed invoke() wrappers, one file per domain
 │   │   ├── exercises.ts
 │   │   ├── setTemplates.ts
 │   │   ├── workoutTemplates.ts
-│   │   └── sessions.ts
+│   │   ├── sessions.ts
+│   │   ├── history.ts
+│   │   ├── library.ts                # export/import/reset/clear
+│   │   ├── stats.ts                  # getStats
+│   │   └── fileExport.ts             # saveJsonToFile, pickJsonFile, readJsonFile
 │   ├── store/
 │   │   ├── sessionStore.ts           # Zustand: active session + timer base values
+│   │   ├── settingsStore.ts          # Zustand persist: theme, runner prefs, sound
 │   │   └── uiStore.ts                # Zustand: platform flag, global modal state
 │   ├── hooks/
-│   │   ├── useTimer.ts               # Derived elapsed ms from session store
-│   │   ├── usePlatform.ts            # @tauri-apps/plugin-os: isAndroid
-│   │   └── useSessionRecovery.ts     # On-mount draft / in-progress check
+│   │   ├── useTimer.ts               # useElapsedMs, useExerciseElapsedMs
+│   │   ├── usePlatform.ts            # @tauri-apps/plugin-os: sets isAndroid
+│   │   ├── useSessionRecovery.ts     # On-mount draft / in-progress check
+│   │   └── useCountdownCues.ts       # Web Audio countdown cue firing
+│   ├── theme/
+│   │   └── tokens.ts                 # 5 themes, CSS custom props, applyThemeToDOM
+│   ├── audio/
+│   │   └── cues.ts                   # playBeep, playPreviewCue, CUE_SECONDS
 │   ├── screens/
+│   │   ├── MainMenu/
+│   │   │   └── index.tsx             # Navigation dashboard (app home)
 │   │   ├── ExerciseLibrary/
 │   │   │   ├── index.tsx
 │   │   │   ├── ExerciseCard.tsx
@@ -139,9 +164,13 @@ dzerkout/
 │   │   │   ├── TimerDisplay.tsx
 │   │   │   ├── ExerciseQueue.tsx
 │   │   │   └── RunnerControls.tsx
-│   │   └── WorkoutHistory/
-│   │       ├── index.tsx
-│   │       └── SessionDetail.tsx
+│   │   ├── WorkoutHistory/
+│   │   │   ├── index.tsx
+│   │   │   └── SessionDetail.tsx
+│   │   ├── Stats/
+│   │   │   └── index.tsx
+│   │   └── Settings/
+│   │       └── index.tsx             # Appearance / Runner / Sound / Data tabs
 │   ├── components/
 │   │   ├── SortableList/             # dnd-kit + Android button fallback
 │   │   │   └── index.tsx
@@ -151,10 +180,22 @@ dzerkout/
 │       ├── exercise.ts
 │       ├── setTemplate.ts
 │       ├── workoutTemplate.ts
-│       └── session.ts
+│       ├── session.ts
+│       ├── library.ts                # ImportResult, ResetResult, ClearResult
+│       └── stats.ts                  # StatsPayload, StatsSummary, TagStat, ExerciseStat
 │
+├── scripts/
+│   ├── README.md
+│   ├── android-release.local.sh      # local signing helper (gitignored)
+│   ├── generate-free-exercise-db-library.mjs
+│   ├── generate-yoga-poses-library.mjs
+│   └── generated/                    # gitignored script output
+│
+├── vendor/                           # gitignored source data for catalog generators
 ├── SPEC.md
 ├── ARCH.md
+├── PERSISTENCE.md
+├── ANDROID.md
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json
@@ -166,34 +207,64 @@ dzerkout/
 
 ### 4.1 Routing
 
+The app uses `HashRouter` with inline `<Routes>` declared in `App.tsx`. There
+is no separate `router.tsx` file.
+
 ```typescript
-// router.tsx
-const router = createBrowserRouter([
-  { path: '/',                  element: <Navigate to="/workouts" /> },
-  { path: '/exercises',         element: <ExerciseLibrary /> },
-  { path: '/sets',              element: <SetTemplateBuilder /> },
-  { path: '/sets/:id',          element: <SetEditor /> },
-  { path: '/workouts',          element: <WorkoutTemplateBuilder /> },
-  { path: '/workouts/:id',      element: <WorkoutEditor /> },
-  { path: '/session',           element: <ActiveWorkoutRunner /> },
-  { path: '/history',           element: <WorkoutHistory /> },
-  { path: '/history/:sessionId',element: <SessionDetail /> },
-]);
+// App.tsx (simplified)
+function AppShell() {
+  useSessionRecovery();
+  useThemeApplicator();
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      <main style={{ flex: 1, minHeight: 0, overflow: ... }}>
+        <Routes>
+          <Route path="/"            element={<MainMenu />} />
+          <Route path="/exercises"   element={<ExerciseLibrary />} />
+          <Route path="/sets"        element={<SetTemplateBuilder />} />
+          <Route path="/sets/:id"    element={<SetTemplateBuilder />} />
+          <Route path="/workouts"    element={<WorkoutTemplateBuilder />} />
+          <Route path="/workouts/:id" element={<WorkoutTemplateBuilder />} />
+          <Route path="/runner"      element={<ActiveWorkoutRunner />} />
+          <Route path="/history"     element={<WorkoutHistory />} />
+          <Route path="/stats"       element={<Stats />} />
+          <Route path="/settings"    element={<Settings />} />
+        </Routes>
+      </main>
+      {confirmModal && <ConfirmModal ... />}
+    </div>
+  );
+}
+
+export default function App() {
+  usePlatform();
+  return (
+    <HashRouter>
+      <AppShell />
+    </HashRouter>
+  );
+}
 ```
 
-`App.tsx` renders a persistent tab bar (sidebar on desktop, bottom bar on
-Android) and `<RouterProvider>`. The Active Session tab is conditionally
-visible: `sessionStore.sessionId !== null`.
+There is no persistent tab bar or sidebar. Navigation is hub-and-spoke from
+`MainMenu` (`/`). The MainMenu shows an "Active" badge on the Runner button
+when `sessionStore.sessionId !== null`. Settings is accessible via a gear
+button in the top-right corner of MainMenu.
 
 ### 4.2 State Layering
 
 **TanStack Query** manages all DB-backed read data — exercises, set templates,
-workout templates, history. Every mutation calls a Rust command then invalidates
-the relevant query key(s). No data is stored redundantly.
+workout templates, history, stats. Every mutation calls a Rust command then
+invalidates the relevant query key(s). No data is stored redundantly.
 
 **Zustand `sessionStore`** manages active-session state. It is the only place
 timer base values live in the frontend. It is loaded from the command return
 value after every state-changing command; there is no partial update.
+
+**Zustand `settingsStore`** manages user preferences (theme, runner behavior,
+sound). It is persisted to `localStorage` under the key `"dzerkout_settings"`.
+See §7.4 for the full interface.
 
 **Local component state** handles form fields (`react-hook-form`), search text,
 modal visibility, and dnd-kit in-flight drag state.
@@ -247,9 +318,6 @@ export function SortableList<T extends { id: string }>({
 }
 ```
 
-This keeps both platforms served by one component tree with no parallel code
-paths in builder screens.
-
 ### 4.5 Keyboard Shortcuts (desktop only)
 
 Registered in `ActiveWorkoutRunner/index.tsx` behind `!isAndroid`:
@@ -266,6 +334,69 @@ useEffect(() => {
   return () => window.removeEventListener('keydown', onKey);
 }, [isAndroid]);
 ```
+
+### 4.6 Theme System
+
+Five themes are defined in `src/theme/tokens.ts`: `dark`, `graphite`, `forest`,
+`ember`, `slate`. Each theme is a `ThemeTokens` object mapping token names to
+concrete color values.
+
+At runtime, `applyThemeToDOM(theme)` writes the active theme's values as CSS
+custom properties on `document.documentElement`. The `tokens` object provides
+`var(--name)` references for every token, which resolve to the currently applied
+theme at render time.
+
+The `useThemeApplicator` hook in `AppShell` calls `applyThemeToDOM` via
+`useLayoutEffect` (fires synchronously before paint, eliminating first-frame
+flash) whenever `settingsStore.theme` changes.
+
+```typescript
+// theme/tokens.ts (summary)
+export type ThemeKey = "dark" | "graphite" | "forest" | "ember" | "slate";
+
+export const tokens = {
+  bg: "var(--bg)",
+  bgElevated: "var(--bgElevated)",
+  textPrimary: "var(--textPrimary)",
+  // ... all token keys
+};
+
+export function applyThemeToDOM(t: ThemeTokens): void {
+  const root = document.documentElement;
+  Object.entries(t).forEach(([key, value]) => root.style.setProperty(`--${key}`, value));
+}
+```
+
+The default theme (`"dark"`) is applied immediately before the first React
+render via a small inline script in `index.html`.
+
+### 4.7 Sound Cues / Web Audio
+
+`src/audio/cues.ts` provides Web Audio countdown beeps for timed exercise and
+rest phases.
+
+```typescript
+export const CUE_SECONDS: readonly number[] = [2, 1, 0, -1];
+export const FINAL_CUE_SECOND = -1;
+
+// 880 Hz countdown beep; 1320 Hz final tone
+export function playBeep(isFinal: boolean): void { ... }
+
+// Plays the full cue sequence with 500 ms gaps (for Settings preview)
+export function playPreviewCue(): Promise<void> { ... }
+```
+
+`AudioContext` is lazily created as a singleton on the first call to avoid
+autoplay policy issues.
+
+The `useCountdownCues(remainingSec, phaseId, enabled, paused)` hook in
+`src/hooks/useCountdownCues.ts` fires `playBeep` when `remainingSec` crosses a
+cue-second boundary. It tracks fired cue-seconds per phase in a ref to prevent
+duplicates across re-renders, and pre-seeds already-elapsed cues on phase change
+to prevent stale replays when the app opens mid-countdown.
+
+Sound cues are enabled by `settingsStore.soundCues`. The `phaseId` is
+`null` for untimed exercises (no cues fire).
 
 ---
 
@@ -284,10 +415,12 @@ No SQL, no business logic, no UUID generation in command handlers.
 
 **exercises.rs**
 - `list_exercises() → Vec<Exercise>`
-- `create_exercise(name, notes) → Exercise`
-- `update_exercise(id, name, notes) → Exercise`
+- `get_exercise(id) → Exercise`
+- `search_exercises(filters: ExerciseSearchFilters) → ExerciseSearchResult`
+- `create_exercise(name, notes, tags?, muscles?, catalog metadata?) → Exercise`
+- `update_exercise(id, name, notes, tags?, muscles?) → Exercise`
 - `get_exercise_references(id) → ExerciseReferences`
-- `delete_exercise(id, confirmed: bool) → ()`
+- `delete_exercise(id) → ()`
 
 **set_templates.rs**
 - `list_set_templates() → Vec<SetTemplateSummary>`
@@ -313,6 +446,7 @@ No SQL, no business logic, no UUID generation in command handlers.
 - `clone_set_from_workout(set_ref_id) → WorkoutTemplateSetRef`
 - `upsert_card_assignment(set_ref_id, card_id, exercise_id?, display_label?, duration_hint_sec?, notes?) → WorkoutTemplateCardAssignment`
 - `delete_card_assignment(assignment_id) → ()`
+- `export_forked_set(set_ref_id) → SetTemplateDetail`
 
 **sessions.rs**
 - `get_active_session() → Option<ActiveSessionPayload>`
@@ -323,6 +457,7 @@ No SQL, no business logic, no UUID generation in command handlers.
 - `advance_exercise(session_id) → ActiveSessionPayload`
 - `retreat_exercise(session_id) → ActiveSessionPayload`
 - `skip_exercise(session_id, exercise_id) → ActiveSessionPayload`
+- `start_next_set(session_id) → ActiveSessionPayload`
 - `finish_session(session_id) → WorkoutSession`
 - `abandon_session(session_id) → ()`
 - `discard_session(session_id) → ()`
@@ -331,6 +466,19 @@ No SQL, no business logic, no UUID generation in command handlers.
 - `list_session_history() → Vec<SessionSummary>`
 - `get_session_detail(session_id) → SessionDetail`
 
+**stats.rs**
+- `get_stats(range: String) → StatsPayload`  (`range`: `"all"` | `"30d"` | `"7d"`)
+
+**library.rs**
+- `export_library_json() → String`  (full JSON export including sessions)
+- `import_library_json(json: String) → ImportResult`
+- `reset_local_data() → ResetResult`  (clear + re-seed default library)
+- `clear_local_data() → ClearResult`  (FK-safe delete of all user data)
+
+**file_io.rs**
+- `write_text_to_uri(path: String, content: String) → ()`
+- `read_text_from_uri(path: String) → String`
+
 ### 5.3 Domain Service Layer
 
 `domain/session.rs` is the most complex service. It owns:
@@ -338,8 +486,11 @@ No SQL, no business logic, no UUID generation in command handlers.
   `display_name`, `duration_hint_sec`, and `notes` from assignments and cards.
 - All state transitions: start, pause, resume, advance, retreat, skip,
   finish, abandon.
-- Corrective-Prev semantics: within-set and cross-set cases as specified in the
-  spec.
+- Rest-phase management: `advance_exercise` enters a between-set rest phase
+  when `rest_between_sets_sec > 0`; `start_next_set` ends rest and starts the
+  next set; `skip_exercise` always bypasses rest.
+- Corrective-Prev semantics: within-set and cross-set cases, including handling
+  the rest-phase case (no active exercise, set in rest state).
 - The implicit-resume rule: if `paused_at` is non-null when `advance`,
   `retreat`, `skip`, or `finish` is called, it performs the resume transaction
   first.
@@ -351,6 +502,24 @@ three reference types (`SetTemplateCard`, `WorkoutTemplateCardAssignment`,
 `domain/workout_template.rs` owns the `clone_set_from_workout` logic and
 validates card counts for startability (at least one concrete or placeholder
 card across all non-empty sets).
+
+`domain/library.rs` owns:
+- `export_full_library`: fetches all exercises (with tags and muscles),
+  set templates, workout templates, sessions, session sets, and session
+  exercises; serializes to the `dzerkout.library` JSON schema.
+- `import_library_json`: upsert-based idempotent import in a single
+  transaction; validates tags, muscles, and catalog metadata; writes in FK-safe
+  order (exercises → tags → muscles → sets → set cards → workouts → set refs →
+  assignments → sessions → session sets → session exercises).
+- `seed_if_empty`: gates on all three template tables being empty; calls the
+  import codepath with the bundled seed JSON.
+- `clear_local_data`: FK-safe DELETE of all tables (reverse dependency order).
+- `reset_local_data`: clear + seed_if_empty.
+
+`domain/stats.rs` owns:
+- `StatsRange` enum (`All`, `Days30`, `Days7`) with ISO 8601 cutoff computation.
+- `get_stats(range_str)`: queries session, exercise, tag, and per-exercise
+  aggregations and assembles `StatsPayload`.
 
 ### 5.4 Error Type
 
@@ -382,14 +551,24 @@ rather than requiring the frontend to refetch:
 
 ```rust
 pub struct ActiveSessionPayload {
-    pub session:             WorkoutSession,
-    pub sets:                Vec<WorkoutSessionSet>,
-    pub exercises:           Vec<WorkoutSessionExercise>,
-    pub current_exercise_id: Option<String>,
-    pub current_set_id:      Option<String>,
+    pub session:               WorkoutSession,
+    pub sets:                  Vec<WorkoutSessionSet>,
+    pub exercises:             Vec<WorkoutSessionExercise>,
+    pub current_exercise_id:   Option<String>,
+    pub current_set_id:        Option<String>,
     /// DB-sourced timer base values for the current set.
     /// Zustand derives elapsed time from these; nothing is accumulated in the frontend.
-    pub timer_base:          TimerBase,
+    pub timer_base:            TimerBase,
+    /// Non-null when between sets (rest phase active).
+    pub rest_phase:            Option<RestPhaseInfo>,
+    /// Copied from the workout template; used by the frontend rest timer.
+    pub rest_between_sets_sec: Option<i64>,
+}
+
+pub struct RestPhaseInfo {
+    pub next_set_id:        String,
+    pub rest_duration_sec:  i64,
+    pub rest_started_at_ms: i64,
 }
 ```
 
@@ -410,24 +589,48 @@ Connection strings follow the pattern:
 
 ### 6.2 Startup Configuration
 
-Run once, before the Tauri app window opens:
+Run once in `lib.rs` setup, before the Tauri app window opens:
 
 ```rust
+// Pragmas are applied on every new connection via after_connect, not once at pool level.
+let pool = SqlitePoolOptions::new()
+    .max_connections(2)
+    .after_connect(|conn, _meta| Box::pin(async move {
+        sqlx::query("PRAGMA foreign_keys = ON").execute(conn).await?;
+        sqlx::query("PRAGMA journal_mode = WAL").execute(conn).await?;
+        sqlx::query("PRAGMA synchronous = NORMAL").execute(conn).await?;
+        Ok(())
+    }))
+    .connect_with(opts)
+    .await?;
+
 sqlx::migrate!("migrations/").run(&pool).await?;
-sqlx::query("PRAGMA foreign_keys = ON").execute(&pool).await?;
-sqlx::query("PRAGMA journal_mode = WAL").execute(&pool).await?;
-sqlx::query("PRAGMA synchronous = NORMAL").execute(&pool).await?;
+
+// Seed the library from the bundled JSON if the DB is completely empty.
+seed_if_empty(&pool, include_str!("../seeds/default_library.json")).await?;
 ```
 
-WAL mode allows reads while writes proceed and avoids locking on the single
-pool. `foreign_keys = ON` is required per the spec; enforce on every connection
-via an `after_connect` hook on the pool, not just at startup.
+`after_connect` ensures pragmas apply to every connection in the pool, not just
+the first one. `foreign_keys = ON` is required by spec; WAL mode allows reads
+while writes proceed. `seed_if_empty` gates on all three template tables
+(exercises, set_templates, workout_templates) being empty.
 
 ### 6.3 Migration Files
 
-`migrations/001_initial_schema.sql` creates all tables from the spec in one
-file. Future migrations are numbered sequentially and additive only. The file
-name convention is `{NNN}_{description}.sql`.
+Seven migrations apply sequentially at startup:
+
+| File | Change |
+|---|---|
+| `001_initial_schema.sql` | All core tables (exercises, set templates, workout templates, sessions, sets, exercises) |
+| `002_fork_provenance.sql` | Adds `source_set_template_id` to `workout_template_set_refs` |
+| `003_workout_local_sets.sql` | Adds `owning_workout_template_id` to `set_templates` (FK → workout_templates, ON DELETE CASCADE) |
+| `004_exercise_performed_duration.sql` | Adds `paused_offset_sec`, `performed_duration_sec` to `workout_session_exercises` |
+| `005_rest_between_sets.sql` | Adds `rest_duration_sec`, `rest_started_at` to `workout_session_sets` |
+| `006_exercise_tags.sql` | Adds `exercise_tags` table (normalized, ON DELETE CASCADE) |
+| `007_exercise_catalog_metadata.sql` | Adds catalog fields to exercises; adds `exercise_muscles` table; adds partial unique index |
+
+The file name convention is `{NNN}_{description}.sql`. All migrations are
+additive only; no existing columns or tables are dropped.
 
 Key schema decisions directly from the spec:
 - All PKs are `TEXT` (UUID stored as string).
@@ -534,6 +737,14 @@ interface SessionStore {
   pausedTotalSec: number;         // seconds
   pausedAt:       number | null;  // Unix ms; non-null = currently paused
 
+  // Per-exercise timer offset: value of pausedTotalSec when the current
+  // exercise started, so exercise elapsed time excludes earlier pauses.
+  exercisePausedOffsetSec: number;
+
+  // Rest-phase state (between sets)
+  restPhase:         RestPhaseInfo | null;
+  restBetweenSetsSec: number | null;
+
   // Actions
   load(payload: ActiveSessionPayload): void;
   clear(): void;
@@ -547,14 +758,15 @@ authoritative result. There is no partial-patch logic.
 
 ### 7.2 Timer Derivation
 
+`src/hooks/useTimer.ts` exports two hooks:
+
 ```typescript
-// hooks/useTimer.ts
+// Set-level elapsed time (drives the main runner timer display)
 export function useElapsedMs(): number {
   const { setStartedAt, pausedTotalSec, pausedAt, sessionStatus } = useSessionStore();
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
-    // Only tick when actively running
     if (!setStartedAt || pausedAt !== null || sessionStatus !== 'in_progress') return;
     const id = setInterval(() => setTick(t => t + 1), 100);
     return () => clearInterval(id);
@@ -564,11 +776,35 @@ export function useElapsedMs(): number {
   const wall = pausedAt !== null ? pausedAt : Date.now();
   return Math.max(0, wall - setStartedAt - pausedTotalSec * 1000);
 }
+
+// Per-exercise elapsed time (for timed exercise progress and countdown cues)
+export function useExerciseElapsedMs(): {
+  elapsedMs: number;
+  durationHintSec: number | null;
+} {
+  const { currentExerciseId, exercises, pausedAt, pausedTotalSec,
+          exercisePausedOffsetSec, sessionStatus } = useSessionStore();
+
+  const currentExercise = exercises.find(e => e.id === currentExerciseId) ?? null;
+  const exerciseStartedAt = currentExercise?.started_at
+    ? new Date(currentExercise.started_at).getTime()
+    : null;
+
+  // ... setInterval for re-renders, same pattern as useElapsedMs ...
+
+  if (!exerciseStartedAt) return { elapsedMs: 0, durationHintSec: null };
+  const wall = pausedAt !== null ? pausedAt : Date.now();
+  const pausedDuringExerciseMs = (pausedTotalSec - exercisePausedOffsetSec) * 1000;
+  return {
+    elapsedMs: Math.max(0, wall - exerciseStartedAt - pausedDuringExerciseMs),
+    durationHintSec: currentExercise?.duration_hint_sec ?? null,
+  };
+}
 ```
 
-`tick` is only used to trigger re-renders; the actual value always recomputes
-from the DB-sourced base values. The timer cannot drift independently of the
-persisted state.
+`tick` (the state variable) is only used to trigger re-renders; the actual
+value always recomputes from the DB-sourced base values. The timer cannot drift
+independently of the persisted state.
 
 ### 7.3 TanStack Query Keys
 
@@ -580,11 +816,28 @@ persisted state.
 ['workout-template', id]
 ['session-history']
 ['session-detail', sessionId]
+['stats']
 ```
 
 Mutations invalidate the minimal affected key(s). No query in this app is
 complex enough to warrant `select` transforms or normalisation — raw entity
 arrays returned by Rust are sufficient.
+
+### 7.4 Zustand `settingsStore`
+
+```typescript
+// Persisted to localStorage key "dzerkout_settings"
+interface SettingsStore {
+  theme: ThemeKey;           // "dark" | "graphite" | "forest" | "ember" | "slate"; default "dark"
+  autoAdvance: boolean;      // auto-advance to next exercise when duration_hint elapses; default false
+  soundCues: boolean;        // Web Audio countdown beeps; default false
+  runnerCardSize: number;    // 0.5–2.0 scale multiplier for runner exercise cards; default 1.0
+  autoStartNextSet: boolean; // auto-start next set when between-set rest reaches zero; default false
+}
+```
+
+Mutations call the corresponding `setX` action which calls Zustand `set()`;
+`persist` middleware writes the full state to `localStorage` after each change.
 
 ---
 
@@ -592,24 +845,31 @@ arrays returned by Rust are sufficient.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Workouts : app open
+    [*] --> MainMenu : app open
+    MainMenu --> Exercises : tap Exercises
+    MainMenu --> Sets : tap Sets
+    Sets --> SetEditor : tap set
+    MainMenu --> Workouts : tap Workouts
     Workouts --> WorkoutEditor : tap edit
     WorkoutEditor --> SetEditor : tap set
-    Workouts --> Session : tap start (creates draft)
-    Session --> History : finish
-    Session --> Workouts : abandon
-    History --> Session : tap in-progress session
-    Exercises --> [*]
-    Sets --> SetEditor
+    MainMenu --> Runner : tap Runner (or Start on workout)
+    Runner --> History : finish
+    Runner --> MainMenu : abandon
+    MainMenu --> History : tap History
+    History --> Runner : tap in-progress session
+    MainMenu --> Stats : tap Stats
+    MainMenu --> Settings : tap Settings gear
 ```
 
-The shell `App.tsx` renders the tab bar plus a `<SessionRecoveryGate>` that
-checks for an existing draft/in-progress session on mount and shows the
-appropriate Continue/Resume modal before the UI becomes interactive.
+`App.tsx`'s `AppShell` calls `useSessionRecovery()` on mount. If an existing
+draft or in-progress session is found, a `ConfirmModal` is shown (via
+`uiStore.confirmModal`) with Continue / Resume / Discard options before the UI
+becomes interactive. The modal is rendered in `AppShell`, not on a specific
+screen.
 
-The `/session` route is accessible from the tab bar whenever `sessionId !== null`.
-Navigating away from it does not pause the session; the timer continues via the
-Zustand store and the `setInterval` in `useElapsedMs`.
+The `/runner` route is not conditionally mounted; it is always accessible via
+URL. The MainMenu shows an "Active" badge on the Runner nav button when
+`sessionStore.sessionId !== null`.
 
 ---
 
@@ -628,7 +888,7 @@ sequenceDiagram
     T->>D: BEGIN; INSERT session(draft)+sets+exercises; COMMIT
     T-->>R: ActiveSessionPayload
     R->>Z: load(payload)  [sessionStatus=draft, setStartedAt=null]
-    R->>R: navigate /session  [pre-start state, timer frozen at 0]
+    R->>R: navigate /runner  [pre-start state, timer frozen at 0]
 
     U->>R: press Start
     R->>T: start_session(session_id)
@@ -651,12 +911,18 @@ sequenceDiagram
     R->>Z: load(payload)  [pausedAt=null, paused_total_sec updated]
     Note over R,Z: interval restarts
 
-    U->>R: press Next (crossing set boundary)
+    U->>R: press Next (crossing set boundary, rest_between_sets_sec > 0)
     R->>T: advance_exercise(session_id)
-    T->>D: UPDATE old exercise→completed; UPDATE old set ended_at; UPDATE new set started_at; UPDATE new exercise→active
-    T-->>R: ActiveSessionPayload
-    R->>Z: load(payload)  [new setStartedAt, pausedTotalSec=0]
-    Note over R,Z: timer resets to 0
+    T->>D: UPDATE old exercise→completed; UPDATE old set ended_at; UPDATE next set rest_started_at
+    T-->>R: ActiveSessionPayload  [rest_phase non-null]
+    R->>Z: load(payload)  [restPhase set, no current_exercise_id]
+    Note over R,Z: rest countdown timer shown; set timer paused
+
+    U->>R: rest ends / press Start Next Set
+    R->>T: start_next_set(session_id)
+    T->>D: UPDATE rest_started_at=NULL; UPDATE set started_at; UPDATE first exercise→active
+    T-->>R: ActiveSessionPayload  [rest_phase=null, new setStartedAt]
+    R->>Z: load(payload)  [restPhase cleared, timer resets to 0]
 
     U->>R: press Prev (crossing set boundary)
     R->>T: retreat_exercise(session_id)
@@ -675,27 +941,19 @@ sequenceDiagram
 
 ### Recovery after app restart
 
-`useSessionRecovery` runs inside `App.tsx` before any tab content renders:
+`useSessionRecovery` runs inside `AppShell` before any screen renders:
 
 ```typescript
-// hooks/useSessionRecovery.ts
 export function useSessionRecovery() {
   useEffect(() => {
     sessionsApi.getActiveSession().then(payload => {
       if (!payload) return;
 
       const isDraft = payload.session.status === 'draft';
-      const label   = isDraft ? 'Continue' : 'Resume';
-
       showConfirmModal({
-        message: isDraft
-          ? 'You have an unstarted workout. Continue?'
-          : 'You have a workout in progress. Resume?',
-        confirmLabel: label,
-        onConfirm: () => {
-          sessionStore.load(payload);
-          navigate('/session');
-        },
+        message: isDraft ? 'You have an unstarted workout. Continue?' : 'You have a workout in progress. Resume?',
+        confirmLabel: isDraft ? 'Continue' : 'Resume',
+        onConfirm: () => { sessionStore.load(payload); navigate('/runner'); },
         onCancel: () => sessionsApi.discardSession(payload.session.id),
       });
     });
@@ -715,25 +973,26 @@ timer does not tick until the user presses Resume.
 |---|---|---|
 | Card/set reordering | dnd-kit drag | Up/down arrow buttons |
 | Runner navigation | Keyboard: `→` / `←` / `Space` | Touch buttons only |
-| Background timer | Window notification badge | Android foreground service |
-| App shell layout | Sidebar tabs | Bottom tab bar |
+| Background timer | Session state is in SQLite; restart recovers via useSessionRecovery | Same — DB-sourced timer survives process death |
+| App shell layout | Same MainMenu dashboard — no platform-specific tab bar | Same |
+| File I/O: export/import | `tauri-plugin-dialog` gives filesystem path → `std::fs::write/read` | `tauri-plugin-dialog` gives `content://` URI → `FileIoPlugin.kt` via ContentResolver |
 
-### Android Foreground Service
+### Android File I/O Plugin
 
-The spec requires a foreground service to prevent Android from killing an
-in-progress session. This is the only platform-native code in the project.
-Implement it as a minimal Kotlin file in
-`src-tauri/gen/android/app/src/main/kotlin/` that:
+Android's Storage Access Framework returns `content://` URIs that cannot be
+accessed via `std::fs`. `FileIoPlugin.kt` (in
+`src-tauri/gen/android/app/src/main/java/com/dzerkout/app/`) implements two
+Tauri plugin commands:
 
-1. Exposes a `startForegroundTimer(sessionName: String)` and
-   `stopForegroundTimer()` function.
-2. Shows a persistent notification with the session name.
-3. Tapping the notification launches the app and navigates to `/session`.
+- `writeUri(uri, content)`: opens an OutputStream via `ContentResolver` on a
+  background thread, writes UTF-8 text, resolves on the UI thread.
+- `readUri(uri)`: opens an InputStream via `ContentResolver` on a background
+  thread, reads UTF-8 text, resolves on the UI thread.
 
-Wire to two Tauri commands: `start_foreground_notification(name)` and
-`stop_foreground_notification()`. Call them from the frontend on session start
-and finish/abandon. No foreground service is needed on macOS; gate the calls
-behind `isAndroid`.
+`commands/file_io.rs` exposes these as the `write_text_to_uri` and
+`read_text_from_uri` Tauri commands, with a desktop fallback using `std::fs`.
+The frontend (`api/fileExport.ts`) calls these commands uniformly on both
+platforms; the path/URI is whatever `tauri-plugin-dialog` returns.
 
 ---
 
@@ -748,7 +1007,7 @@ behind `isAndroid`.
 | `Conflict` | Inline form error via `setError` |
 | `Validation` | Inline form error |
 | `NotFound` | Toast notification; refresh query |
-| `NoActiveSession` | Clear session store; navigate to /workouts |
+| `NoActiveSession` | Clear session store; navigate to / |
 | `Database` | Global error boundary modal: "Something went wrong. Please restart." |
 
 All Rust commands return `Result<T, AppError>`. The `api/` wrappers parse the
@@ -789,20 +1048,23 @@ migrations applied. One test per critical state transition:
 3. `advance_exercise` within same set — verify timer continuity (set
    `started_at` unchanged).
 4. `advance_exercise` crossing set boundary — verify set `ended_at` / new set
-   `started_at`.
-5. `retreat_exercise` within same set — verify corrective rewrite.
-6. `retreat_exercise` crossing set boundary — verify full corrective rewrite
+   `started_at` / rest phase when `rest_between_sets_sec > 0`.
+5. `start_next_set` — verify rest cleared, set started, first exercise active.
+6. `retreat_exercise` within same set — verify corrective rewrite.
+7. `retreat_exercise` crossing set boundary — verify full corrective rewrite
    including pause fields.
-7. `pause_session` / `resume_session` round-trip — verify `paused_total_sec`
+8. `pause_session` / `resume_session` round-trip — verify `paused_total_sec`
    accumulates correctly.
-8. `finish_session` — verify status, all `ended_at` fields.
-9. `delete_exercise` with references — verify all three reference types handled
-   correctly.
+9. `finish_session` — verify status, all `ended_at` fields.
+10. `delete_exercise` with references — verify all three reference types handled
+    correctly.
 
 ### Frontend: unit tests (Vitest)
 
 - `useElapsedMs`: mock `Date.now()`; test active, paused, and restarted-after-
   Prev states. Pure computation; no component needed.
+- `useExerciseElapsedMs`: verify `exercisePausedOffsetSec` correctly excludes
+  pre-exercise pause time.
 - `SortableList`: verify dnd-kit renders on desktop (mock `isAndroid = false`);
   verify arrow buttons render on Android (mock `isAndroid = true`).
 
@@ -832,7 +1094,6 @@ Four critical happy paths:
 | Risk | Severity | Mitigation |
 |---|---|---|
 | Timer drift if `Date.now()` skews after relaunch | Low | Base values are from DB timestamps; drift only affects sub-second display jitter |
-| Android foreground service Kotlin boilerplate | Medium | Minimal v1 scope: notification only, no audio or scheduling |
 | `dnd-kit` touch-drag on Android (if attempted later) | Low | Explicitly disabled in v1; arrow-button path is isolated in `SortableList` |
 | `sqlx` `DATABASE_URL` required at compile time for query macros | Low | Use `DATABASE_URL` env var pointing to dev DB; CI sets it in the workflow; alternatively use `query!` with `offline` mode |
 | Assignment editor UX complexity (nested override per card per workout) | Medium | Keep `AssignmentEditor` as a simple popover with nullable fields; unset = no override |
@@ -845,14 +1106,13 @@ Four critical happy paths:
   entire category of consistency bugs.
 - No undo/redo stack. Prev is the only corrective action and it is fully
   specified.
-- Android foreground service is notification-only in v1; no lock-screen widget
-  or background audio.
+- No Android foreground service. The session timer is fully DB-sourced; timer
+  accuracy survives process death and is recovered correctly on next launch via
+  `useSessionRecovery`. A foreground notification (if desired later) can be
+  added without any schema changes.
 
 ### Safely deferred (schema already supports)
 
-- Muscle-group tagging: `placeholder_tag` + `exercise_id` FK are already stored
-  in session exercises.
-- Rest timer UI: `rest_between_sets_sec` is stored; no schema change needed.
 - Image upload: `image_url` column exists; UI field is disabled.
 - Ad-hoc sessions: `workout_template_id` is nullable.
 - Sync layer: UUID PKs + `created_at` / `updated_at` on every row; a
@@ -861,45 +1121,91 @@ Four critical happy paths:
 
 ---
 
-## 14. Recommended Implementation Order
+## 14. Library and Data Management
 
-### Phase 1 — Foundation (days 1–2)
-1. Tauri v2 scaffold: `src-tauri/` + `src/` structure, Vite config, TypeScript config.
-2. `SqlitePool` initialization, WAL + FK pragmas, `sqlx::migrate!` runner.
-3. `migrations/001_initial_schema.sql` — all tables from the spec in one file.
-4. `AppError` type + `tauri::ipc::IntoIpcResponse` impl.
-5. Command registration skeleton (`lib.rs`).
+### Export / Import
 
-### Phase 2 — Data layer (days 3–5)
-6. Exercise CRUD commands + domain service (with unlink logic and all three
-   reference-type handling).
-7. SetTemplate CRUD + card management + clone command.
-8. WorkoutTemplate CRUD + set refs + card assignments + `upsert_card_assignment`.
-9. React screens: ExerciseLibrary, SetTemplateBuilder, WorkoutTemplateBuilder
-   (read + write, no drag yet).
-10. TanStack Query setup + typed `api/` wrappers.
+The library JSON format (`schema: "dzerkout.library"`, `version: 1`) is a
+complete snapshot of all user data: exercises (with tags and muscles), set
+templates (with cards), workout templates (with set refs and assignments),
+sessions, session sets, and session exercises. It is identical to a manual app
+backup.
 
-### Phase 3 — Session core (days 6–9)
-11. `create_session_draft` — atomic snapshot with full fallback chains.
-12. `start_session`, `finish_session`, `abandon_session`, `discard_session`.
-13. `advance_exercise`, `retreat_exercise` (including corrective Prev and
-    cross-set cases).
-14. `skip_exercise`.
-15. `pause_session`, `resume_session`.
-16. `get_active_session`.
-17. Zustand `sessionStore` + `useTimer` hook.
-18. `ActiveWorkoutRunner` screen (timer display, exercise queue, all controls).
-19. `useSessionRecovery` hook + recovery gate in `App.tsx`.
+**Export** (`export_library_json`): assembles the full payload in one
+read-only pass. Available in two frontend paths:
+1. Clipboard export — `clipboardWriteText(json)` via `tauri-plugin-clipboard-manager`.
+2. File export — `saveJsonToFile(json)` via `tauri-plugin-dialog` + `write_text_to_uri`.
 
-### Phase 4 — Platform polish (days 10–12)
-20. `SortableList` with dnd-kit on desktop.
-21. Android up/down button fallback in `SortableList`.
-22. Keyboard shortcuts in `ActiveWorkoutRunner` (desktop only).
-23. Android foreground service Kotlin shim + Tauri commands.
-24. `WorkoutHistory` screen + `SessionDetail`.
+**Import** (`import_library_json`): validates the JSON schema, then upserts all
+entities in FK-safe write order within a single transaction. The operation is
+idempotent: re-importing the same file updates existing rows rather than
+creating duplicates (exercises are keyed by `id`; catalog exercises also match
+on `catalog_source` + `catalog_id`). Returns `ImportResult` with row-level
+counts.
 
-### Phase 5 — Testing and hardening (days 13–14)
-25. Rust `sqlx::test` integration tests for all 9 DB scenarios.
-26. Rust unit tests for domain logic (unlink, snapshot fallback, pause arithmetic).
-27. `useElapsedMs` unit tests with mocked `Date.now()`.
-28. 4 critical E2E scenarios with WebdriverIO.
+### Reset and Clear
+
+**`reset_local_data`**: calls `clear_local_data` then `seed_if_empty`. Returns
+`ResetResult` with `cleared: bool`, `seeded: bool`, and the `ImportResult` from
+seeding (if any).
+
+**`clear_local_data`**: DELETE all user data in FK-safe order (session
+exercises → session sets → sessions → card assignments → set refs → workout
+templates → set cards → set templates → exercise muscles → exercise tags →
+exercises). Returns `ClearResult { cleared: bool }`. Does not re-seed.
+
+Both are accessible from Settings → Data section.
+
+### Startup Seed
+
+`seed_if_empty` runs at every app startup (in `lib.rs` setup). It is a no-op
+unless all three template tables (exercises, set_templates, workout_templates)
+are empty. When they are all empty, it runs `import_library_json` with the
+content of `src-tauri/seeds/default_library.json`, which is bundled into the
+binary via `include_str!`. Exercises in the default seed are imported with
+`is_catalog = true` and `catalog_source = "default"`.
+
+---
+
+## 15. Catalog Tooling
+
+Two Node.js scripts in `scripts/` convert external exercise datasets into
+dzerkout library JSON for evaluation and manual import.
+
+### `generate-free-exercise-db-library.mjs`
+
+Source: [free-exercise-db](https://github.com/yuhonas/free-exercise-db)
+(Unlicense / public domain). Clone to `vendor/free-exercise-db/` before running.
+
+```sh
+npm run generate:free-exercise-db
+# or with options:
+node scripts/generate-free-exercise-db-library.mjs \
+  --exclude-category "strongman,olympic weightlifting" \
+  --max 200 \
+  --output scripts/generated/subset.json
+```
+
+### `generate-yoga-poses-library.mjs`
+
+Source: yoga poses dataset in `vendor/yoga/yoga_poses.json`.
+
+```sh
+npm run generate:yoga-poses
+```
+
+### Common properties
+
+- Output directory: `scripts/generated/` (gitignored).
+- Output schema: `dzerkout.library` version 1 — same format as app export.
+- Exercise IDs: deterministic UUID v5, keyed on `{catalog_source}:{catalog_id}`.
+  Re-importing the same file is safe; rows are updated, not duplicated.
+- The bundled seed (`src-tauri/seeds/default_library.json`) is **not** modified
+  automatically by these scripts.
+
+### Import for evaluation
+
+1. Open the app.
+2. Go to **Settings → Data → Import**.
+3. Select the generated JSON file.
+4. The app upserts all exercises as catalog entries (`is_catalog: true`).
