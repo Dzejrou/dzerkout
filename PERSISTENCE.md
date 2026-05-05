@@ -1,7 +1,7 @@
 # dzerkout — Persistence Design
 
-**Version**: 1.0  
-**Date**: 2026-04-22  
+**Version**: 1.1
+**Date**: 2026-05-05
 **Inputs**: [SPEC.md](SPEC.md) · [ARCH.md](ARCH.md)  
 **Stack**: SQLite · Rust · sqlx (direct SQL, no ORM)
 
@@ -13,6 +13,8 @@
 
 ```mermaid
 erDiagram
+    exercises ||--o{ exercise_tags              : "has"
+    exercises ||--o{ exercise_muscles           : "has"
     exercises ||--o{ set_template_cards         : "referenced by"
     set_templates ||--|{ set_template_cards      : "owns"
     set_templates ||--o{ workout_template_set_refs : "referenced by"
@@ -29,7 +31,8 @@ erDiagram
 
 ### Two-layer split
 
-**Template layer** (`exercises`, `set_templates`, `set_template_cards`,
+**Template layer** (`exercises`, `exercise_tags`, `exercise_muscles`,
+`set_templates`, `set_template_cards`,
 `workout_templates`, `workout_template_set_refs`,
 `workout_template_card_assignments`) — reusable, mutable, never directly
 executed. Changes here do not affect sessions already snapshotted.
@@ -48,6 +51,8 @@ transitions and corrective Prev rewrites.
 | `duration_hint_sec` | `workout_session_exercises` | Records the value actually used, after assignment override resolution |
 | `notes` | `workout_session_exercises` | Records the notes from assignment or card at snapshot time |
 | `placeholder_tag` | `workout_session_exercises` | Preserved for future analytics; the template card may change |
+| `paused_offset_sec` | `workout_session_exercises` | Set's `paused_total_sec` at the moment this exercise became active; used to derive per-exercise paused time |
+| `performed_duration_sec` | `workout_session_exercises` | Active wall-time seconds for this exercise; NULL until exercise leaves active state; cleared by corrective Prev |
 
 ### How workout-specific overrides fit
 
@@ -103,7 +108,7 @@ in a future migration.
 
 ### 3.1 `exercises`
 
-Stores all exercises available to the user.
+Stores all exercises available to the user — both user-created and catalog-imported.
 
 ```sql
 CREATE TABLE exercises (
@@ -111,18 +116,115 @@ CREATE TABLE exercises (
     name        TEXT NOT NULL,
     notes       TEXT,
     image_url   TEXT,                   -- reserved; not surfaced in v1 UI
+    -- Catalog metadata (migration 007); all nullable so user-created rows are unaffected
+    catalog_source TEXT,               -- source identifier, e.g. "free-exercise-db"
+    catalog_id     TEXT,               -- ID within that source
+    is_catalog     INTEGER NOT NULL DEFAULT 0
+                       CHECK (is_catalog IN (0, 1)),
+    category    TEXT
+                    CHECK (category IS NULL OR category IN (
+                        'strength', 'stretching', 'cardio', 'plyometrics',
+                        'powerlifting', 'olympic weightlifting', 'strongman', 'yoga'
+                    )),
+    equipment   TEXT
+                    CHECK (equipment IS NULL OR equipment IN (
+                        'none', 'body only', 'barbell', 'dumbbell', 'cable', 'machine',
+                        'kettlebells', 'bands', 'medicine ball', 'exercise ball',
+                        'foam roll', 'e-z curl bar', 'other'
+                    )),
+    level       TEXT
+                    CHECK (level IS NULL OR level IN (
+                        'beginner', 'intermediate', 'expert'
+                    )),
+    mechanic    TEXT
+                    CHECK (mechanic IS NULL OR mechanic IN ('compound', 'isolation')),
+    force       TEXT
+                    CHECK (force IS NULL OR force IN ('push', 'pull', 'static')),
+    instructions_json TEXT,            -- validated as JSON array of strings in domain layer
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 CREATE UNIQUE INDEX uq_exercises_name ON exercises (name);
+
+-- Prevents importing the same catalog exercise twice (migration 007)
+CREATE UNIQUE INDEX uq_exercises_catalog
+    ON exercises (catalog_source, catalog_id)
+    WHERE catalog_source IS NOT NULL AND catalog_id IS NOT NULL;
+
+-- Partial indexes for catalog filter queries (migration 007)
+CREATE INDEX idx_exercises_category  ON exercises (category)  WHERE category  IS NOT NULL;
+CREATE INDEX idx_exercises_equipment ON exercises (equipment) WHERE equipment IS NOT NULL;
+CREATE INDEX idx_exercises_level     ON exercises (level)     WHERE level     IS NOT NULL;
+CREATE INDEX idx_exercises_force     ON exercises (force)     WHERE force     IS NOT NULL;
 ```
 
-**Constraints:** `name` uniqueness enforced by index. No FK dependencies.
+**Catalog vs user distinction:**
+- `is_catalog = 0` (default): user-created exercise.
+- `is_catalog = 1`: imported from an external catalog source (`catalog_source` / `catalog_id`).
+- Catalog exercises can be edited by the user; `is_catalog` is informational only.
+
+**Constraints:** `name` uniqueness enforced by `uq_exercises_name`. Catalog
+uniqueness enforced by `uq_exercises_catalog` partial index on the non-null pair.
+No FK dependencies.
 
 ---
 
-### 3.2 `set_templates`
+### 3.2 `exercise_tags`
+
+Normalized tag storage. One row per tag per exercise. Added in migration 006.
+
+```sql
+CREATE TABLE exercise_tags (
+    exercise_id TEXT NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+    tag         TEXT NOT NULL,
+    PRIMARY KEY (exercise_id, tag)
+);
+```
+
+**Constraints:** `ON DELETE CASCADE` — tags are automatically removed when the
+exercise is deleted. No `CHECK` constraint on `tag`; validation is domain-layer
+only (against `VALID_EXERCISE_TAGS`).
+
+**Valid tag values** (enforced in Rust `VALID_EXERCISE_TAGS`):
+`unspecified`, `push`, `pull`, `legs`, `core`, `mobility`, `yoga`, `cardio`,
+`isotonic`, `isometric`, `concentric`, `eccentric`.
+
+Note: `placeholder_tag` in `set_template_cards` uses the same first 6 values
+(`unspecified`, `push`, `pull`, `legs`, `core`, `mobility`) enforced at DB level
+by `CHECK` constraint. The extra 6 tag values are exercise-only and have no DB
+CHECK — domain layer is the enforcement boundary.
+
+---
+
+### 3.3 `exercise_muscles`
+
+Tracks primary and secondary muscle targets per exercise. Added in migration 007.
+
+```sql
+CREATE TABLE exercise_muscles (
+    exercise_id TEXT NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+    muscle      TEXT NOT NULL CHECK (muscle IN (
+        'abdominals', 'abductors', 'adductors', 'biceps', 'calves',
+        'chest', 'forearms', 'glutes', 'hamstrings', 'lats',
+        'lower back', 'middle back', 'neck', 'quadriceps',
+        'shoulders', 'traps', 'triceps'
+    )),
+    role        TEXT NOT NULL CHECK (role IN ('primary', 'secondary')),
+    PRIMARY KEY (exercise_id, muscle, role)
+);
+
+CREATE INDEX idx_exercise_muscles_by_muscle   ON exercise_muscles (muscle, role);
+CREATE INDEX idx_exercise_muscles_by_exercise ON exercise_muscles (exercise_id);
+```
+
+**FK notes:**
+- `exercise_id CASCADE`: muscle rows are owned by the exercise; deletion of the
+  exercise automatically removes all its muscle rows (no domain-layer step needed).
+
+---
+
+### 3.4 `set_templates`
 
 Reusable named sets. Owns cards via `set_template_cards`.
 
@@ -131,14 +233,27 @@ CREATE TABLE set_templates (
     id          TEXT NOT NULL PRIMARY KEY,
     name        TEXT NOT NULL,
     notes       TEXT,
+    owning_workout_template_id TEXT
+                    REFERENCES workout_templates(id) ON DELETE CASCADE, -- migration 003
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 ```
 
+**`owning_workout_template_id` semantics (migration 003):**
+- `NULL` = global/reusable set; appears in the Sets library, can be added to any workout.
+- non-`NULL` = workout-local set; hidden from the Sets library; created when the user
+  forks a set from within the workout editor (`clone_set_from_workout`).
+- `ON DELETE CASCADE`: deleting a workout template automatically deletes all its
+  locally owned sets.
+
+Workout-local sets can be promoted to global via `export_forked_set`, which
+creates an independent copy with a new ID and `owning_workout_template_id = NULL`.
+The original local fork is not removed by this operation.
+
 ---
 
-### 3.3 `set_template_cards`
+### 3.5 `set_template_cards`
 
 Ordered cards within a set template. Each card is either `concrete`
 (references an exercise) or `placeholder` (carries a tag).
@@ -186,11 +301,11 @@ CREATE UNIQUE INDEX uq_stc_set_order ON set_template_cards (set_template_id, ord
   deletes all its cards.
 - `exercise_id RESTRICT`: prevents exercise deletion while card references
   exist. The service converts all referencing cards to placeholders within the
-  deletion transaction before the DELETE fires (see §7).
+  deletion transaction before the DELETE fires (see §9.3).
 
 ---
 
-### 3.4 `workout_templates`
+### 3.6 `workout_templates`
 
 Named reusable workouts. Owns set references and per-card assignments.
 
@@ -211,7 +326,7 @@ CREATE TABLE workout_templates (
 
 ---
 
-### 3.5 `workout_template_set_refs`
+### 3.7 `workout_template_set_refs`
 
 Ordered references from a workout template to set templates. The same set
 template may appear multiple times.
@@ -224,6 +339,7 @@ CREATE TABLE workout_template_set_refs (
     set_template_id     TEXT NOT NULL
                             REFERENCES set_templates(id) ON DELETE RESTRICT,
     order_index         INTEGER NOT NULL,
+    source_set_template_id TEXT,   -- migration 002; see note below
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -231,6 +347,14 @@ CREATE TABLE workout_template_set_refs (
 CREATE UNIQUE INDEX uq_wtsr_workout_order
     ON workout_template_set_refs (workout_template_id, order_index);
 ```
+
+**`source_set_template_id` semantics (migration 002):**
+- `NULL` = normal set reference (not forked).
+- non-`NULL` = records the original set template ID from which this ref was forked via
+  `clone_set_from_workout`. Used solely to drive the "Forked" badge in the workout editor.
+- **No FK constraint** on this column: if the original set template is later deleted,
+  the value becomes stale but causes no integrity error. The badge display falls back
+  gracefully.
 
 **FK notes:**
 - `workout_template_id CASCADE`: set refs owned by the workout template.
@@ -240,7 +364,7 @@ CREATE UNIQUE INDEX uq_wtsr_workout_order
 
 ---
 
-### 3.6 `workout_template_card_assignments`
+### 3.8 `workout_template_card_assignments`
 
 Workout-specific overrides for individual cards within a set reference.
 At most one row per `(workout_template_set_ref_id, set_template_card_id)`.
@@ -281,7 +405,7 @@ no separate `CREATE INDEX` is needed.
 
 ---
 
-### 3.7 `workout_sessions`
+### 3.9 `workout_sessions`
 
 One row per workout attempt. Lifecycle: `draft` → `in_progress` →
 `completed | abandoned`.
@@ -321,10 +445,10 @@ CREATE INDEX idx_ws_history ON workout_sessions (session_date DESC, started_at D
 
 ---
 
-### 3.8 `workout_session_sets`
+### 3.10 `workout_session_sets`
 
 Snapshot of one set as performed. One row per non-empty set reference in the
-snapshot. Owns the set timer state.
+snapshot. Owns the set timer state and rest-phase state.
 
 ```sql
 CREATE TABLE workout_session_sets (
@@ -338,6 +462,9 @@ CREATE TABLE workout_session_sets (
     ended_at                TEXT,
     paused_total_sec        INTEGER NOT NULL DEFAULT 0,  -- accumulated paused seconds
     paused_at               TEXT,       -- non-null while currently paused
+    -- Rest-phase columns (migration 005)
+    rest_duration_sec       INTEGER,    -- configured rest duration; NULL = not in rest
+    rest_started_at         TEXT,       -- wall-clock start of rest; NULL = not in rest
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -346,6 +473,11 @@ CREATE UNIQUE INDEX uq_wss_session_order
     ON workout_session_sets (workout_session_id, order_index);
 ```
 
+**Set lifecycle states (derived from columns):**
+- **In rest**: `rest_started_at IS NOT NULL AND started_at IS NULL`
+- **Active**: `started_at IS NOT NULL AND ended_at IS NULL`
+- **Ended**: `ended_at IS NOT NULL`
+
 **FK notes:**
 - `workout_session_id CASCADE`: sets are owned by their session.
 - `source_set_template_id SET NULL`: provenance only; must not block template
@@ -353,7 +485,7 @@ CREATE UNIQUE INDEX uq_wss_session_order
 
 ---
 
-### 3.9 `workout_session_exercises`
+### 3.11 `workout_session_exercises`
 
 One row per card as performed or skipped within a session set. The completed
 historical record.
@@ -384,6 +516,9 @@ CREATE TABLE workout_session_exercises (
     started_at              TEXT,
     ended_at                TEXT,
     notes                   TEXT,
+    -- Per-exercise timing (migration 004)
+    paused_offset_sec       INTEGER NOT NULL DEFAULT 0,  -- set.paused_total_sec at activation
+    performed_duration_sec  INTEGER,    -- active wall-time seconds; NULL until exercise ends
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
 
@@ -403,6 +538,14 @@ CREATE INDEX idx_wse_active
     ON workout_session_exercises (workout_session_set_id, status)
     WHERE status = 'active';
 ```
+
+**Per-exercise paused time derivation:**
+```
+per_exercise_paused_sec = (set.paused_total_sec at exercise end) - paused_offset_sec
+```
+
+`performed_duration_sec` is computed at exercise completion and cleared back to
+`NULL` by corrective Prev.
 
 **FK notes:**
 - `workout_session_set_id CASCADE`: exercises are owned by their set.
@@ -432,6 +575,9 @@ Create equivalent triggers for: `set_templates`, `set_template_cards`,
 `workout_template_card_assignments`, `workout_sessions`,
 `workout_session_sets`, `workout_session_exercises`.
 
+`exercise_tags` and `exercise_muscles` have no `updated_at` column and require
+no trigger.
+
 The `WHEN NEW.updated_at = OLD.updated_at` guard prevents infinite recursion
 and allows callers to supply an explicit `updated_at` (useful for future sync
 import).
@@ -442,8 +588,11 @@ import).
 
 | Column | References | ON DELETE | Rationale |
 |---|---|---|---|
+| `exercise_tags.exercise_id` | `exercises(id)` | CASCADE | Tags owned by exercise |
+| `exercise_muscles.exercise_id` | `exercises(id)` | CASCADE | Muscles owned by exercise |
 | `set_template_cards.set_template_id` | `set_templates(id)` | CASCADE | Cards owned by set |
 | `set_template_cards.exercise_id` | `exercises(id)` | RESTRICT | Service converts card before delete |
+| `set_templates.owning_workout_template_id` | `workout_templates(id)` | CASCADE | Local set owned by workout; deleted with it |
 | `workout_template_set_refs.workout_template_id` | `workout_templates(id)` | CASCADE | Refs owned by workout |
 | `workout_template_set_refs.set_template_id` | `set_templates(id)` | RESTRICT | User warned; service removes refs first |
 | `workout_template_card_assignments.workout_template_set_ref_id` | `workout_template_set_refs(id)` | CASCADE | Assignment meaningless without its ref |
@@ -454,6 +603,10 @@ import).
 | `workout_session_sets.source_set_template_id` | `set_templates(id)` | SET NULL | Provenance only |
 | `workout_session_exercises.workout_session_set_id` | `workout_session_sets(id)` | CASCADE | Exercises owned by set |
 | `workout_session_exercises.exercise_id` | `exercises(id)` | SET NULL | FK nulled; display_name preserved |
+
+`workout_template_set_refs.source_set_template_id` has **no FK constraint** —
+it is a plain TEXT field recording the forked-from set ID for badge display.
+Staleness after the original set is deleted is acceptable.
 
 ### Exercise deletion/unlink — safe sequence
 
@@ -480,15 +633,18 @@ SET exercise_id   = NULL,
 WHERE exercise_id = :id;
 
 -- 4. Delete the exercise.
---    SQLite automatically SET NULL on workout_session_exercises.exercise_id
---    via the ON DELETE SET NULL FK. Steps 2 & 3 have already removed all
---    RESTRICT-guarded references, so this DELETE succeeds.
+--    SQLite automatically:
+--      SET NULL on workout_session_exercises.exercise_id (via ON DELETE SET NULL FK)
+--      CASCADE DELETE on exercise_tags and exercise_muscles rows
+--    Steps 2 & 3 have already removed all RESTRICT-guarded references,
+--    so this DELETE succeeds.
 DELETE FROM exercises WHERE id = :id;
 ```
 
 After step 2, `set_template_cards` has no remaining `exercise_id = :id` rows,
 so the RESTRICT FK is satisfied at step 4. Step 4 triggers SQLite's built-in
-SET NULL cascade on `workout_session_exercises`, preserving `display_name`.
+SET NULL cascade on `workout_session_exercises`, preserving `display_name`, and
+CASCADE DELETE on `exercise_tags` and `exercise_muscles`.
 
 ---
 
@@ -497,6 +653,13 @@ SET NULL cascade on `workout_session_exercises`, preserving `display_name`.
 | Index | Columns | Purpose |
 |---|---|---|
 | `uq_exercises_name` | `exercises(name)` UNIQUE | Name uniqueness + search |
+| `uq_exercises_catalog` | `exercises(catalog_source, catalog_id)` UNIQUE partial WHERE both non-null | Catalog dedup — prevents importing the same catalog exercise twice |
+| `idx_exercises_category` | `exercises(category)` partial WHERE non-null | Catalog filter queries |
+| `idx_exercises_equipment` | `exercises(equipment)` partial WHERE non-null | Catalog filter queries |
+| `idx_exercises_level` | `exercises(level)` partial WHERE non-null | Catalog filter queries |
+| `idx_exercises_force` | `exercises(force)` partial WHERE non-null | Catalog filter queries |
+| `idx_exercise_muscles_by_muscle` | `exercise_muscles(muscle, role)` | Filter exercises by muscle + role |
+| `idx_exercise_muscles_by_exercise` | `exercise_muscles(exercise_id)` | Load muscles for a given exercise |
 | `uq_stc_set_order` | `set_template_cards(set_template_id, order_index)` UNIQUE | Ordered card retrieval; prevents duplicate positions within a set |
 | `uq_wtsr_workout_order` | `workout_template_set_refs(workout_template_id, order_index)` UNIQUE | Ordered set ref retrieval; prevents duplicate positions within a workout |
 | *(implicit)* | `workout_template_card_assignments(workout_template_set_ref_id, set_template_card_id)` UNIQUE | Backed by the inline `UNIQUE` constraint; no separate index needed |
@@ -510,17 +673,18 @@ SQLite partial indexes (`WHERE` clause) are supported from SQLite 3.8.9, which
 is bundled with Tauri v2. All partial indexes above dramatically shrink the
 working set for the most frequent runtime lookups.
 
+Note: no index exists for `mechanic` — the column is present but not indexed.
+
 ---
 
 ## 7. Migration Plan
 
 Use `sqlx::migrate!("migrations/")` at app startup with numbered migration
-files. A single initial migration is sufficient for v1; split only when there
-is a real dependency reason.
+files.
 
 ### `migrations/001_initial_schema.sql`
 
-Creates all tables, indexes, and `updated_at` triggers in dependency order:
+Creates all base tables, indexes, and `updated_at` triggers in dependency order:
 
 ```
 exercises
@@ -537,19 +701,59 @@ workout_session_exercises
 [WAL and FK pragmas via pool setup, not in migration]
 ```
 
-**Placeholder tag values** — validated by `CHECK` constraint in the schema.
-No separate lookup table. The Rust `PlaceholderTag` enum enforces the same
-vocabulary at the app layer. To add a new tag in future, add it to the CHECK
-constraint in a new migration and relax the Rust enum.
+### `migrations/002_fork_provenance.sql`
 
-**No seed data** is required. The app starts with empty tables.
+Adds `source_set_template_id TEXT` to `workout_template_set_refs`.
+Records the original set template when a ref is forked via `clone_set_from_workout`.
+No FK constraint — provenance only.
+
+### `migrations/003_workout_local_sets.sql`
+
+Adds `owning_workout_template_id TEXT REFERENCES workout_templates(id) ON DELETE CASCADE`
+to `set_templates`.
+Marks a set as workout-local (non-null) vs. global library (null).
+
+### `migrations/004_exercise_performed_duration.sql`
+
+Adds to `workout_session_exercises`:
+- `paused_offset_sec INTEGER NOT NULL DEFAULT 0`
+- `performed_duration_sec INTEGER`
+
+Enables per-exercise active-time tracking.
+
+### `migrations/005_rest_between_sets.sql`
+
+Adds to `workout_session_sets`:
+- `rest_duration_sec INTEGER`
+- `rest_started_at TEXT`
+
+Enables the between-set rest phase in the runner.
+
+### `migrations/006_exercise_tags.sql`
+
+Creates the `exercise_tags` table (see §3.2).
+
+### `migrations/007_exercise_catalog_metadata.sql`
+
+Adds catalog columns to `exercises` (`catalog_source`, `catalog_id`,
+`is_catalog`, `category`, `equipment`, `level`, `mechanic`, `force`,
+`instructions_json`) and creates the `exercise_muscles` table (see §3.3).
+Also creates `uq_exercises_catalog` and the four catalog partial indexes.
+
+### Startup seed
+
+At app startup, `seed_if_empty(pool, seed_json)` is called with
+`src-tauri/seeds/default_library.json`. Seeding is applied **only** when
+`exercises`, `set_templates`, and `workout_templates` are all empty.
+Once any of those tables has at least one row the seed is never re-applied.
+Session/history tables are not consulted for the emptiness check.
 
 ### Future migration naming
 
-`002_add_muscle_tag.sql`, `003_sync_ids.sql`, etc. All v1 migrations are
-additive. SQLite does not support `ALTER COLUMN` or `DROP CONSTRAINT`;
-constraint changes require `CREATE TABLE … AS SELECT … DROP … RENAME` (the
-standard SQLite table-rebuild pattern, handled in the migration file).
+`008_add_column.sql`, etc. All v1 migrations are additive. SQLite does not
+support `ALTER COLUMN` or `DROP CONSTRAINT`; constraint changes require
+`CREATE TABLE … AS SELECT … DROP … RENAME` (the standard SQLite table-rebuild
+pattern, handled in the migration file).
 
 ---
 
@@ -561,17 +765,26 @@ standard SQLite table-rebuild pattern, handled in the migration file).
 src-tauri/src/
 ├── db/
 │   ├── mod.rs                # pool init, pragma setup, migration runner
-│   ├── exercises.rs          # repository functions: SELECT/INSERT/UPDATE/DELETE
+│   ├── exercises.rs          # repository functions: SELECT/INSERT/UPDATE/DELETE,
+│   │                         #   tags, muscles, catalog search
 │   ├── set_templates.rs
 │   ├── workout_templates.rs  # includes set_refs and assignments
 │   ├── sessions.rs           # all session + set + exercise row operations
-│   └── history.rs            # read-only history queries
-└── domain/
-    ├── types.rs              # PlaceholderTag, SessionStatus, ExerciseStatus enums
-    ├── exercise.rs           # service: create, update, delete-with-unlink
-    ├── set_template.rs       # service: CRUD, clone, reorder
-    ├── workout_template.rs   # service: CRUD, assignment upsert, startability check
-    └── session.rs            # service: snapshot, all transitions
+│   ├── history.rs            # read-only history queries
+│   └── stats.rs              # read-only stats aggregation queries
+├── domain/
+│   ├── mod.rs
+│   ├── types.rs              # all row types, payload types, enum constant arrays
+│   ├── exercise.rs           # service: create, update, delete-with-unlink, search
+│   ├── set_template.rs       # service: CRUD, clone, reorder, fork export
+│   ├── workout_template.rs   # service: CRUD, assignment upsert, clone_set_from_workout
+│   ├── session.rs            # service: snapshot, all transitions, start_next_set
+│   ├── library.rs            # service: export, import, clear, reset, seed
+│   └── stats.rs              # service: get_stats with range filtering
+└── tests/
+    ├── mod.rs                # integration tests (sqlx::test — fresh in-memory DB each)
+    ├── exercise_catalog.rs   # catalog-specific tests
+    └── exercise_search.rs    # search filter tests
 ```
 
 ### Repository vs service boundary
@@ -583,12 +796,15 @@ business logic.
 
 ```rust
 // db/exercises.rs — example signatures
-pub async fn find_all(pool: &SqlitePool) -> Result<Vec<Exercise>, sqlx::Error>;
-pub async fn find_by_id(conn: &mut SqliteConnection, id: &str) -> Result<Option<Exercise>, sqlx::Error>;
-pub async fn insert(conn: &mut SqliteConnection, row: &NewExercise) -> Result<Exercise, sqlx::Error>;
-pub async fn update(conn: &mut SqliteConnection, id: &str, name: &str, notes: Option<&str>) -> Result<Exercise, sqlx::Error>;
+pub async fn find_all(pool: &SqlitePool) -> Result<Vec<ExerciseRow>, sqlx::Error>;
+pub async fn find_by_id(conn: &mut SqliteConnection, id: &str) -> Result<Option<ExerciseRow>, sqlx::Error>;
+pub async fn insert(conn: &mut SqliteConnection, id: &str, name: &str, notes: Option<&str>, meta: &ExerciseMeta) -> Result<ExerciseRow, sqlx::Error>;
+pub async fn update(conn: &mut SqliteConnection, id: &str, name: &str, notes: Option<&str>) -> Result<ExerciseRow, sqlx::Error>;
 pub async fn delete(conn: &mut SqliteConnection, id: &str) -> Result<(), sqlx::Error>;
 pub async fn find_referencing_cards(conn: &mut SqliteConnection, exercise_id: &str) -> Result<Vec<ExerciseCardRef>, sqlx::Error>;
+pub async fn set_tags(conn: &mut SqliteConnection, id: &str, tags: &[String]) -> Result<(), sqlx::Error>;
+pub async fn set_muscles(conn: &mut SqliteConnection, id: &str, muscles: &[ExerciseMuscleInput]) -> Result<(), sqlx::Error>;
+pub async fn search(pool: &SqlitePool, filters: &ExerciseSearchFilters, limit: i64, offset: i64) -> Result<(Vec<ExerciseRow>, i64), sqlx::Error>;
 ```
 
 **Service functions** (`domain/*.rs`) open transactions and compose repository
@@ -596,8 +812,9 @@ calls. They own business rules and invariant enforcement.
 
 ```rust
 // domain/exercise.rs — example signatures
-pub async fn create(pool: &SqlitePool, name: &str, notes: Option<&str>) -> Result<Exercise, AppError>;
-pub async fn delete_with_unlink(pool: &SqlitePool, id: &str) -> Result<(), AppError>;
+pub async fn create(pool: &SqlitePool, name: &str, notes: Option<&str>, tags: &[String], meta: Option<&ExerciseMeta>, muscles: Option<&[ExerciseMuscleInput]>) -> Result<Exercise, AppError>;
+pub async fn delete_with_unlink(pool: &SqlitePool, id: &str, confirmed: bool) -> Result<(), AppError>;
+pub async fn search(pool: &SqlitePool, filters: &ExerciseSearchFilters) -> Result<ExerciseSearchResult, AppError>;
 ```
 
 ### Connection pooling
@@ -645,20 +862,29 @@ during CI builds.
 ### 9.1 Create exercise
 
 ```
-Inputs:    name: &str, notes: Option<&str>
+Inputs:    name: &str, notes: Option<&str>, tags: &[String],
+           meta: Option<&ExerciseMeta>, muscles: Option<&[ExerciseMuscleInput]>
 Reads:     none
-Writes:    INSERT exercises (new UUID generated in Rust)
+Writes (single transaction):
+  INSERT exercises (new UUID generated in Rust)
+  DELETE + INSERT exercise_tags (set_tags replaces wholesale)
+  DELETE + INSERT exercise_muscles (set_muscles replaces wholesale)
 Invariant: name uniqueness — sqlx surfaces UNIQUE constraint violation as
-           AppError::Conflict
+           AppError::Conflict.
+           Catalog uniqueness — (catalog_source, catalog_id) must not already exist.
 Rollback:  automatic on constraint violation
 ```
 
 ### 9.2 Update exercise
 
 ```
-Inputs:    id, name, notes
+Inputs:    id, name, notes, tags, meta?, muscles?
 Reads:     none (UPDATE returns rows affected)
-Writes:    UPDATE exercises SET name=?, notes=?, updated_at=? WHERE id=?
+Writes (single transaction):
+  UPDATE exercises SET name=?, notes=?, updated_at=? WHERE id=?
+  If meta provided: UPDATE exercises catalog columns
+  DELETE + INSERT exercise_tags (replace wholesale)
+  If muscles provided: DELETE + INSERT exercise_muscles (replace wholesale)
 Invariant: UNIQUE on name — AppError::Conflict if duplicate
 Rollback:  automatic
 ```
@@ -666,13 +892,15 @@ Rollback:  automatic
 ### 9.3 Delete/unlink exercise
 
 ```
-Inputs:    id (user has confirmed)
+Inputs:    id, confirmed: bool (must be true)
 Reads:     exercises.name (for fallback labels)
 Writes (single transaction):
   1. UPDATE set_template_cards → convert to placeholder
   2. UPDATE workout_template_card_assignments → null exercise_id, set display_label
   3. DELETE exercises WHERE id=?
-     (SQLite automatically SET NULL on workout_session_exercises.exercise_id)
+     (SQLite automatically:
+       SET NULL on workout_session_exercises.exercise_id
+       CASCADE DELETE on exercise_tags and exercise_muscles)
 Invariant: After steps 1–2 no RESTRICT FK references remain; step 3 succeeds.
            workout_session_exercises rows are untouched except the FK null.
 Rollback:  Full rollback if any step fails.
@@ -693,7 +921,8 @@ Rollback:  automatic
 Inputs:    source_id
 Reads:     set_template + all its cards
 Writes (single transaction):
-  INSERT set_templates (new UUID, name = "<original> (copy)")
+  INSERT set_templates (new UUID, name = "<original> (copy)",
+                        owning_workout_template_id = NULL — always global)
   For each card: INSERT set_template_cards (new UUID, same field values)
 Invariant: Either all cards are inserted or none.
 Rollback:  Full rollback.
@@ -808,6 +1037,8 @@ Writes (single transaction):
         placeholder_tag:  card.placeholder_tag  (preserved, NULL for concrete)
         status:           'pending'
         skipped:          0
+        paused_offset_sec: 0
+        performed_duration_sec: NULL
       }
       INSERT workout_session_exercises (resolved fields)
 
@@ -897,18 +1128,37 @@ Reads:
 Pre-condition: if current set has paused_at IS NOT NULL → inline resume (9.13)
 
 Writes (single transaction, same-set case):
-  UPDATE wse SET status='completed', ended_at=now WHERE id=current_exercise_id
-  UPDATE wse SET status='active', started_at=now WHERE id=next_exercise_id
+  UPDATE wse SET status='completed', ended_at=now,
+                 performed_duration_sec=computed WHERE id=current_exercise_id
+  UPDATE wse SET status='active', started_at=now,
+                 paused_offset_sec=current_set.paused_total_sec
+    WHERE id=next_exercise_id
 
-Writes (single transaction, cross-set case — additional):
+Writes (single transaction, cross-set case — no rest configured):
+  UPDATE wse SET status='completed', ended_at=now, performed_duration_sec=computed
+    WHERE id=current_exercise_id
   UPDATE wss SET ended_at=now WHERE id=current_set_id
   UPDATE wss SET started_at=now, paused_total_sec=0, paused_at=NULL
     WHERE id=next_set_id
+  UPDATE wse SET status='active', started_at=now, paused_offset_sec=0
+    WHERE id=next_exercise_id
+
+Writes (single transaction, cross-set case — rest configured):
+  UPDATE wse SET status='completed', ended_at=now, performed_duration_sec=computed
+    WHERE id=current_exercise_id
+  UPDATE wss SET ended_at=now WHERE id=current_set_id
+  UPDATE wss SET rest_duration_sec=rest_sec, rest_started_at=now
+    WHERE id=next_set_id
+  -- next set is NOT started; no exercise is activated yet
 
 Returns: full ActiveSessionPayload
-Invariant: Exactly one 'active' exercise after commit. Set timer resets only on set crossing.
-Edge: If next_exercise is NULL (last exercise was current) → service returns a
-      special flag; frontend shows "Finish workout?" prompt and calls finish_session.
+  When rest is entered: rest_phase IS NOT NULL, current_exercise_id IS NULL.
+  Frontend shows rest countdown and calls start_next_set (§9.21) when ready.
+
+Invariant: Exactly one 'active' exercise after commit (same-set or no-rest cross-set).
+           During rest phase, no exercise is active; rest_phase field signals the state.
+Edge: If next_exercise is NULL (last exercise was current) →
+      service returns AppError::Validation("no next exercise — call finish_session").
 ```
 
 ### 9.15 Retreat exercise (Prev)
@@ -916,28 +1166,44 @@ Edge: If next_exercise is NULL (last exercise was current) → service returns a
 ```
 Inputs:    session_id
 Reads:
-  current active exercise + its set
+  current active exercise + its set (or rest-phase set if no active exercise)
   previous exercise: same set, order_index = current.order_index - 1
-                     if none (current is first in set): last exercise in prev set
+                     if none: last exercise in prev set
 
-Writes (single transaction, same-set case):
-  UPDATE wse SET started_at=NULL, ended_at=NULL, status='pending'
-    WHERE id=current_exercise_id
+Case A — normal (active exercise exists, same-set):
+Writes (single transaction):
+  UPDATE wse SET started_at=NULL, ended_at=NULL, status='pending',
+                 performed_duration_sec=NULL WHERE id=current_exercise_id
   UPDATE wse SET ended_at=NULL, started_at=now, status='active'
     WHERE id=prev_exercise_id
   -- set timing unchanged; paused state carries over
 
-Writes (single transaction, cross-set case — additional):
+Case B — normal (active exercise exists, cross-set):
+Writes (single transaction):
+  UPDATE wse SET started_at=NULL, ended_at=NULL, status='pending',
+                 performed_duration_sec=NULL WHERE id=current_exercise_id
   UPDATE wss SET started_at=NULL, ended_at=NULL, paused_at=NULL, paused_total_sec=0
     WHERE id=current_set_id
   UPDATE wss SET ended_at=NULL, started_at=now, paused_at=NULL, paused_total_sec=0
     WHERE id=prev_set_id
+  UPDATE wse SET ended_at=NULL, started_at=now, status='active'
+    WHERE id=prev_last_exercise_id
+
+Case C — rest phase (no active exercise; a set has rest_started_at IS NOT NULL):
+Reads:  set in rest (rest_started_at IS NOT NULL AND started_at IS NULL)
+        previous set (order_index < rest_set.order_index)
+Writes (single transaction):
+  UPDATE wss SET rest_duration_sec=NULL, rest_started_at=NULL WHERE id=rest_set_id
+  UPDATE wss SET ended_at=NULL, started_at=now, paused_at=NULL, paused_total_sec=0
+    WHERE id=prev_set_id
+  UPDATE wse SET ended_at=NULL, started_at=now, status='active'
+    WHERE id=prev_last_exercise_id
 
 Returns: full ActiveSessionPayload
 Invariant: All time information for affected rows is fully reset; no residue
-           from the cancelled forward move. paused_at cleared on set crossing.
-Edge: If current exercise is the first exercise of the first set → Prev is
-      disabled; service returns AppError::Validation("already at first exercise").
+           from the cancelled forward move.
+Edge: If current exercise is the first exercise of the first set, or rest phase
+      has no previous set → AppError::Validation("already at first exercise").
 ```
 
 ### 9.16 Skip exercise
@@ -946,8 +1212,11 @@ Edge: If current exercise is the first exercise of the first set → Prev is
 Inputs:    session_id, exercise_id
 Pre-condition: if current set paused → inline resume (9.13)
 Writes: Inline resume if needed, then:
-  UPDATE wse SET skipped=1, status='skipped', ended_at=now WHERE id=exercise_id
+  UPDATE wse SET skipped=1, status='skipped', ended_at=now,
+                 performed_duration_sec=computed WHERE id=exercise_id
   Then same advance logic as 9.14 (find next exercise, write transitions)
+  EXCEPTION: skip always bypasses rest — even when rest_between_sets_sec > 0,
+             skip uses start_fresh_set directly (no rest phase entered).
 Returns: full ActiveSessionPayload
 Invariant: skipped=1 and status='skipped' always set together; record never deleted.
 ```
@@ -957,7 +1226,7 @@ Invariant: skipped=1 and status='skipped' always set together; record never dele
 ```
 Inputs:    session_id
 Pre-condition: if current set paused → inline resume (9.13)
-Reads:     current active exercise and its set
+Reads:     current active exercise and its set (may be None if last was skipped)
 Writes (single transaction):
   UPDATE wse SET ended_at=now WHERE id=current_exercise_id AND ended_at IS NULL
   UPDATE wss SET ended_at=now WHERE id=current_set_id AND ended_at IS NULL
@@ -1000,13 +1269,32 @@ Returns: Option<ActiveSessionPayload>
 No writes; the caller decides to continue/discard based on user choice.
 ```
 
+### 9.21 Start next set (end rest → begin next set)
+
+```
+Inputs:    session_id
+Reads:     set in rest (rest_started_at IS NOT NULL AND started_at IS NULL)
+           first exercise in that set
+
+Writes (single transaction):
+  UPDATE wss SET rest_duration_sec=NULL, rest_started_at=NULL WHERE id=rest_set_id
+  UPDATE wss SET started_at=now, paused_total_sec=0, paused_at=NULL
+    WHERE id=rest_set_id
+  UPDATE wse SET status='active', started_at=now, paused_offset_sec=0
+    WHERE id=first_exercise_id
+
+Returns: full ActiveSessionPayload (rest_phase IS NULL, exercise now active)
+Error:   AppError::Validation if no rest phase is currently active.
+Use case: User manually ends the rest countdown and starts the next set.
+```
+
 ---
 
 ## 10. `ActiveSessionPayload` Contract
 
 ```rust
 /// Returned by every session mutation command that keeps the runner active
-/// (create_draft, start, pause, resume, advance, retreat, skip).
+/// (create_draft, start, pause, resume, advance, retreat, skip, start_next_set).
 /// Terminal operations (finish, abandon, discard) do not return this type;
 /// see §9.17–9.19 for their respective return shapes.
 /// Contains full authoritative state for Zustand to load.
@@ -1016,12 +1304,21 @@ pub struct ActiveSessionPayload {
     pub sets:                Vec<WorkoutSessionSetRow>,
     pub exercises:           Vec<WorkoutSessionExerciseRow>,
     /// Id of the currently active exercise (status = 'active'), if any.
+    /// None during a rest phase or after the last exercise is skipped.
     pub current_exercise_id: Option<String>,
     /// Id of the set that contains the current exercise.
     pub current_set_id:      Option<String>,
     /// Timer base values extracted from the current set,
     /// ready for direct use by the Zustand timer.
     pub timer_base:          TimerBase,
+    /// Non-null when the runner is in a between-set rest phase
+    /// (rest_started_at IS NOT NULL AND started_at IS NULL on a set).
+    /// While non-null, current_exercise_id is None.
+    pub rest_phase:          Option<RestPhaseInfo>,
+    /// Configured rest-between-sets duration from the workout template.
+    /// None when the session has no template or the template has no rest configured.
+    /// Used by the runner to preview upcoming rest in the exercise queue.
+    pub rest_between_sets_sec: Option<i64>,
 }
 
 /// Extracted from the current WorkoutSessionSet.
@@ -1033,9 +1330,20 @@ pub struct TimerBase {
     /// None for draft sessions (set not yet started).
     pub set_started_at_ms:  Option<i64>,
     /// Accumulated paused seconds for this set.
-    pub paused_total_sec:   i32,
+    pub paused_total_sec:   i64,
     /// Unix ms from paused_at; Some = currently paused, None = running.
     pub paused_at_ms:       Option<i64>,
+}
+
+/// Present in ActiveSessionPayload when the runner is in a between-set rest phase.
+#[derive(Debug, serde::Serialize)]
+pub struct RestPhaseInfo {
+    /// workout_session_sets.id of the set waiting to start.
+    pub next_set_id:        String,
+    /// Configured rest duration in seconds (copied from template at set-end).
+    pub rest_duration_sec:  i64,
+    /// Unix timestamp (milliseconds) of when rest began.
+    pub rest_started_at_ms: i64,
 }
 ```
 
@@ -1054,6 +1362,9 @@ All three `TimerBase` fields are **persisted** in `workout_session_sets`. The
 frontend never accumulates time independently; it always re-derives from the
 DB-sourced base values loaded into Zustand.
 
+Auto-advance settings (whether to auto-advance to the next exercise when a
+timer expires) are **frontend/local settings**, not persisted in the DB.
+
 ---
 
 ## 11. Query Catalog
@@ -1062,12 +1373,30 @@ DB-sourced base values loaded into Zustand.
 
 ```sql
 -- list
-SELECT id, name, notes, image_url, created_at, updated_at
+SELECT id, name, notes, image_url,
+       catalog_source, catalog_id, is_catalog,
+       category, equipment, level, mechanic, force, instructions_json,
+       created_at, updated_at
 FROM exercises ORDER BY name;
 
 -- get by id
-SELECT id, name, notes, image_url, created_at, updated_at
+SELECT id, name, notes, image_url,
+       catalog_source, catalog_id, is_catalog,
+       category, equipment, level, mechanic, force, instructions_json,
+       created_at, updated_at
 FROM exercises WHERE id = ?;
+
+-- search (dynamic WHERE clauses built in Rust; example for name + category + source)
+SELECT e.*, COUNT(*) OVER() as total_count
+FROM exercises e
+WHERE (:query IS NULL OR e.name LIKE '%' || :query || '%')
+  AND (:category IS NULL OR e.category = :category)
+  AND (:source = 'catalog' AND e.is_catalog = 1
+       OR :source = 'user' AND e.is_catalog = 0
+       OR :source IS NULL)
+  -- additional filters: equipment, level, force, primary_muscle (via JOIN), tag (via JOIN)
+ORDER BY e.name
+LIMIT :limit OFFSET :offset;
 
 -- check name availability
 SELECT id FROM exercises WHERE name = ? AND id != ?;
@@ -1079,8 +1408,11 @@ JOIN set_templates st ON st.id = stc.set_template_id
 WHERE stc.exercise_id = ?;
 
 -- insert
-INSERT INTO exercises (id, name, notes, image_url, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO exercises (id, name, notes, image_url,
+                       catalog_source, catalog_id, is_catalog,
+                       category, equipment, level, mechanic, force, instructions_json,
+                       created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- update
 UPDATE exercises SET name=?, notes=?, updated_at=? WHERE id=?;
@@ -1093,7 +1425,8 @@ DELETE FROM exercises WHERE id=?;
 
 ```sql
 -- list with card count
-SELECT st.id, st.name, st.notes, st.created_at, st.updated_at,
+SELECT st.id, st.name, st.notes, st.owning_workout_template_id,
+       st.created_at, st.updated_at,
        COUNT(stc.id) AS card_count
 FROM set_templates st
 LEFT JOIN set_template_cards stc ON stc.set_template_id = st.id
@@ -1128,6 +1461,7 @@ GROUP BY wt.id ORDER BY wt.name;
 
 -- full workout template load (for editor)
 SELECT wt.*, wtsr.id AS ref_id, wtsr.set_template_id, wtsr.order_index AS ref_order,
+       wtsr.source_set_template_id,
        st.name AS set_name
 FROM workout_templates wt
 LEFT JOIN workout_template_set_refs wtsr ON wtsr.workout_template_id = wt.id
@@ -1177,11 +1511,13 @@ SELECT s.*, ss.id AS set_id, ss.order_index AS set_order,
        ss.started_at AS set_started_at, ss.ended_at AS set_ended_at,
        ss.paused_total_sec, ss.paused_at,
        ss.source_set_template_id,
+       ss.rest_duration_sec, ss.rest_started_at,
        se.id AS ex_id, se.order_index AS ex_order, se.display_name,
        se.status AS ex_status, se.skipped,
        se.exercise_id, se.placeholder_tag, se.duration_hint_sec,
        se.started_at AS ex_started_at, se.ended_at AS ex_ended_at,
-       se.notes AS ex_notes
+       se.notes AS ex_notes,
+       se.paused_offset_sec, se.performed_duration_sec
 FROM workout_sessions s
 JOIN workout_session_sets ss ON ss.workout_session_id = s.id
 JOIN workout_session_exercises se ON se.workout_session_set_id = ss.id
@@ -1193,6 +1529,14 @@ SELECT se.id, se.workout_session_set_id, se.order_index
 FROM workout_session_exercises se
 JOIN workout_session_sets ss ON ss.id = se.workout_session_set_id
 WHERE ss.workout_session_id = ? AND se.status = 'active'
+LIMIT 1;
+
+-- find set in rest phase
+SELECT id, order_index, rest_duration_sec, rest_started_at
+FROM workout_session_sets
+WHERE workout_session_id = ?
+  AND rest_started_at IS NOT NULL
+  AND started_at IS NULL
 LIMIT 1;
 
 -- find next exercise (same set)
@@ -1238,6 +1582,20 @@ WHERE wss.workout_session_id = ?
 ORDER BY wss.order_index, wse.order_index;
 ```
 
+### Stats
+
+Stats are derived from completed sessions. Two important behavioral notes:
+
+**Tag stats use current exercise_tags, not historical.**
+`fetch_tag_stats` JOINs `exercise_tags et ON et.exercise_id = wse.exercise_id`.
+If an exercise's tags are changed after a session, historical tag-stat breakdowns
+change retroactively. Exercises that were never retagged are unaffected.
+
+**Deleted exercises still appear in exercise stats.**
+`fetch_exercise_stats` groups by `COALESCE(wse.exercise_id, 'name::' || wse.display_name)`.
+Deleted exercises (where `wse.exercise_id IS NULL`) are bucketed by their
+denormalized `display_name`, preserving their leaderboard entry.
+
 ---
 
 ## 12. Testing Plan
@@ -1250,7 +1608,7 @@ async fn test_schema_applies_cleanly(pool: SqlitePool) {
     // verify all tables exist and FK pragmas are applied
     let count: (i32,) = sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
         .fetch_one(&pool).await.unwrap();
-    assert!(count.0 >= 9);
+    assert!(count.0 >= 11);  // 9 core tables + exercise_tags + exercise_muscles
 }
 ```
 
@@ -1317,12 +1675,14 @@ Setup:  exercise E
         set template card (concrete) referencing E
         workout template assignment referencing E (with and without display_label)
         completed session exercise referencing E
-Action: delete_with_unlink(E.id)
+Action: delete_with_unlink(E.id, confirmed=true)
 Assert: set_template_cards: card_type='placeholder', exercise_id=NULL,
         placeholder_tag='unspecified', placeholder_label=E.name
         workout_template_card_assignments: exercise_id=NULL,
         display_label = existing label OR E.name if was null
         workout_session_exercises: exercise_id=NULL, display_name UNCHANGED
+        exercise_tags: all rows for E deleted (CASCADE)
+        exercise_muscles: all rows for E deleted (CASCADE)
         exercises table: E deleted
 ```
 
@@ -1340,6 +1700,7 @@ Action: skip_exercise during in_progress session
 Assert: exercise row has skipped=1, status='skipped', ended_at IS NOT NULL
         exercise row still exists (never deleted)
         next exercise becomes active
+        no rest phase entered (skip always bypasses rest)
 ```
 
 **10. Finish session closes all open rows**
@@ -1372,6 +1733,28 @@ Assert: transaction commits without UNIQUE constraint error
         no partial update (all three rows updated or none)
 ```
 
+**14. Rest phase — advance enters rest, start_next_set exits it**
+```
+Setup:  workout template with rest_between_sets_sec = 30, two sets with 1 card each
+Action: start session, advance through first exercise
+Assert: payload.rest_phase IS NOT NULL
+        payload.current_exercise_id IS NULL
+        next set has rest_started_at IS NOT NULL, started_at IS NULL
+Action: start_next_set
+Assert: payload.rest_phase IS NULL
+        payload.current_exercise_id IS NOT NULL (first exercise of set 2)
+        next set has started_at IS NOT NULL, rest_started_at IS NULL
+```
+
+**15. Retreat from rest phase**
+```
+Setup:  advance into rest phase as in test 14
+Action: retreat_exercise
+Assert: rest set has rest_duration_sec=NULL, rest_started_at=NULL
+        prev set has ended_at=NULL, started_at IS NOT NULL
+        last exercise of prev set is active
+```
+
 ---
 
 ## 13. Risks and Edge Cases
@@ -1388,3 +1771,128 @@ Assert: transaction commits without UNIQUE constraint error
 | Very large session load payload for workouts with many exercises | Negligible | Single-user SQLite; 100-exercise session ≈ 10 KB |
 | `unixepoch()` resolution is 1 second in SQLite | Low | Pause arithmetic in seconds matches `paused_total_sec` type; sub-second timer precision comes from `Date.now()` on the frontend |
 | `sqlx::query!` offline mode cache out of date in CI | Low | Commit `.sqlx/` directory; CI uses `SQLX_OFFLINE=true` |
+| `source_set_template_id` on set_ref becomes stale if original set deleted | Low | No FK constraint; field is badge-display only; stale value causes no integrity error |
+| Tag stats retroactively change when exercise is retagged | Low | Documented behavior; tag join uses current `exercise_tags` by design |
+| Startup seed re-applied after clear_local_data + restart | None | `seed_if_empty` gates on all three template tables being empty; seed fires correctly after a clear |
+
+---
+
+## 14. Library Management (Import / Export / Clear / Reset / Seed)
+
+### Export
+
+`export_full_library` serialises the entire DB into a single JSON document:
+
+```json
+{
+  "schema": "dzerkout.library",
+  "version": 1,
+  "exported_at": "...",
+  "exercises": [...],       // includes tags, muscles, catalog metadata
+  "set_templates": [...],   // includes owning_workout_template_id and cards
+  "workout_templates": [...],// includes rest_between_sets_sec, set_refs with
+                             //   source_set_template_id and assignments
+  "sessions": [...],
+  "session_sets": [...],    // includes rest_duration_sec, rest_started_at
+  "session_exercises": [...] // includes paused_offset_sec, performed_duration_sec
+}
+```
+
+Export is exposed as the `export_library_json` Tauri command and returns the
+JSON string to the frontend (for clipboard/file save). No scope filtering —
+there is no per-entity export; the export always includes everything.
+
+### Import
+
+`import_library_json` is **upsert-based and idempotent**:
+- Re-importing the same export produces the same result.
+- Exercises, sets, and workouts are upserted by `id` (`ON CONFLICT(id) DO UPDATE`).
+- Tags and muscles are replaced wholesale (DELETE then INSERT) per exercise.
+- Cards and set_refs use the two-phase upsert to avoid transient UNIQUE violations.
+- Sessions are upserted by `id`; session_sets and session_exercises follow.
+- All writes happen in a single transaction; failure rolls back completely.
+
+**Validation before write (in-memory + DB-side):**
+- Exercise tags, catalog metadata enum values, instructions_json format.
+- Card type invariants (`concrete` requires `exercise_id`, `placeholder` requires `placeholder_tag`).
+- Assignment cross-set integrity (card must belong to the set the ref points to).
+- FK references: concrete card `exercise_id` must exist in import payload or DB;
+  set_ref `set_template_id` must exist in import payload or DB.
+
+Import is exposed as the `import_library_json` Tauri command.
+
+**Write order (FK-safe):**
+```
+exercises → workout template headers → set templates
+→ set template cards (two-phase) → set refs (two-phase) → assignments
+→ sessions → session_sets → session_exercises
+```
+
+### Clear
+
+`clear_local_data` deletes all domain data in FK-safe order within a single
+transaction, leaving the DB **empty**. It does not re-seed.
+
+```
+session_exercises → session_sets → sessions
+→ assignments → set_refs → set_template_cards → set_templates
+→ exercise_tags → exercises → workout_templates
+```
+
+Exposed as the `clear_local_data` Tauri command.
+
+### Reset
+
+`reset_local_data_with_seed` calls `clear_local_data` then immediately
+`seed_if_empty`. Because the DB is now empty, the seed always fires.
+Exposed as the `reset_local_data` Tauri command.
+
+### Startup seed
+
+At every app launch, `seed_if_empty(pool, seed_json)` is called with
+`include_str!("../seeds/default_library.json")`.
+
+Seed is applied **only if** `exercises`, `set_templates`, and `workout_templates`
+are all empty (checked with `SELECT id … LIMIT 1` on each table). Session/history
+tables are not consulted.
+
+Once any template table has a row, seeding is permanently skipped until the next
+`clear_local_data`. The seed file is baked into the binary at compile time via
+`include_str!`.
+
+---
+
+## 15. Generated Catalog Tooling
+
+Two Node.js scripts convert vendor datasets into `dzerkout.library` JSON for
+manual review and optional import:
+
+### `scripts/generate-free-exercise-db-library.mjs`
+
+- **Source:** `vendor/free-exercise-db/dist/exercises.json`
+- **Output:** `scripts/generated/free-exercise-db-library.json` (default)
+- Converts free-exercise-db entries to `ExportedExercise` format with catalog
+  metadata (`catalog_source = "free-exercise-db"`, `is_catalog = true`),
+  muscles, and derived tags.
+- Supports `--include-category`, `--exclude-category`, `--max`, `--output` flags.
+- Excludes `strongman` and `olympic weightlifting` by default.
+
+### `scripts/generate-yoga-poses-library.mjs`
+
+- **Source:** `vendor/yoga/yoga_poses.json`
+- **Output:** `scripts/generated/yoga-poses-library.json` (default)
+- Converts yoga poses to `ExportedExercise` format with `catalog_source = "yoga-poses"`,
+  `is_catalog = true`, `category = "yoga"`.
+- `image_url` is always `null` (photo URLs point at third-party CDN).
+- Sanskrit name and pose type are folded into the `notes` field until dedicated
+  columns exist.
+- Supports `--max` and `--output` flags.
+
+### Key constraints
+
+- The `scripts/generated/` directory is **not committed** to the repository.
+- Generated files are **not automatically seeded** — a developer must manually
+  import them via the `import_library_json` command or merge them into
+  `seeds/default_library.json`.
+- IDs are deterministic UUID v5 values derived from `(catalog_source, catalog_id)`,
+  ensuring re-running the generator produces the same IDs (import is idempotent).
