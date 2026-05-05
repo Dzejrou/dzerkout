@@ -38,6 +38,7 @@ function flag(name) {
 }
 
 const INPUT_PATH = resolve(ROOT, "vendor/yoga/yoga_poses.json");
+const FED_INPUT_PATH = resolve(ROOT, "vendor/free-exercise-db/dist/exercises.json");
 const OUTPUT_PATH = resolve(
   ROOT,
   flag("--output") ?? "scripts/generated/yoga-poses-library.json",
@@ -63,6 +64,10 @@ const VALID_TAGS = new Set([
 
 const CATEGORY = "yoga";
 const EQUIPMENT = "none";
+// TODO: pose_type should become first-class metadata/filtering (a dedicated column
+// or join table) once the schema is extended. Generic tags ("mobility", "yoga") are
+// not useful for filtering by specific pose type (e.g. "Standing", "Backbend").
+// For now pose_type is folded into the notes field as "Pose type: ...".
 const TAGS = ["mobility", "yoga"]; // alphabetical, mirrors Rust sort order
 
 // Sanity-check the constants we depend on.
@@ -140,12 +145,27 @@ if (!existsSync(INPUT_PATH)) {
   process.exit(1);
 }
 
+// Load free-exercise-db display names so we can disambiguate cross-catalog collisions.
+// Any yoga pose whose name exactly matches a free-exercise-db exercise gets "(Yoga)" appended.
+const fedDisplayNames = new Set();
+if (existsSync(FED_INPUT_PATH)) {
+  const fedRaw = JSON.parse(readFileSync(FED_INPUT_PATH, "utf8"));
+  for (const src of fedRaw) {
+    const n = (src?.name ?? "").trim();
+    if (n) fedDisplayNames.add(n);
+  }
+  console.log(`Loaded ${fedDisplayNames.size} free-exercise-db names for cross-catalog disambiguation.`);
+} else {
+  console.warn(`WARN: free-exercise-db source not found at ${FED_INPUT_PATH}; skipping disambiguation.`);
+}
+
 const raw = JSON.parse(readFileSync(INPUT_PATH, "utf8"));
 console.log(`\nSource yoga poses loaded: ${raw.length}`);
 
 const skipped = [];
 const exercises = [];
 const seenSlugs = new Map();
+const disambiguated = [];
 
 for (let idx = 0; idx < raw.length; idx++) {
   const src = raw[idx];
@@ -188,9 +208,17 @@ for (let idx = 0; idx < raw.length; idx++) {
   const poseTypes = normalizePoseTypes(src?.pose_type);
   const notes = buildNotes(src?.sanskrit_name, poseTypes);
 
+  // Disambiguate if the display name collides with a free-exercise-db exercise.
+  // The UUID is derived from the original slug (not the display name) so it stays stable.
+  let displayName = name;
+  if (fedDisplayNames.has(name)) {
+    displayName = `${name} (Yoga)`;
+    disambiguated.push({ original: name, final: displayName });
+  }
+
   exercises.push({
     id: uuidV5(NS_OID, `yoga-poses:${slug}`),
-    name,
+    name: displayName,
     notes,
     tags: [...TAGS],
     image_url: null,
@@ -282,11 +310,62 @@ for (const [t, n] of tallyArrayField(finalExercises, "tags")) {
   console.log(`    ${n.toString().padStart(4)}  ${t}`);
 }
 
+if (disambiguated.length > 0) {
+  console.log(`\n  Cross-catalog disambiguation (${disambiguated.length}):`);
+  for (const d of disambiguated) {
+    console.log(`    "${d.original}" → "${d.final}"`);
+  }
+}
+
 if (skipped.length > 0) {
   console.log(`\n  Skipped records (${skipped.length}):`);
   for (const s of skipped) {
     console.log(`    [${s.index}] ${s.name || "(empty)"}: ${s.reason}`);
   }
+}
+
+// ── Post-generation validation ────────────────────────────────────────────────
+{
+  const ids = new Set();
+  const catalogPairs = new Set();
+  const names = new Set();
+  let validationErrors = 0;
+
+  for (const ex of finalExercises) {
+    if (!ex.name) {
+      console.error(`  VALIDATION ERROR: empty name for id ${ex.id}`);
+      validationErrors++;
+    }
+    if (ids.has(ex.id)) {
+      console.error(`  VALIDATION ERROR: duplicate id: ${ex.id}`);
+      validationErrors++;
+    }
+    ids.add(ex.id);
+
+    const pair = `${ex.catalog_source}:${ex.catalog_id}`;
+    if (catalogPairs.has(pair)) {
+      console.error(`  VALIDATION ERROR: duplicate catalog pair: ${pair}`);
+      validationErrors++;
+    }
+    catalogPairs.add(pair);
+
+    if (names.has(ex.name)) {
+      console.error(`  VALIDATION ERROR: duplicate name within yoga catalog: "${ex.name}"`);
+      validationErrors++;
+    }
+    names.add(ex.name);
+
+    if (fedDisplayNames.has(ex.name)) {
+      console.error(`  VALIDATION ERROR: name "${ex.name}" still collides with free-exercise-db after disambiguation`);
+      validationErrors++;
+    }
+  }
+
+  if (validationErrors > 0) {
+    console.error(`\n  VALIDATION FAILED: ${validationErrors} error(s) — fix before importing.\n`);
+    process.exit(1);
+  }
+  console.log("\n  Post-generation validation: OK");
 }
 
 console.log("\n─────────────────────────────────────────────────────────────\n");

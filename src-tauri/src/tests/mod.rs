@@ -3,6 +3,7 @@
 
 mod exercise_catalog;
 mod exercise_search;
+mod library_import;
 
 use sqlx::{Row, SqlitePool};
 use crate::{

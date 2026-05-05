@@ -765,6 +765,43 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
         }
     }
 
+    // ── Name-collision pre-check ──────────────────────────────────────────────
+    // Detect within-payload name duplicates and cross-DB name conflicts before
+    // any writes.  The UPSERT uses ON CONFLICT(id), so a same-name / different-id
+    // situation would otherwise surface as an opaque UNIQUE constraint failure.
+    {
+        let mut seen_names: HashMap<&str, &str> = HashMap::new();
+        for ex in &lib.exercises {
+            if let Some(prev_id) = seen_names.insert(ex.name.as_str(), ex.id.as_str()) {
+                return Err(AppError::Validation(format!(
+                    "import contains duplicate exercise name '{}' (ids: '{}' and '{}')",
+                    ex.name, prev_id, ex.id
+                )));
+            }
+        }
+    }
+
+    for ex in &lib.exercises {
+        let row = sqlx::query(
+            "SELECT id FROM exercises WHERE name = ? AND id != ?"
+        )
+        .bind(&ex.name)
+        .bind(&ex.id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        if let Some(existing) = row {
+            let existing_id: String = existing.get("id");
+            let source_info = ex.catalog_source.as_deref().unwrap_or("(user-created)");
+            return Err(AppError::Validation(format!(
+                "exercise '{}' (catalog_source: {}) conflicts with existing exercise \
+                 id '{}': exercise names must be globally unique. \
+                 If this is a cross-catalog name collision, regenerate the catalog files.",
+                ex.name, source_info, existing_id
+            )));
+        }
+    }
+
     // ── Writes ─────────────────────────────────────────────────────────────────
     // Write order is FK-safe:
     //   exercises → workout template headers → set templates (may FK → workouts)

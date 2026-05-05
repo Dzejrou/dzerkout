@@ -278,4 +278,43 @@ if (skipped.length > 0) {
   }
 }
 
+// ── Post-generation validation ────────────────────────────────────────────────
+{
+  const ids = new Set();
+  const catalogPairs = new Set();
+  const names = new Set();
+  let validationErrors = 0;
+
+  for (const ex of finalExercises) {
+    if (!ex.name) {
+      console.error(`  VALIDATION ERROR: empty name for id ${ex.id}`);
+      validationErrors++;
+    }
+    if (ids.has(ex.id)) {
+      console.error(`  VALIDATION ERROR: duplicate id: ${ex.id}`);
+      validationErrors++;
+    }
+    ids.add(ex.id);
+
+    const pair = `${ex.catalog_source}:${ex.catalog_id}`;
+    if (catalogPairs.has(pair)) {
+      console.error(`  VALIDATION ERROR: duplicate catalog pair: ${pair}`);
+      validationErrors++;
+    }
+    catalogPairs.add(pair);
+
+    if (names.has(ex.name)) {
+      console.error(`  VALIDATION ERROR: duplicate name within catalog: "${ex.name}"`);
+      validationErrors++;
+    }
+    names.add(ex.name);
+  }
+
+  if (validationErrors > 0) {
+    console.error(`\n  VALIDATION FAILED: ${validationErrors} error(s) — fix before importing.\n`);
+    process.exit(1);
+  }
+  console.log("\n  Post-generation validation: OK");
+}
+
 console.log("\n─────────────────────────────────────────────────────────────\n");
