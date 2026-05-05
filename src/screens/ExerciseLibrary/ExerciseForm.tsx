@@ -143,6 +143,15 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
       onSubmit={handleSubmit(onSubmit)}
       style={{ display: "flex", flexDirection: "column", gap: 14 }}
     >
+      {/* Catalog notice */}
+      {initial?.is_catalog && (
+        <div style={catalogNoteStyle}>
+          <strong>Catalog exercise.</strong> Source and catalog ID are read-only and preserved.
+          Local edits (name, notes, tags, metadata, muscles) may be overwritten if you re-import
+          the catalog in the future.
+        </div>
+      )}
+
       {/* Name */}
       <div>
         <label style={labelStyle}>Name</label>
@@ -404,4 +413,14 @@ const saveBtnStyle: React.CSSProperties = {
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 600,
+};
+
+const catalogNoteStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: 8,
+  border: `1px solid ${tokens.purpleBorder}`,
+  background: tokens.purpleBg,
+  color: tokens.textSecondary,
+  fontSize: 12,
+  lineHeight: 1.5,
 };

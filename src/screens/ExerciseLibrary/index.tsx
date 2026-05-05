@@ -175,6 +175,11 @@ function DetailPane({
           <DetailRow icon="📅" label="Created" value={formatDateFull(exercise.created_at)} />
           <DetailRow icon="✏" label="Last updated" value={formatDateFull(exercise.updated_at)} />
         </div>
+        {exercise.is_catalog && (
+          <p style={catalogDetailNoteStyle}>
+            Catalog exercise — local edits are saved but may be overwritten if this catalog is re-imported.
+          </p>
+        )}
       </section>
     </div>
   );
@@ -521,9 +526,13 @@ export default function ExerciseLibrary() {
         <ConfirmModal
           title={`Delete "${modal.exercise.name}"?`}
           message={
-            modal.refs > 0
-              ? `This exercise is used in ${modal.refs} card(s). Cards will become placeholders.`
-              : "This exercise will be permanently deleted."
+            modal.exercise.is_catalog
+              ? modal.refs > 0
+                ? `This catalog exercise is used in ${modal.refs} card(s). Cards will become placeholders. It will be removed from your local library.`
+                : "This catalog exercise will be removed from your local library."
+              : modal.refs > 0
+                ? `This exercise is used in ${modal.refs} card(s). Cards will become placeholders.`
+                : "This exercise will be permanently deleted."
           }
           confirmLabel="Delete"
           destructive
@@ -1017,4 +1026,15 @@ const catalogBadgeDetailStyle: React.CSSProperties = {
   borderRadius: 5,
   padding: "2px 8px",
   marginTop: 6,
+};
+
+const catalogDetailNoteStyle: React.CSSProperties = {
+  margin: "10px 0 0",
+  fontSize: 12,
+  color: TEXT_SECONDARY,
+  lineHeight: 1.5,
+  padding: "7px 10px",
+  borderRadius: 7,
+  border: `1px solid ${tokens.purpleBorder}`,
+  background: tokens.purpleBg,
 };
