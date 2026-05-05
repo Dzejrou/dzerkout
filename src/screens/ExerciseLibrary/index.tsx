@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { exercisesApi } from "../../api/exercises";
-import type { Exercise, ExerciseMeta, ExerciseMuscleInput } from "../../types/exercise";
+import type { Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseSearchFilters } from "../../types/exercise";
 import {
   EXERCISE_CATEGORIES, EXERCISE_EQUIPMENT, EXERCISE_LEVELS,
   EXERCISE_MUSCLES, EXERCISE_TAGS, EXERCISE_FORCES,
@@ -254,27 +254,28 @@ export default function ExerciseLibrary() {
   const [filterForce, setFilterForce] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const { data: exercises = [], isLoading } = useQuery({
-    queryKey: ["exercises"],
-    queryFn: exercisesApi.list,
-  });
-
   const activeFilterCount = [
     filterCategory, filterEquipment, filterLevel, filterMuscle, filterTag, filterForce,
   ].filter(Boolean).length;
 
-  const filtered = exercises.filter((e) => {
-    if (!e.name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterSource === "user" && e.is_catalog) return false;
-    if (filterSource === "catalog" && !e.is_catalog) return false;
-    if (filterCategory && e.category !== filterCategory) return false;
-    if (filterEquipment && e.equipment !== filterEquipment) return false;
-    if (filterLevel && e.level !== filterLevel) return false;
-    if (filterMuscle && !e.primary_muscles.includes(filterMuscle)) return false;
-    if (filterTag && !e.tags.includes(filterTag)) return false;
-    if (filterForce && e.force !== filterForce) return false;
-    return true;
+  const searchFilters: ExerciseSearchFilters = useMemo(() => ({
+    query: search || undefined,
+    source: filterSource || undefined,
+    category: filterCategory || undefined,
+    equipment: filterEquipment || undefined,
+    level: filterLevel || undefined,
+    primary_muscle: filterMuscle || undefined,
+    force: filterForce || undefined,
+    tag: filterTag || undefined,
+  }), [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag]);
+
+  const { data: searchResult, isLoading } = useQuery({
+    queryKey: ["exercises", "search", searchFilters],
+    queryFn: () => exercisesApi.search(searchFilters),
   });
+
+  const filtered = searchResult?.exercises ?? [];
+  const totalCount = searchResult?.total ?? 0;
 
   function clearFilters() {
     setFilterCategory("");
@@ -299,6 +300,8 @@ export default function ExerciseLibrary() {
     }
   }, [filtered, selectedId]);
 
+  const invalidateExercises = () => qc.invalidateQueries({ queryKey: ["exercises"] });
+
   const createMut = useMutation({
     mutationFn: ({
       name, notes, tags, meta, muscles,
@@ -307,7 +310,7 @@ export default function ExerciseLibrary() {
       meta: ExerciseMeta; muscles: ExerciseMuscleInput[];
     }) => exercisesApi.create(name, notes, tags, meta, muscles),
     onSuccess: (created) => {
-      qc.invalidateQueries({ queryKey: ["exercises"] });
+      invalidateExercises();
       setSelectedId(created.id);
       setModal(null);
     },
@@ -320,13 +323,13 @@ export default function ExerciseLibrary() {
       id: string; name: string; notes: string | null; tags: string[];
       meta: ExerciseMeta; muscles: ExerciseMuscleInput[];
     }) => exercisesApi.update(id, name, notes, tags, meta, muscles),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["exercises"] }); setModal(null); },
+    onSuccess: () => { invalidateExercises(); setModal(null); },
   });
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => exercisesApi.delete(id, true),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["exercises"] });
+      invalidateExercises();
       qc.invalidateQueries({ queryKey: ["set-templates"] });
       setModal(null);
     },
@@ -446,7 +449,7 @@ export default function ExerciseLibrary() {
           {isLoading && <p style={{ color: TEXT_SECONDARY, padding: "16px 20px" }}>Loading…</p>}
           {!isLoading && filtered.length === 0 && (
             <p style={{ color: TEXT_SECONDARY, padding: "16px 20px", textAlign: "center" }}>
-              {search || activeFilterCount > 0 ? "No matches" : "No exercises yet"}
+              {search || filterSource || activeFilterCount > 0 ? "No matches" : "No exercises yet"}
             </p>
           )}
           {filtered.map((ex) => {
@@ -480,7 +483,11 @@ export default function ExerciseLibrary() {
             );
           })}
           {filtered.length > 0 && (
-            <p style={listCountStyle}>{filtered.length} exercise{filtered.length !== 1 ? "s" : ""}</p>
+            <p style={listCountStyle}>
+              {filtered.length === totalCount
+                ? `${totalCount} exercise${totalCount !== 1 ? "s" : ""}`
+                : `${filtered.length} of ${totalCount} exercises`}
+            </p>
           )}
         </div>
       </div>

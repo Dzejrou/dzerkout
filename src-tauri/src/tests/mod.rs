@@ -2,6 +2,7 @@
 // with migrations applied automatically.
 
 mod exercise_catalog;
+mod exercise_search;
 
 use sqlx::{Row, SqlitePool};
 use crate::{

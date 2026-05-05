@@ -115,6 +115,24 @@ export interface ExerciseMuscleInput {
   role: MuscleRole;
 }
 
+export interface ExerciseSearchFilters {
+  query?: string;
+  source?: "all" | "user" | "catalog";
+  category?: string;
+  equipment?: string;
+  level?: string;
+  primary_muscle?: string;
+  force?: string;
+  tag?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ExerciseSearchResult {
+  exercises: Exercise[];
+  total: number;
+}
+
 export interface ExerciseCardRef {
   card_id: string;
   set_name: string;

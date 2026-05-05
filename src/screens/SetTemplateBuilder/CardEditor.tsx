@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { exercisesApi } from "../../api/exercises";
-import type { Exercise } from "../../types/exercise";
+import type { Exercise, ExerciseSearchFilters } from "../../types/exercise";
 import {
   EXERCISE_CATEGORIES,
   EXERCISE_EQUIPMENT,
@@ -73,13 +73,13 @@ function PickerFilterSelect({
 // ── ExercisePicker ────────────────────────────────────────────────────────────
 
 function ExercisePicker({
-  exercises,
+  selectedExercise,
   value,
   onChange,
 }: {
-  exercises: Exercise[];
+  selectedExercise: Exercise | null;
   value: string;
-  onChange: (id: string) => void;
+  onChange: (id: string, exercise: Exercise | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -91,30 +91,38 @@ function ExercisePicker({
   const [fForce, setFForce] = useState("");
   const [fTag, setFTag] = useState("");
 
-  const selectedEx = exercises.find((e) => e.id === value) ?? null;
+  const selectedEx = selectedExercise;
 
   const activeFilterCount = [fCategory, fEquipment, fLevel, fMuscle, fForce, fTag].filter(Boolean).length;
 
-  const filtered = exercises.filter((e) => {
-    if (search && !e.name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (fCategory && e.category !== fCategory) return false;
-    if (fEquipment && e.equipment !== fEquipment) return false;
-    if (fLevel && e.level !== fLevel) return false;
-    if (fMuscle && !e.primary_muscles.includes(fMuscle)) return false;
-    if (fForce && e.force !== fForce) return false;
-    if (fTag && !e.tags.includes(fTag)) return false;
-    return true;
+  const pickerFilters: ExerciseSearchFilters = useMemo(() => ({
+    query: search || undefined,
+    category: fCategory || undefined,
+    equipment: fEquipment || undefined,
+    level: fLevel || undefined,
+    primary_muscle: fMuscle || undefined,
+    force: fForce || undefined,
+    tag: fTag || undefined,
+    limit: 80,
+  }), [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag]);
+
+  const { data: searchResult } = useQuery({
+    queryKey: ["exercises", "search", "picker", pickerFilters],
+    queryFn: () => exercisesApi.search(pickerFilters),
+    enabled: open,
   });
-  const visibleExercises = filtered.slice(0, 80);
-  const hiddenCount = filtered.length - visibleExercises.length;
+
+  const filtered = searchResult?.exercises ?? [];
+  const totalCount = searchResult?.total ?? 0;
+  const hiddenCount = totalCount - filtered.length;
 
   function clearFilters() {
     setFCategory(""); setFEquipment(""); setFLevel("");
     setFMuscle(""); setFForce(""); setFTag("");
   }
 
-  function pickExercise(id: string) {
-    onChange(id);
+  function pickExercise(ex: Exercise) {
+    onChange(ex.id, ex);
     setOpen(false);
   }
 
@@ -138,7 +146,7 @@ function ExercisePicker({
         </div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {selectedEx && (
-            <button type="button" onClick={() => onChange("")} style={pickerActionBtnStyle} title="Clear">
+            <button type="button" onClick={() => onChange("", null)} style={pickerActionBtnStyle} title="Clear">
               ✕
             </button>
           )}
@@ -176,7 +184,7 @@ function ExercisePicker({
           <span style={{ fontSize: 11, fontWeight: 700, color: tokens.greenBadgeText }}>
             {selectedEx.name}
           </span>
-          <button type="button" onClick={() => onChange("")} style={{ ...pickerMiniBtn, marginLeft: "auto" }}>
+          <button type="button" onClick={() => onChange("", null)} style={{ ...pickerMiniBtn, marginLeft: "auto" }}>
             Clear ✕
           </button>
         </div>
@@ -202,7 +210,7 @@ function ExercisePicker({
           </button>
         )}
         <span style={{ marginLeft: "auto", fontSize: 11, color: tokens.textMuted }}>
-          {filtered.length} result{filtered.length !== 1 ? "s" : ""}
+          {totalCount} result{totalCount !== 1 ? "s" : ""}
         </span>
       </div>
 
@@ -226,13 +234,13 @@ function ExercisePicker({
           </p>
         ) : (
           <>
-          {visibleExercises.map((ex) => {
+          {filtered.map((ex) => {
             const isSelected = ex.id === value;
             return (
               <button
                 key={ex.id}
                 type="button"
-                onClick={() => pickExercise(ex.id)}
+                onClick={() => pickExercise(ex)}
                 style={{
                   ...pickerRowStyle,
                   background: isSelected ? tokens.surfaceSelected : "transparent",
@@ -276,7 +284,7 @@ function ExercisePicker({
           })}
           {hiddenCount > 0 && (
             <p style={pickerOverflowNoteStyle}>
-              Showing first 80 of {filtered.length}. Narrow your search or filters.
+              Showing first {filtered.length} of {totalCount}. Narrow your search or filters.
             </p>
           )}
           </>
@@ -289,10 +297,22 @@ function ExercisePicker({
 // ── CardEditor ────────────────────────────────────────────────────────────────
 
 export default function CardEditor({ card, onSave, onCancel, saving }: Props) {
-  const { data: exercises = [] } = useQuery({
-    queryKey: ["exercises"],
-    queryFn: exercisesApi.list,
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+
+  // Resolve the selected exercise when editing an existing concrete card.
+  const exerciseIdToResolve = card?.exercise_id ?? null;
+  const { data: resolvedExercise } = useQuery({
+    queryKey: ["exercises", "detail", exerciseIdToResolve],
+    queryFn: () => exercisesApi.get(exerciseIdToResolve!),
+    enabled: !!exerciseIdToResolve && !selectedExercise,
+    staleTime: 60_000,
   });
+
+  useEffect(() => {
+    if (resolvedExercise && !selectedExercise) {
+      setSelectedExercise(resolvedExercise);
+    }
+  }, [resolvedExercise, selectedExercise]);
 
   const { register, handleSubmit, watch, reset, setValue } = useForm<FormValues>({
     defaultValues: {
@@ -375,9 +395,12 @@ export default function CardEditor({ card, onSave, onCancel, saving }: Props) {
         <div>
           <label style={labelStyle}>Exercise</label>
           <ExercisePicker
-            exercises={exercises}
+            selectedExercise={selectedExercise}
             value={exerciseId}
-            onChange={(id) => setValue("exercise_id", id)}
+            onChange={(id, exercise) => {
+              setValue("exercise_id", id);
+              setSelectedExercise(exercise);
+            }}
           />
         </div>
       ) : (

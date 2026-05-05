@@ -192,6 +192,36 @@ pub struct ExerciseReferences {
     pub cards: Vec<ExerciseCardRef>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ExerciseSearchFilters {
+    #[serde(default)]
+    pub query: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub equipment: Option<String>,
+    #[serde(default)]
+    pub level: Option<String>,
+    #[serde(default)]
+    pub primary_muscle: Option<String>,
+    #[serde(default)]
+    pub force: Option<String>,
+    #[serde(default)]
+    pub tag: Option<String>,
+    #[serde(default)]
+    pub limit: Option<i64>,
+    #[serde(default)]
+    pub offset: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExerciseSearchResult {
+    pub exercises: Vec<Exercise>,
+    pub total: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct SetTemplateRow {
     pub id: String,

@@ -1,13 +1,32 @@
-use sqlx::SqlitePool;
-use tauri::State;
 use crate::{
-    domain::{exercise, types::{Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences}},
+    domain::{
+        exercise,
+        types::{
+            Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences, ExerciseSearchFilters,
+            ExerciseSearchResult,
+        },
+    },
     error::AppError,
 };
+use sqlx::SqlitePool;
+use tauri::State;
 
 #[tauri::command]
 pub async fn list_exercises(pool: State<'_, SqlitePool>) -> Result<Vec<Exercise>, AppError> {
     exercise::list(&pool).await
+}
+
+#[tauri::command]
+pub async fn get_exercise(pool: State<'_, SqlitePool>, id: String) -> Result<Exercise, AppError> {
+    exercise::get(&pool, &id).await
+}
+
+#[tauri::command]
+pub async fn search_exercises(
+    pool: State<'_, SqlitePool>,
+    filters: ExerciseSearchFilters,
+) -> Result<ExerciseSearchResult, AppError> {
+    exercise::search(&pool, &filters).await
 }
 
 #[tauri::command]

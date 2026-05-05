@@ -1,6 +1,8 @@
+use crate::domain::types::{
+    ExerciseCardRef, ExerciseMeta, ExerciseMuscleInput, ExerciseRow, ExerciseSearchFilters,
+};
+use sqlx::{Row, SqliteConnection, SqlitePool};
 use std::collections::HashMap;
-use sqlx::{SqliteConnection, SqlitePool};
-use crate::domain::types::{ExerciseRow, ExerciseCardRef, ExerciseMeta, ExerciseMuscleInput};
 
 // ── Column list shared by all SELECT / RETURNING queries ─────────────────────
 // Must stay in sync with ExerciseRow field order.
@@ -182,12 +184,12 @@ pub async fn null_assignment_exercise_ids(
 
 /// Fetch all tags for all exercises in one query.
 /// Returns a map from exercise_id to sorted tag list.
-pub async fn fetch_all_tags(pool: &SqlitePool) -> Result<HashMap<String, Vec<String>>, sqlx::Error> {
-    let rows = sqlx::query!(
-        "SELECT exercise_id, tag FROM exercise_tags ORDER BY exercise_id, tag"
-    )
-    .fetch_all(pool)
-    .await?;
+pub async fn fetch_all_tags(
+    pool: &SqlitePool,
+) -> Result<HashMap<String, Vec<String>>, sqlx::Error> {
+    let rows = sqlx::query!("SELECT exercise_id, tag FROM exercise_tags ORDER BY exercise_id, tag")
+        .fetch_all(pool)
+        .await?;
 
     let mut map: HashMap<String, Vec<String>> = HashMap::new();
     for r in rows {
@@ -301,4 +303,166 @@ pub async fn set_muscles(
         .await?;
     }
     Ok(())
+}
+
+// ── Search ───────────────────────────────────────────────────────────────────
+
+fn escape_like(input: &str) -> String {
+    input
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+pub async fn search(
+    pool: &SqlitePool,
+    filters: &ExerciseSearchFilters,
+    limit: i64,
+    offset: i64,
+) -> Result<(Vec<ExerciseRow>, i64), sqlx::Error> {
+    let mut where_clauses: Vec<String> = Vec::new();
+    let mut params: Vec<String> = Vec::new();
+
+    if let Some(q) = &filters.query {
+        if !q.is_empty() {
+            where_clauses.push(format!(
+                "LOWER(e.name) LIKE LOWER(?{}) ESCAPE '\\'",
+                params.len() + 1
+            ));
+            params.push(format!("%{}%", escape_like(q)));
+        }
+    }
+
+    match filters.source.as_deref() {
+        Some("user") => where_clauses.push("e.is_catalog = 0".to_string()),
+        Some("catalog") => where_clauses.push("e.is_catalog = 1".to_string()),
+        _ => {}
+    }
+
+    if let Some(v) = &filters.category {
+        where_clauses.push(format!("e.category = ?{}", params.len() + 1));
+        params.push(v.clone());
+    }
+    if let Some(v) = &filters.equipment {
+        where_clauses.push(format!("e.equipment = ?{}", params.len() + 1));
+        params.push(v.clone());
+    }
+    if let Some(v) = &filters.level {
+        where_clauses.push(format!("e.level = ?{}", params.len() + 1));
+        params.push(v.clone());
+    }
+    if let Some(v) = &filters.force {
+        where_clauses.push(format!("e.force = ?{}", params.len() + 1));
+        params.push(v.clone());
+    }
+
+    let mut joins = String::new();
+    if let Some(muscle) = &filters.primary_muscle {
+        joins
+            .push_str(" JOIN exercise_muscles em ON em.exercise_id = e.id AND em.role = 'primary'");
+        where_clauses.push(format!("em.muscle = ?{}", params.len() + 1));
+        params.push(muscle.clone());
+    }
+    if let Some(tag) = &filters.tag {
+        joins.push_str(" JOIN exercise_tags et ON et.exercise_id = e.id");
+        where_clauses.push(format!("et.tag = ?{}", params.len() + 1));
+        params.push(tag.clone());
+    }
+
+    let where_sql = if where_clauses.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", where_clauses.join(" AND "))
+    };
+
+    let count_sql =
+        format!("SELECT COUNT(DISTINCT e.id) as cnt FROM exercises e{joins}{where_sql}");
+    let data_sql = format!(
+        "SELECT DISTINCT e.id, e.name, e.notes, e.image_url,
+                e.catalog_source, e.catalog_id, e.is_catalog,
+                e.category, e.equipment, e.level, e.mechanic, e.force, e.instructions_json,
+                e.created_at, e.updated_at
+         FROM exercises e{joins}{where_sql}
+         ORDER BY e.name COLLATE NOCASE ASC, e.id ASC
+         LIMIT ?{limit_pos} OFFSET ?{offset_pos}",
+        limit_pos = params.len() + 1,
+        offset_pos = params.len() + 2,
+    );
+
+    // Build and execute count query
+    let mut count_query = sqlx::query(&count_sql);
+    for p in &params {
+        count_query = count_query.bind(p);
+    }
+    let total: i64 = count_query.fetch_one(pool).await?.get("cnt");
+
+    // Build and execute data query
+    let mut data_query = sqlx::query_as::<_, ExerciseRow>(&data_sql);
+    for p in &params {
+        data_query = data_query.bind(p);
+    }
+    data_query = data_query.bind(limit).bind(offset);
+
+    let rows = data_query.fetch_all(pool).await?;
+    Ok((rows, total))
+}
+
+/// Fetch tags for a specific set of exercise IDs.
+pub async fn fetch_tags_for_ids(
+    pool: &SqlitePool,
+    ids: &[String],
+) -> Result<HashMap<String, Vec<String>>, sqlx::Error> {
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let placeholders: String = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT exercise_id, tag FROM exercise_tags WHERE exercise_id IN ({}) ORDER BY exercise_id, tag",
+        placeholders
+    );
+    let mut query = sqlx::query(&sql);
+    for id in ids {
+        query = query.bind(id);
+    }
+    let rows = query.fetch_all(pool).await?;
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    for r in rows {
+        let eid: String = r.get("exercise_id");
+        let tag: String = r.get("tag");
+        map.entry(eid).or_default().push(tag);
+    }
+    Ok(map)
+}
+
+/// Fetch muscles for a specific set of exercise IDs.
+pub async fn fetch_muscles_for_ids(
+    pool: &SqlitePool,
+    ids: &[String],
+) -> Result<HashMap<String, (Vec<String>, Vec<String>)>, sqlx::Error> {
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let placeholders: String = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT exercise_id, muscle, role FROM exercise_muscles WHERE exercise_id IN ({}) ORDER BY exercise_id, role, muscle",
+        placeholders
+    );
+    let mut query = sqlx::query(&sql);
+    for id in ids {
+        query = query.bind(id);
+    }
+    let rows = query.fetch_all(pool).await?;
+    let mut map: HashMap<String, (Vec<String>, Vec<String>)> = HashMap::new();
+    for r in rows {
+        let eid: String = r.get("exercise_id");
+        let muscle: String = r.get("muscle");
+        let role: String = r.get("role");
+        let entry = map.entry(eid).or_default();
+        if role == "primary" {
+            entry.0.push(muscle);
+        } else {
+            entry.1.push(muscle);
+        }
+    }
+    Ok(map)
 }

@@ -1,15 +1,15 @@
-use sqlx::SqlitePool;
-use uuid::Uuid;
 use crate::{
     db::exercises,
     domain::types::{
-        Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences,
-        VALID_EXERCISE_CATEGORIES, VALID_EXERCISE_EQUIPMENT, VALID_EXERCISE_FORCES,
-        VALID_EXERCISE_LEVELS, VALID_EXERCISE_MECHANICS, VALID_EXERCISE_MUSCLES,
-        VALID_EXERCISE_TAGS,
+        Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences, ExerciseSearchFilters,
+        ExerciseSearchResult, VALID_EXERCISE_CATEGORIES, VALID_EXERCISE_EQUIPMENT,
+        VALID_EXERCISE_FORCES, VALID_EXERCISE_LEVELS, VALID_EXERCISE_MECHANICS,
+        VALID_EXERCISE_MUSCLES, VALID_EXERCISE_TAGS,
     },
     error::AppError,
 };
+use sqlx::SqlitePool;
+use uuid::Uuid;
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
@@ -137,6 +137,22 @@ pub async fn list(pool: &SqlitePool) -> Result<Vec<Exercise>, AppError> {
     Ok(result)
 }
 
+pub async fn get(pool: &SqlitePool, id: &str) -> Result<Exercise, AppError> {
+    let mut conn = pool.acquire().await?;
+    let row = exercises::find_by_id(&mut conn, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(id.to_string()))?;
+    drop(conn);
+
+    let ids = vec![row.id.clone()];
+    let mut tags_map = exercises::fetch_tags_for_ids(pool, &ids).await?;
+    let mut muscles_map = exercises::fetch_muscles_for_ids(pool, &ids).await?;
+    let tags = tags_map.remove(&row.id).unwrap_or_default();
+    let (primary, secondary) = muscles_map.remove(&row.id).unwrap_or_default();
+
+    Ok(Exercise::from_parts(row, tags, primary, secondary))
+}
+
 pub async fn create(
     pool: &SqlitePool,
     name: &str,
@@ -192,7 +208,12 @@ pub async fn create(
 
     let mut sorted_tags = tags.to_vec();
     sorted_tags.sort();
-    Ok(Exercise::from_parts(row, sorted_tags, primary_muscles, secondary_muscles))
+    Ok(Exercise::from_parts(
+        row,
+        sorted_tags,
+        primary_muscles,
+        secondary_muscles,
+    ))
 }
 
 pub async fn update(
@@ -252,18 +273,134 @@ pub async fn update(
 
     let mut sorted_tags = tags.to_vec();
     sorted_tags.sort();
-    Ok(Exercise::from_parts(row, sorted_tags, primary_muscles, secondary_muscles))
+    Ok(Exercise::from_parts(
+        row,
+        sorted_tags,
+        primary_muscles,
+        secondary_muscles,
+    ))
 }
 
-pub async fn get_references(
-    pool: &SqlitePool,
-    id: &str,
-) -> Result<ExerciseReferences, AppError> {
+pub async fn get_references(pool: &SqlitePool, id: &str) -> Result<ExerciseReferences, AppError> {
     let mut conn = pool.acquire().await?;
     let cards = exercises::find_referencing_cards(&mut conn, id)
         .await
         .map_err(AppError::from)?;
     Ok(ExerciseReferences { cards })
+}
+
+const DEFAULT_SEARCH_LIMIT: i64 = 80;
+const MAX_SEARCH_LIMIT: i64 = 200;
+
+fn validate_search_filters(filters: &ExerciseSearchFilters) -> Result<(), AppError> {
+    if let Some(src) = &filters.source {
+        match src.as_str() {
+            "all" | "user" | "catalog" => {}
+            _ => {
+                return Err(AppError::Validation(format!(
+                    "invalid source: '{}'. Valid values: all, user, catalog",
+                    src
+                )));
+            }
+        }
+    }
+    if let Some(v) = &filters.category {
+        if !VALID_EXERCISE_CATEGORIES.contains(&v.as_str()) {
+            return Err(AppError::Validation(format!(
+                "invalid category: '{}'. Valid values: {}",
+                v,
+                VALID_EXERCISE_CATEGORIES.join(", ")
+            )));
+        }
+    }
+    if let Some(v) = &filters.equipment {
+        if !VALID_EXERCISE_EQUIPMENT.contains(&v.as_str()) {
+            return Err(AppError::Validation(format!(
+                "invalid equipment: '{}'. Valid values: {}",
+                v,
+                VALID_EXERCISE_EQUIPMENT.join(", ")
+            )));
+        }
+    }
+    if let Some(v) = &filters.level {
+        if !VALID_EXERCISE_LEVELS.contains(&v.as_str()) {
+            return Err(AppError::Validation(format!(
+                "invalid level: '{}'. Valid values: {}",
+                v,
+                VALID_EXERCISE_LEVELS.join(", ")
+            )));
+        }
+    }
+    if let Some(v) = &filters.force {
+        if !VALID_EXERCISE_FORCES.contains(&v.as_str()) {
+            return Err(AppError::Validation(format!(
+                "invalid force: '{}'. Valid values: {}",
+                v,
+                VALID_EXERCISE_FORCES.join(", ")
+            )));
+        }
+    }
+    if let Some(v) = &filters.primary_muscle {
+        if !VALID_EXERCISE_MUSCLES.contains(&v.as_str()) {
+            return Err(AppError::Validation(format!(
+                "invalid primary_muscle: '{}'. Valid values: {}",
+                v,
+                VALID_EXERCISE_MUSCLES.join(", ")
+            )));
+        }
+    }
+    if let Some(v) = &filters.tag {
+        if !VALID_EXERCISE_TAGS.contains(&v.as_str()) {
+            return Err(AppError::Validation(format!(
+                "invalid tag: '{}'. Valid values: {}",
+                v,
+                VALID_EXERCISE_TAGS.join(", ")
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub async fn search(
+    pool: &SqlitePool,
+    filters: &ExerciseSearchFilters,
+) -> Result<ExerciseSearchResult, AppError> {
+    validate_search_filters(filters)?;
+
+    let effective_filters = ExerciseSearchFilters {
+        source: match filters.source.as_deref() {
+            Some("all") => None,
+            _ => filters.source.clone(),
+        },
+        ..filters.clone()
+    };
+
+    let limit = filters
+        .limit
+        .unwrap_or(DEFAULT_SEARCH_LIMIT)
+        .min(MAX_SEARCH_LIMIT)
+        .max(1);
+    let offset = filters.offset.unwrap_or(0).max(0);
+
+    let (rows, total) = exercises::search(pool, &effective_filters, limit, offset).await?;
+
+    let ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
+    let mut tags_map = exercises::fetch_tags_for_ids(pool, &ids).await?;
+    let mut muscles_map = exercises::fetch_muscles_for_ids(pool, &ids).await?;
+
+    let result = rows
+        .into_iter()
+        .map(|row| {
+            let tags = tags_map.remove(&row.id).unwrap_or_default();
+            let (primary, secondary) = muscles_map.remove(&row.id).unwrap_or_default();
+            Exercise::from_parts(row, tags, primary, secondary)
+        })
+        .collect();
+
+    Ok(ExerciseSearchResult {
+        exercises: result,
+        total,
+    })
 }
 
 pub async fn delete_with_unlink(

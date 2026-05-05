@@ -34,6 +34,8 @@ pub fn run() {
             import_library_json,
             // exercises
             list_exercises,
+            get_exercise,
+            search_exercises,
             create_exercise,
             update_exercise,
             get_exercise_references,
