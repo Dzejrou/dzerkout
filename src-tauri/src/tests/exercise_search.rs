@@ -785,6 +785,182 @@ async fn test_search_pose_type_composes_with_other_filters(pool: SqlitePool) {
     assert_eq!(page1.exercises.len(), 1);
 }
 
+// ── Catalog source filter ────────────────────────────────────────────────────
+
+async fn seed_catalog_sources_mix(pool: &SqlitePool) {
+    // 2 free-exercise-db rows (already in seed_exercises) + 2 yoga-poses rows
+    seed_exercises(pool).await;
+    seed_yoga_poses(pool).await;
+}
+
+#[sqlx::test]
+async fn test_list_catalog_sources_returns_distinct_with_counts(pool: SqlitePool) {
+    seed_catalog_sources_mix(&pool).await;
+
+    let sources = exercise::list_catalog_sources(&pool).await.unwrap();
+    assert_eq!(sources.len(), 2);
+    // Sorted ASC by source: free-exercise-db, yoga-poses
+    assert_eq!(sources[0].source, "free-exercise-db");
+    assert_eq!(sources[0].count, 3);
+    assert_eq!(sources[1].source, "yoga-poses");
+    assert_eq!(sources[1].count, 2);
+}
+
+#[sqlx::test]
+async fn test_list_catalog_sources_excludes_user_and_null(pool: SqlitePool) {
+    // user-created exercise (no catalog_source)
+    exercise::create(&pool, "Garage PR", None, &[], None, None, None).await.unwrap();
+    // catalog row with explicit source
+    seed_yoga_poses(&pool).await;
+
+    let sources = exercise::list_catalog_sources(&pool).await.unwrap();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(sources[0].source, "yoga-poses");
+    assert_eq!(sources[0].count, 2);
+}
+
+#[sqlx::test]
+async fn test_search_catalog_source_free_exercise_db(pool: SqlitePool) {
+    seed_catalog_sources_mix(&pool).await;
+    let r = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            catalog_source: Some("free-exercise-db".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.total, 3);
+    for ex in &r.exercises {
+        assert_eq!(ex.catalog_source.as_deref(), Some("free-exercise-db"));
+    }
+}
+
+#[sqlx::test]
+async fn test_search_catalog_source_yoga_poses(pool: SqlitePool) {
+    seed_catalog_sources_mix(&pool).await;
+    let r = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            catalog_source: Some("yoga-poses".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.total, 2);
+    for ex in &r.exercises {
+        assert_eq!(ex.catalog_source.as_deref(), Some("yoga-poses"));
+    }
+}
+
+#[sqlx::test]
+async fn test_search_source_catalog_with_catalog_source(pool: SqlitePool) {
+    seed_catalog_sources_mix(&pool).await;
+    let r = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            source: Some("catalog".to_string()),
+            catalog_source: Some("yoga-poses".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.total, 2);
+}
+
+#[sqlx::test]
+async fn test_search_source_all_with_catalog_source(pool: SqlitePool) {
+    seed_catalog_sources_mix(&pool).await;
+    let r = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            source: Some("all".to_string()),
+            catalog_source: Some("free-exercise-db".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.total, 3);
+}
+
+#[sqlx::test]
+async fn test_search_source_user_with_catalog_source_rejected(pool: SqlitePool) {
+    seed_catalog_sources_mix(&pool).await;
+    let err = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            source: Some("user".to_string()),
+            catalog_source: Some("yoga-poses".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap_err();
+    match err {
+        AppError::Validation(msg) => {
+            assert!(msg.contains("catalog_source") && msg.contains("user"));
+        }
+        _ => panic!("expected validation error"),
+    }
+}
+
+#[sqlx::test]
+async fn test_search_catalog_source_composes_with_other_filters(pool: SqlitePool) {
+    seed_catalog_sources_mix(&pool).await;
+
+    // category=yoga + catalog_source=yoga-poses + pose_type=back_bend
+    let r = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            category: Some("yoga".to_string()),
+            catalog_source: Some("yoga-poses".to_string()),
+            pose_type: Some("back_bend".to_string()),
+            limit: Some(10),
+            offset: Some(0),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.total, 1);
+    assert_eq!(r.exercises[0].name, "Bridge Pose");
+
+    // Paging composes: yoga catalog has 2 rows, page size 1.
+    let p1 = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            catalog_source: Some("yoga-poses".to_string()),
+            limit: Some(1),
+            offset: Some(0),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(p1.total, 2);
+    assert_eq!(p1.exercises.len(), 1);
+}
+
+#[sqlx::test]
+async fn test_search_unknown_catalog_source_returns_empty(pool: SqlitePool) {
+    seed_catalog_sources_mix(&pool).await;
+    let r = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            catalog_source: Some("does-not-exist".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.total, 0);
+    assert!(r.exercises.is_empty());
+}
+
 #[sqlx::test]
 async fn test_search_invalid_pose_type(pool: SqlitePool) {
     let err = exercise::search(

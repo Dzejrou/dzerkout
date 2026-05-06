@@ -217,6 +217,8 @@ pub struct ExerciseSearchFilters {
     #[serde(default)]
     pub source: Option<String>,
     #[serde(default)]
+    pub catalog_source: Option<String>,
+    #[serde(default)]
     pub category: Option<String>,
     #[serde(default)]
     pub equipment: Option<String>,
@@ -240,6 +242,12 @@ pub struct ExerciseSearchFilters {
 pub struct ExerciseSearchResult {
     pub exercises: Vec<Exercise>,
     pub total: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CatalogSourceSummary {
+    pub source: String,
+    pub count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

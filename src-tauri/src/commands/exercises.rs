@@ -2,8 +2,8 @@ use crate::{
     domain::{
         exercise,
         types::{
-            Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences, ExerciseSearchFilters,
-            ExerciseSearchResult,
+            CatalogSourceSummary, Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences,
+            ExerciseSearchFilters, ExerciseSearchResult,
         },
     },
     error::AppError,
@@ -27,6 +27,13 @@ pub async fn search_exercises(
     filters: ExerciseSearchFilters,
 ) -> Result<ExerciseSearchResult, AppError> {
     exercise::search(&pool, &filters).await
+}
+
+#[tauri::command]
+pub async fn list_catalog_sources(
+    pool: State<'_, SqlitePool>,
+) -> Result<Vec<CatalogSourceSummary>, AppError> {
+    exercise::list_catalog_sources(&pool).await
 }
 
 #[tauri::command]

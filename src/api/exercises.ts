@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences, ExerciseSearchFilters, ExerciseSearchResult } from "../types/exercise";
+import type { CatalogSourceSummary, Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences, ExerciseSearchFilters, ExerciseSearchResult } from "../types/exercise";
 
 export const exercisesApi = {
   list: () => invoke<Exercise[]>("list_exercises"),
@@ -9,6 +9,9 @@ export const exercisesApi = {
 
   search: (filters: ExerciseSearchFilters) =>
     invoke<ExerciseSearchResult>("search_exercises", { filters }),
+
+  listCatalogSources: () =>
+    invoke<CatalogSourceSummary[]>("list_catalog_sources"),
 
   create: (
     name: string,

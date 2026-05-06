@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT catalog_source AS \"source!: String\", COUNT(*) AS \"count!: i64\"\n           FROM exercises\n           WHERE is_catalog = 1 AND catalog_source IS NOT NULL\n           GROUP BY catalog_source\n           ORDER BY catalog_source ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "source!: String",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "count!: i64",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "3e199fe5b68898a260b032bc1c385f081a77ce1ba4b0525b6f938eab946bca8c"
+}

@@ -1,5 +1,6 @@
 use crate::domain::types::{
-    ExerciseCardRef, ExerciseMeta, ExerciseMuscleInput, ExerciseRow, ExerciseSearchFilters,
+    CatalogSourceSummary, ExerciseCardRef, ExerciseMeta, ExerciseMuscleInput, ExerciseRow,
+    ExerciseSearchFilters,
 };
 use sqlx::{Row, SqliteConnection, SqlitePool};
 use std::collections::HashMap;
@@ -305,6 +306,32 @@ pub async fn set_muscles(
     Ok(())
 }
 
+// ── Catalog source helpers ────────────────────────────────────────────────────
+
+/// Distinct catalog_source values across catalog exercises with row counts,
+/// sorted by source ascending. Excludes user-created (`is_catalog = 0`) rows
+/// and rows with NULL catalog_source.
+pub async fn list_catalog_sources(
+    pool: &SqlitePool,
+) -> Result<Vec<CatalogSourceSummary>, sqlx::Error> {
+    let rows = sqlx::query!(
+        r#"SELECT catalog_source AS "source!: String", COUNT(*) AS "count!: i64"
+           FROM exercises
+           WHERE is_catalog = 1 AND catalog_source IS NOT NULL
+           GROUP BY catalog_source
+           ORDER BY catalog_source ASC"#
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| CatalogSourceSummary {
+            source: r.source,
+            count: r.count,
+        })
+        .collect())
+}
+
 // ── Pose-type helpers ─────────────────────────────────────────────────────────
 
 /// Fetch pose types for all exercises in one query.
@@ -428,6 +455,13 @@ pub async fn search(
         Some("user") => where_clauses.push("e.is_catalog = 0".to_string()),
         Some("catalog") => where_clauses.push("e.is_catalog = 1".to_string()),
         _ => {}
+    }
+
+    if let Some(v) = &filters.catalog_source {
+        // Specific catalog filter implies catalog rows.
+        where_clauses.push("e.is_catalog = 1".to_string());
+        where_clauses.push(format!("e.catalog_source = ?{}", params.len() + 1));
+        params.push(v.clone());
     }
 
     if let Some(v) = &filters.category {

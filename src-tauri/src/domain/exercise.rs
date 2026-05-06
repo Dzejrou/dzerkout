@@ -1,10 +1,11 @@
 use crate::{
     db::exercises,
     domain::types::{
-        Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences, ExerciseSearchFilters,
-        ExerciseSearchResult, VALID_EXERCISE_CATEGORIES, VALID_EXERCISE_EQUIPMENT,
-        VALID_EXERCISE_FORCES, VALID_EXERCISE_LEVELS, VALID_EXERCISE_MECHANICS,
-        VALID_EXERCISE_MUSCLES, VALID_EXERCISE_POSE_TYPES, VALID_EXERCISE_TAGS,
+        CatalogSourceSummary, Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences,
+        ExerciseSearchFilters, ExerciseSearchResult, VALID_EXERCISE_CATEGORIES,
+        VALID_EXERCISE_EQUIPMENT, VALID_EXERCISE_FORCES, VALID_EXERCISE_LEVELS,
+        VALID_EXERCISE_MECHANICS, VALID_EXERCISE_MUSCLES, VALID_EXERCISE_POSE_TYPES,
+        VALID_EXERCISE_TAGS,
     },
     error::AppError,
 };
@@ -361,6 +362,21 @@ fn validate_search_filters(filters: &ExerciseSearchFilters) -> Result<(), AppErr
             }
         }
     }
+
+    // catalog_source narrows to catalog rows; combining with source="user"
+    // is contradictory and rejected to surface the bug at the API boundary.
+    if let Some(cs) = &filters.catalog_source {
+        if cs.trim().is_empty() {
+            return Err(AppError::Validation(
+                "catalog_source must not be an empty string".into(),
+            ));
+        }
+        if filters.source.as_deref() == Some("user") {
+            return Err(AppError::Validation(
+                "catalog_source cannot be combined with source='user'".into(),
+            ));
+        }
+    }
     if let Some(v) = &filters.category {
         if !VALID_EXERCISE_CATEGORIES.contains(&v.as_str()) {
             return Err(AppError::Validation(format!(
@@ -469,6 +485,12 @@ pub async fn search(
         exercises: result,
         total,
     })
+}
+
+pub async fn list_catalog_sources(
+    pool: &SqlitePool,
+) -> Result<Vec<CatalogSourceSummary>, AppError> {
+    Ok(exercises::list_catalog_sources(pool).await?)
 }
 
 pub async fn delete_with_unlink(

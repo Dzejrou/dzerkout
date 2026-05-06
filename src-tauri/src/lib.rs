@@ -36,6 +36,7 @@ pub fn run() {
             list_exercises,
             get_exercise,
             search_exercises,
+            list_catalog_sources,
             create_exercise,
             update_exercise,
             get_exercise_references,

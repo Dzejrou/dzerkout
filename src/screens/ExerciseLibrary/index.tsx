@@ -273,19 +273,26 @@ export default function ExerciseLibrary() {
   const [filterTag, setFilterTag] = useState("");
   const [filterForce, setFilterForce] = useState("");
   const [filterPoseType, setFilterPoseType] = useState("");
+  const [filterCatalogSource, setFilterCatalogSource] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Selecting "user" library makes catalog_source contradictory — clear it.
+  useEffect(() => {
+    if (filterSource === "user" && filterCatalogSource) setFilterCatalogSource("");
+  }, [filterSource, filterCatalogSource]);
 
   const activeFilterCount = [
     filterCategory, filterEquipment, filterLevel, filterMuscle,
-    filterTag, filterForce, filterPoseType,
+    filterTag, filterForce, filterPoseType, filterCatalogSource,
   ].filter(Boolean).length;
 
   // Reset to page 0 whenever any search/filter value changes.
-  useEffect(() => { setPage(0); }, [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, filterPoseType]);
+  useEffect(() => { setPage(0); }, [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, filterPoseType, filterCatalogSource]);
 
   const searchFilters: ExerciseSearchFilters = useMemo(() => ({
     query: search || undefined,
     source: filterSource || undefined,
+    catalog_source: filterCatalogSource || undefined,
     category: filterCategory || undefined,
     equipment: filterEquipment || undefined,
     level: filterLevel || undefined,
@@ -295,7 +302,12 @@ export default function ExerciseLibrary() {
     pose_type: filterPoseType || undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
-  }), [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, filterPoseType, page]);
+  }), [search, filterSource, filterCatalogSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, filterPoseType, page]);
+
+  const { data: catalogSources = [] } = useQuery({
+    queryKey: ["exercises", "catalog-sources"],
+    queryFn: () => exercisesApi.listCatalogSources(),
+  });
 
   const { data: searchResult, isLoading } = useQuery({
     queryKey: ["exercises", "search", searchFilters],
@@ -313,6 +325,7 @@ export default function ExerciseLibrary() {
     setFilterTag("");
     setFilterForce("");
     setFilterPoseType("");
+    setFilterCatalogSource("");
   }
 
   // Auto-select first exercise when nothing is selected (initial load or after clearing).
@@ -396,7 +409,10 @@ export default function ExerciseLibrary() {
             </button>
           </div>
 
-          {/* Source toggle */}
+          {/* Library (broad ownership) toggle.
+              Renamed from "Source" to avoid clashing with the catalog Source
+              filter below; backend field name is still `source`. */}
+          <div style={libraryToggleHeaderStyle}>Library</div>
           <div style={sourceToggleRowStyle}>
             {(["", "user", "catalog"] as const).map((src) => (
               <button
@@ -476,6 +492,28 @@ export default function ExerciseLibrary() {
                 placeholder="Pose type"
                 options={EXERCISE_POSE_TYPES}
               />
+              {catalogSources.length > 0 && (
+                <select
+                  value={filterCatalogSource}
+                  onChange={(e) => setFilterCatalogSource(e.target.value)}
+                  disabled={filterSource === "user"}
+                  title={filterSource === "user" ? "Disabled while Library is set to 'My exercises'" : undefined}
+                  style={{
+                    ...filterSelectStyle,
+                    border: `1px solid ${filterCatalogSource ? tokens.greenBadgeBorder : BORDER}`,
+                    color: filterCatalogSource ? TEXT_PRIMARY : TEXT_SECONDARY,
+                    opacity: filterSource === "user" ? 0.5 : 1,
+                    cursor: filterSource === "user" ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <option value="">Any source</option>
+                  {catalogSources.map((cs) => (
+                    <option key={cs.source} value={cs.source}>
+                      {cs.source} ({cs.count})
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           )}
         </div>
@@ -1054,10 +1092,19 @@ const filterSelectStyle: React.CSSProperties = {
   backgroundPosition: "right 7px center",
 };
 
+const libraryToggleHeaderStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: "0.05em",
+  textTransform: "uppercase",
+  color: TEXT_SECONDARY,
+  marginTop: 10,
+  marginBottom: 4,
+};
+
 const sourceToggleRowStyle: React.CSSProperties = {
   display: "flex",
   gap: 4,
-  marginTop: 10,
   marginBottom: 2,
 };
 

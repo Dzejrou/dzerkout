@@ -136,6 +136,7 @@ export interface ExerciseMuscleInput {
 export interface ExerciseSearchFilters {
   query?: string;
   source?: "all" | "user" | "catalog";
+  catalog_source?: string;
   category?: string;
   equipment?: string;
   level?: string;
@@ -145,6 +146,11 @@ export interface ExerciseSearchFilters {
   pose_type?: string;
   limit?: number;
   offset?: number;
+}
+
+export interface CatalogSourceSummary {
+  source: string;
+  count: number;
 }
 
 export interface ExerciseSearchResult {

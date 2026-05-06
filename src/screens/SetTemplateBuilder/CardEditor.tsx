@@ -94,15 +94,16 @@ function ExercisePicker({
   const [fForce, setFForce] = useState("");
   const [fTag, setFTag] = useState("");
   const [fPoseType, setFPoseType] = useState("");
+  const [fCatalogSource, setFCatalogSource] = useState("");
   const [page, setPage] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
   const selectedEx = selectedExercise;
 
-  const activeFilterCount = [fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, fPoseType].filter(Boolean).length;
+  const activeFilterCount = [fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, fPoseType, fCatalogSource].filter(Boolean).length;
 
   // Reset to page 0 whenever any search/filter value changes.
-  useEffect(() => { setPage(0); }, [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, fPoseType]);
+  useEffect(() => { setPage(0); }, [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, fPoseType, fCatalogSource]);
 
   const pickerFilters: ExerciseSearchFilters = useMemo(() => ({
     query: search || undefined,
@@ -113,9 +114,16 @@ function ExercisePicker({
     force: fForce || undefined,
     tag: fTag || undefined,
     pose_type: fPoseType || undefined,
+    catalog_source: fCatalogSource || undefined,
     limit: PICKER_PAGE_SIZE,
     offset: page * PICKER_PAGE_SIZE,
-  }), [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, fPoseType, page]);
+  }), [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, fPoseType, fCatalogSource, page]);
+
+  const { data: catalogSources = [] } = useQuery({
+    queryKey: ["exercises", "catalog-sources"],
+    queryFn: () => exercisesApi.listCatalogSources(),
+    enabled: open,
+  });
 
   const { data: searchResult } = useQuery({
     queryKey: ["exercises", "search", "picker", pickerFilters],
@@ -133,6 +141,7 @@ function ExercisePicker({
   function clearFilters() {
     setFCategory(""); setFEquipment(""); setFLevel("");
     setFMuscle(""); setFForce(""); setFTag(""); setFPoseType("");
+    setFCatalogSource("");
   }
 
   function goToPage(nextPage: number) {
@@ -244,6 +253,24 @@ function ExercisePicker({
           <PickerFilterSelect value={fForce} onChange={setFForce} placeholder="Force" options={EXERCISE_FORCES} />
           <PickerFilterSelect value={fTag} onChange={setFTag} placeholder="Tag" options={EXERCISE_TAGS} />
           <PickerFilterSelect value={fPoseType} onChange={setFPoseType} placeholder="Pose type" options={EXERCISE_POSE_TYPES} />
+          {catalogSources.length > 0 && (
+            <select
+              value={fCatalogSource}
+              onChange={(e) => setFCatalogSource(e.target.value)}
+              style={{
+                ...pickerFilterSelectStyle,
+                border: `1px solid ${fCatalogSource ? tokens.greenBadgeBorder : tokens.border}`,
+                color: fCatalogSource ? tokens.textPrimary : tokens.textSecondary,
+              }}
+            >
+              <option value="">Any source</option>
+              {catalogSources.map((cs) => (
+                <option key={cs.source} value={cs.source}>
+                  {cs.source} ({cs.count})
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 
