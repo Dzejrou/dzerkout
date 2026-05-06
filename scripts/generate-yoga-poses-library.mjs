@@ -8,8 +8,9 @@
  * Notes:
  *   - photo_url values point at pocketyoga.com and are intentionally NOT used;
  *     image_url is always null in the output.
- *   - sanskrit_name and pose_type are temporarily folded into the notes field
- *     until the schema gains dedicated columns/tables.
+ *   - pose_type is emitted as first-class metadata via the pose_types array,
+ *     using normalized DB enum values (e.g. "Standing" → "standing").
+ *   - Sanskrit name remains folded into notes for now ("Sanskrit: <name>").
  *
  * Usage:
  *   node scripts/generate-yoga-poses-library.mjs [options]
@@ -64,11 +65,31 @@ const VALID_TAGS = new Set([
 
 const CATEGORY = "yoga";
 const EQUIPMENT = "none";
-// TODO: pose_type should become first-class metadata/filtering (a dedicated column
-// or join table) once the schema is extended. Generic tags ("mobility", "yoga") are
-// not useful for filtering by specific pose type (e.g. "Standing", "Backbend").
-// For now pose_type is folded into the notes field as "Pose type: ...".
 const TAGS = ["mobility", "yoga"]; // alphabetical, mirrors Rust sort order
+
+// Mirrors VALID_EXERCISE_POSE_TYPES in Rust domain/types.rs and the CHECK
+// constraint in migration 008. Source labels are mapped to these normalized
+// enum values; anything else is rejected.
+const VALID_POSE_TYPES = new Set([
+  "standing", "forward_bend", "seated", "arm_leg_support",
+  "back_bend", "balancing", "arm_balance", "supine", "prone",
+  "inversion", "twist", "lateral_bend",
+]);
+
+const POSE_TYPE_LABEL_TO_NORMALIZED = new Map([
+  ["standing", "standing"],
+  ["forward bend", "forward_bend"],
+  ["seated", "seated"],
+  ["arm leg support", "arm_leg_support"],
+  ["back bend", "back_bend"],
+  ["balancing", "balancing"],
+  ["arm balance", "arm_balance"],
+  ["supine", "supine"],
+  ["prone", "prone"],
+  ["inversion", "inversion"],
+  ["twist", "twist"],
+  ["lateral bend", "lateral_bend"],
+]);
 
 // Sanity-check the constants we depend on.
 if (!VALID_CATEGORIES.has(CATEGORY)) throw new Error(`category '${CATEGORY}' not in VALID_CATEGORIES`);
@@ -115,7 +136,7 @@ function mapLevel(raw) {
   }
 }
 
-function normalizePoseTypes(arr) {
+function normalizePoseTypes(arr, ctx) {
   if (!Array.isArray(arr)) return [];
   const seen = new Set();
   const out = [];
@@ -123,19 +144,22 @@ function normalizePoseTypes(arr) {
     if (typeof t !== "string") continue;
     const trimmed = t.trim();
     if (!trimmed) continue;
-    if (seen.has(trimmed)) continue;
-    seen.add(trimmed);
-    out.push(trimmed);
+    const normalized = POSE_TYPE_LABEL_TO_NORMALIZED.get(trimmed.toLowerCase());
+    if (!normalized) {
+      throw new Error(
+        `unknown pose_type label "${trimmed}" in ${ctx} — extend POSE_TYPE_LABEL_TO_NORMALIZED if a new variant is needed`,
+      );
+    }
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
   }
   return out;
 }
 
-function buildNotes(sanskritName, poseTypes) {
-  const lines = [];
+function buildNotes(sanskritName) {
   const sanskrit = (sanskritName ?? "").trim();
-  if (sanskrit) lines.push(`Sanskrit: ${sanskrit}`);
-  if (poseTypes.length > 0) lines.push(`Pose type: ${poseTypes.join(", ")}`);
-  return lines.length === 0 ? null : lines.join("\n");
+  return sanskrit ? `Sanskrit: ${sanskrit}` : null;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -205,8 +229,8 @@ for (let idx = 0; idx < raw.length; idx++) {
     continue;
   }
 
-  const poseTypes = normalizePoseTypes(src?.pose_type);
-  const notes = buildNotes(src?.sanskrit_name, poseTypes);
+  const poseTypes = normalizePoseTypes(src?.pose_type, `record ${idx} ("${name}")`);
+  const notes = buildNotes(src?.sanskrit_name);
 
   // Disambiguate if the display name collides with a free-exercise-db exercise.
   // The UUID is derived from the original slug (not the display name) so it stays stable.
@@ -233,16 +257,12 @@ for (let idx = 0; idx < raw.length; idx++) {
     instructions_json: null,
     primary_muscles: [],
     secondary_muscles: [],
-    _poseTypes: poseTypes, // stripped before write; used only for reporting
+    pose_types: poseTypes,
   });
 }
 
-const finalExercises = (MAX ? exercises.slice(0, MAX) : exercises).map((e) => {
-  const { _poseTypes, ...rest } = e;
-  return rest;
-});
-
-const reportableExercises = MAX ? exercises.slice(0, MAX) : exercises;
+const finalExercises = MAX ? exercises.slice(0, MAX) : exercises;
+const reportableExercises = finalExercises;
 
 // ── Build output ──────────────────────────────────────────────────────────────
 
@@ -301,7 +321,7 @@ for (const [lv, n] of tally(finalExercises, "level")) {
 }
 
 console.log("\n  By pose type (normalized):");
-for (const [pt, n] of tallyArrayField(reportableExercises, "_poseTypes")) {
+for (const [pt, n] of tallyArrayField(reportableExercises, "pose_types")) {
   console.log(`    ${n.toString().padStart(4)}  ${pt}`);
 }
 
@@ -358,6 +378,18 @@ if (skipped.length > 0) {
     if (fedDisplayNames.has(ex.name)) {
       console.error(`  VALIDATION ERROR: name "${ex.name}" still collides with free-exercise-db after disambiguation`);
       validationErrors++;
+    }
+
+    if (!Array.isArray(ex.pose_types)) {
+      console.error(`  VALIDATION ERROR: pose_types must be an array on "${ex.name}"`);
+      validationErrors++;
+    } else {
+      for (const pt of ex.pose_types) {
+        if (!VALID_POSE_TYPES.has(pt)) {
+          console.error(`  VALIDATION ERROR: invalid pose_type "${pt}" on "${ex.name}"`);
+          validationErrors++;
+        }
+      }
     }
   }
 

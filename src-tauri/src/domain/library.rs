@@ -9,7 +9,7 @@ use crate::{
     domain::types::{
         VALID_EXERCISE_CATEGORIES, VALID_EXERCISE_EQUIPMENT, VALID_EXERCISE_FORCES,
         VALID_EXERCISE_LEVELS, VALID_EXERCISE_MECHANICS, VALID_EXERCISE_MUSCLES,
-        VALID_EXERCISE_TAGS,
+        VALID_EXERCISE_POSE_TYPES, VALID_EXERCISE_TAGS,
     },
     error::AppError,
 };
@@ -64,6 +64,8 @@ pub struct ExportedExercise {
     pub primary_muscles: Vec<String>,
     #[serde(default)]
     pub secondary_muscles: Vec<String>,
+    #[serde(default)]
+    pub pose_types: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -436,12 +438,14 @@ pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> 
     let all_exercise_rows = db_ex::find_all(pool).await?;
     let mut tags_map = db_ex::fetch_all_tags(pool).await?;
     let mut muscles_map = db_ex::fetch_all_muscles(pool).await?;
+    let mut pose_types_map = db_ex::fetch_all_pose_types(pool).await?;
     let exercises: Vec<ExportedExercise> = all_exercise_rows
         .into_iter()
         .map(|row| {
             let tags = tags_map.remove(&row.id).unwrap_or_default();
             let (primary_muscles, secondary_muscles) =
                 muscles_map.remove(&row.id).unwrap_or_default();
+            let pose_types = pose_types_map.remove(&row.id).unwrap_or_default();
             ExportedExercise {
                 tags,
                 image_url: row.image_url,
@@ -456,6 +460,7 @@ pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> 
                 instructions_json: row.instructions_json,
                 primary_muscles,
                 secondary_muscles,
+                pose_types,
                 id: row.id,
                 name: row.name,
                 notes: row.notes,
@@ -598,6 +603,14 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
             if !VALID_EXERCISE_MUSCLES.contains(&m.as_str()) {
                 return Err(AppError::Validation(format!(
                     "exercise '{}': invalid secondary muscle '{m}'",
+                    ex.name
+                )));
+            }
+        }
+        for pt in &ex.pose_types {
+            if !VALID_EXERCISE_POSE_TYPES.contains(&pt.as_str()) {
+                return Err(AppError::Validation(format!(
+                    "exercise '{}': invalid pose_type '{pt}'",
                     ex.name
                 )));
             }
@@ -894,6 +907,20 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
                 ex.id,
                 m,
                 role
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        // Replace pose_types wholesale
+        sqlx::query!("DELETE FROM exercise_pose_types WHERE exercise_id = ?", ex.id)
+            .execute(&mut *tx)
+            .await?;
+        for pt in &ex.pose_types {
+            sqlx::query!(
+                "INSERT INTO exercise_pose_types (exercise_id, pose_type) VALUES (?, ?)",
+                ex.id,
+                pt
             )
             .execute(&mut *tx)
             .await?;
@@ -1225,6 +1252,9 @@ pub async fn clear_local_data(pool: &SqlitePool) -> Result<(), AppError> {
         .execute(&mut *tx)
         .await?;
     sqlx::query!("DELETE FROM exercise_tags")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM exercise_pose_types")
         .execute(&mut *tx)
         .await?;
     sqlx::query!("DELETE FROM exercises")

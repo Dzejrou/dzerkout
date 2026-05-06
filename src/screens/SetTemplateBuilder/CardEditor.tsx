@@ -10,6 +10,7 @@ import {
   EXERCISE_MUSCLES,
   EXERCISE_TAGS,
   EXERCISE_FORCES,
+  EXERCISE_POSE_TYPES,
 } from "../../types/exercise";
 import type { SetTemplateCard, CardType, PlaceholderTag } from "../../types/setTemplate";
 import { tokens } from "../../theme/tokens";
@@ -92,15 +93,16 @@ function ExercisePicker({
   const [fMuscle, setFMuscle] = useState("");
   const [fForce, setFForce] = useState("");
   const [fTag, setFTag] = useState("");
+  const [fPoseType, setFPoseType] = useState("");
   const [page, setPage] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
   const selectedEx = selectedExercise;
 
-  const activeFilterCount = [fCategory, fEquipment, fLevel, fMuscle, fForce, fTag].filter(Boolean).length;
+  const activeFilterCount = [fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, fPoseType].filter(Boolean).length;
 
   // Reset to page 0 whenever any search/filter value changes.
-  useEffect(() => { setPage(0); }, [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag]);
+  useEffect(() => { setPage(0); }, [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, fPoseType]);
 
   const pickerFilters: ExerciseSearchFilters = useMemo(() => ({
     query: search || undefined,
@@ -110,9 +112,10 @@ function ExercisePicker({
     primary_muscle: fMuscle || undefined,
     force: fForce || undefined,
     tag: fTag || undefined,
+    pose_type: fPoseType || undefined,
     limit: PICKER_PAGE_SIZE,
     offset: page * PICKER_PAGE_SIZE,
-  }), [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, page]);
+  }), [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, fPoseType, page]);
 
   const { data: searchResult } = useQuery({
     queryKey: ["exercises", "search", "picker", pickerFilters],
@@ -129,7 +132,7 @@ function ExercisePicker({
 
   function clearFilters() {
     setFCategory(""); setFEquipment(""); setFLevel("");
-    setFMuscle(""); setFForce(""); setFTag("");
+    setFMuscle(""); setFForce(""); setFTag(""); setFPoseType("");
   }
 
   function goToPage(nextPage: number) {
@@ -240,6 +243,7 @@ function ExercisePicker({
           <PickerFilterSelect value={fMuscle} onChange={setFMuscle} placeholder="Muscle" options={EXERCISE_MUSCLES} />
           <PickerFilterSelect value={fForce} onChange={setFForce} placeholder="Force" options={EXERCISE_FORCES} />
           <PickerFilterSelect value={fTag} onChange={setFTag} placeholder="Tag" options={EXERCISE_TAGS} />
+          <PickerFilterSelect value={fPoseType} onChange={setFPoseType} placeholder="Pose type" options={EXERCISE_POSE_TYPES} />
         </div>
       )}
 

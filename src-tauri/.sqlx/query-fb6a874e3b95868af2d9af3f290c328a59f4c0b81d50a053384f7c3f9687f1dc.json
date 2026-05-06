@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO exercise_pose_types (exercise_id, pose_type) VALUES (?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "fb6a874e3b95868af2d9af3f290c328a59f4c0b81d50a053384f7c3f9687f1dc"
+}

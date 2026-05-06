@@ -14,6 +14,7 @@ import {
   EXERCISE_MECHANICS,
   EXERCISE_FORCES,
   EXERCISE_MUSCLES,
+  EXERCISE_POSE_TYPES,
 } from "../../types/exercise";
 import { tokens } from "../../theme/tokens";
 
@@ -36,6 +37,7 @@ interface Props {
     tags: string[],
     meta: ExerciseMeta,
     muscles: ExerciseMuscleInput[],
+    poseTypes: string[],
   ) => void;
   onCancel: () => void;
   saving?: boolean;
@@ -62,6 +64,7 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
 
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [muscleRoles, setMuscleRoles] = useState<Map<string, "primary" | "secondary">>(new Map());
+  const [selectedPoseTypes, setSelectedPoseTypes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let instructions = "";
@@ -88,7 +91,17 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
     for (const m of initial?.primary_muscles ?? []) roles.set(m, "primary");
     for (const m of initial?.secondary_muscles ?? []) roles.set(m, "secondary");
     setMuscleRoles(roles);
+    setSelectedPoseTypes(new Set(initial?.pose_types ?? []));
   }, [initial, reset]);
+
+  function togglePoseType(pt: string) {
+    setSelectedPoseTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(pt)) next.delete(pt);
+      else next.add(pt);
+      return next;
+    });
+  }
 
   function toggleTag(tag: string) {
     setSelectedTags((prev) => {
@@ -135,7 +148,16 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
       ([muscle, role]) => ({ muscle: muscle as ExerciseMuscle, role }),
     );
 
-    onSave(values.name.trim(), values.notes.trim() || null, normalizedTags, meta, muscles);
+    const poseTypes = Array.from(selectedPoseTypes).sort();
+
+    onSave(
+      values.name.trim(),
+      values.notes.trim() || null,
+      normalizedTags,
+      meta,
+      muscles,
+      poseTypes,
+    );
   }
 
   return (
@@ -293,6 +315,37 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
               >
                 {muscle}
                 {isPrimary ? " P" : isSecondary ? " S" : ""}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Pose types */}
+      <div>
+        <label style={labelStyle}>
+          Pose types{" "}
+          <span style={{ color: tokens.textMuted, fontWeight: 400, fontSize: 11 }}>
+            yoga only
+          </span>
+        </label>
+        <div style={chipGridStyle}>
+          {EXERCISE_POSE_TYPES.map((pt) => {
+            const active = selectedPoseTypes.has(pt);
+            return (
+              <button
+                key={pt}
+                type="button"
+                onClick={() => togglePoseType(pt)}
+                style={{
+                  ...chipBtnBase,
+                  border: `1px solid ${active ? tokens.green : tokens.border}`,
+                  background: active ? tokens.green : tokens.cardSubtle,
+                  color: active ? tokens.greenText : tokens.textSecondary,
+                  fontWeight: active ? 600 : 400,
+                }}
+              >
+                {pt.replace(/_/g, " ")}
               </button>
             );
           })}

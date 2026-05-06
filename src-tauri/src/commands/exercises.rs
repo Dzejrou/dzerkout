@@ -37,6 +37,7 @@ pub async fn create_exercise(
     tags: Vec<String>,
     meta: Option<ExerciseMeta>,
     muscles: Option<Vec<ExerciseMuscleInput>>,
+    pose_types: Option<Vec<String>>,
 ) -> Result<Exercise, AppError> {
     exercise::create(
         &pool,
@@ -45,6 +46,7 @@ pub async fn create_exercise(
         &tags,
         meta.as_ref(),
         muscles.as_deref(),
+        pose_types.as_deref(),
     )
     .await
 }
@@ -58,6 +60,7 @@ pub async fn update_exercise(
     tags: Vec<String>,
     muscles: Option<Vec<ExerciseMuscleInput>>,
     meta: Option<ExerciseMeta>,
+    pose_types: Option<Vec<String>>,
 ) -> Result<Exercise, AppError> {
     exercise::update(
         &pool,
@@ -67,6 +70,7 @@ pub async fn update_exercise(
         &tags,
         meta.as_ref(),
         muscles.as_deref(),
+        pose_types.as_deref(),
     )
     .await
 }

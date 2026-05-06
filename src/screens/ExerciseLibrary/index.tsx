@@ -6,6 +6,7 @@ import type { Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseSearchFilters
 import {
   EXERCISE_CATEGORIES, EXERCISE_EQUIPMENT, EXERCISE_LEVELS,
   EXERCISE_MUSCLES, EXERCISE_TAGS, EXERCISE_FORCES,
+  EXERCISE_POSE_TYPES,
 } from "../../types/exercise";
 import ExerciseForm from "./ExerciseForm";
 import { ConfirmModal } from "../../components/ConfirmModal";
@@ -91,6 +92,21 @@ function DetailPane({
           <section style={detailSectionStyle}>
             <h2 style={sectionHeadingStyle}>Notes</h2>
             <p style={notesTextStyle}>{exercise.notes}</p>
+          </section>
+          <div style={detailDividerStyle} />
+        </>
+      )}
+
+      {/* Pose types section */}
+      {exercise.pose_types.length > 0 && (
+        <>
+          <section style={detailSectionStyle}>
+            <h2 style={sectionHeadingStyle}>Pose types</h2>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {exercise.pose_types.map((pt) => (
+                <span key={pt} style={detailTagChipStyle}>{pt.replace(/_/g, " ")}</span>
+              ))}
+            </div>
           </section>
           <div style={detailDividerStyle} />
         </>
@@ -256,14 +272,16 @@ export default function ExerciseLibrary() {
   const [filterMuscle, setFilterMuscle] = useState("");
   const [filterTag, setFilterTag] = useState("");
   const [filterForce, setFilterForce] = useState("");
+  const [filterPoseType, setFilterPoseType] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const activeFilterCount = [
-    filterCategory, filterEquipment, filterLevel, filterMuscle, filterTag, filterForce,
+    filterCategory, filterEquipment, filterLevel, filterMuscle,
+    filterTag, filterForce, filterPoseType,
   ].filter(Boolean).length;
 
   // Reset to page 0 whenever any search/filter value changes.
-  useEffect(() => { setPage(0); }, [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag]);
+  useEffect(() => { setPage(0); }, [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, filterPoseType]);
 
   const searchFilters: ExerciseSearchFilters = useMemo(() => ({
     query: search || undefined,
@@ -274,9 +292,10 @@ export default function ExerciseLibrary() {
     primary_muscle: filterMuscle || undefined,
     force: filterForce || undefined,
     tag: filterTag || undefined,
+    pose_type: filterPoseType || undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
-  }), [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, page]);
+  }), [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, filterPoseType, page]);
 
   const { data: searchResult, isLoading } = useQuery({
     queryKey: ["exercises", "search", searchFilters],
@@ -293,6 +312,7 @@ export default function ExerciseLibrary() {
     setFilterMuscle("");
     setFilterTag("");
     setFilterForce("");
+    setFilterPoseType("");
   }
 
   // Auto-select first exercise when nothing is selected (initial load or after clearing).
@@ -312,11 +332,11 @@ export default function ExerciseLibrary() {
 
   const createMut = useMutation({
     mutationFn: ({
-      name, notes, tags, meta, muscles,
+      name, notes, tags, meta, muscles, poseTypes,
     }: {
       name: string; notes: string | null; tags: string[];
-      meta: ExerciseMeta; muscles: ExerciseMuscleInput[];
-    }) => exercisesApi.create(name, notes, tags, meta, muscles),
+      meta: ExerciseMeta; muscles: ExerciseMuscleInput[]; poseTypes: string[];
+    }) => exercisesApi.create(name, notes, tags, meta, muscles, poseTypes),
     onSuccess: (created) => {
       invalidateExercises();
       setSelectedId(created.id);
@@ -327,11 +347,11 @@ export default function ExerciseLibrary() {
 
   const updateMut = useMutation({
     mutationFn: ({
-      id, name, notes, tags, meta, muscles,
+      id, name, notes, tags, meta, muscles, poseTypes,
     }: {
       id: string; name: string; notes: string | null; tags: string[];
-      meta: ExerciseMeta; muscles: ExerciseMuscleInput[];
-    }) => exercisesApi.update(id, name, notes, tags, meta, muscles),
+      meta: ExerciseMeta; muscles: ExerciseMuscleInput[]; poseTypes: string[];
+    }) => exercisesApi.update(id, name, notes, tags, meta, muscles, poseTypes),
     onSuccess: () => { invalidateExercises(); setModal(null); },
   });
 
@@ -450,6 +470,12 @@ export default function ExerciseLibrary() {
                 placeholder="Tag"
                 options={EXERCISE_TAGS}
               />
+              <FilterSelect
+                value={filterPoseType}
+                onChange={setFilterPoseType}
+                placeholder="Pose type"
+                options={EXERCISE_POSE_TYPES}
+              />
             </div>
           )}
         </div>
@@ -541,11 +567,14 @@ export default function ExerciseLibrary() {
               initial={modal.type === "edit" ? modal.exercise : undefined}
               saving={createMut.isPending || updateMut.isPending}
               onCancel={() => setModal(null)}
-              onSave={(name, notes, tags, meta, muscles) => {
+              onSave={(name, notes, tags, meta, muscles, poseTypes) => {
                 if (modal.type === "create") {
-                  createMut.mutate({ name, notes, tags, meta, muscles });
+                  createMut.mutate({ name, notes, tags, meta, muscles, poseTypes });
                 } else {
-                  updateMut.mutate({ id: modal.exercise.id, name, notes, tags, meta, muscles });
+                  updateMut.mutate({
+                    id: modal.exercise.id,
+                    name, notes, tags, meta, muscles, poseTypes,
+                  });
                 }
               }}
             />

@@ -4,7 +4,7 @@ use crate::{
         Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseReferences, ExerciseSearchFilters,
         ExerciseSearchResult, VALID_EXERCISE_CATEGORIES, VALID_EXERCISE_EQUIPMENT,
         VALID_EXERCISE_FORCES, VALID_EXERCISE_LEVELS, VALID_EXERCISE_MECHANICS,
-        VALID_EXERCISE_MUSCLES, VALID_EXERCISE_TAGS,
+        VALID_EXERCISE_MUSCLES, VALID_EXERCISE_POSE_TYPES, VALID_EXERCISE_TAGS,
     },
     error::AppError,
 };
@@ -78,6 +78,19 @@ fn validate_meta(meta: &ExerciseMeta) -> Result<(), AppError> {
     Ok(())
 }
 
+fn validate_pose_types(pose_types: &[String]) -> Result<(), AppError> {
+    for pt in pose_types {
+        if !VALID_EXERCISE_POSE_TYPES.contains(&pt.as_str()) {
+            return Err(AppError::Validation(format!(
+                "invalid pose type: '{}'. Valid values: {}",
+                pt,
+                VALID_EXERCISE_POSE_TYPES.join(", ")
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn validate_muscles(muscles: &[ExerciseMuscleInput]) -> Result<(), AppError> {
     for m in muscles {
         if !VALID_EXERCISE_MUSCLES.contains(&m.muscle.as_str()) {
@@ -124,13 +137,15 @@ pub async fn list(pool: &SqlitePool) -> Result<Vec<Exercise>, AppError> {
     let rows = exercises::find_all(pool).await?;
     let mut tags_map = exercises::fetch_all_tags(pool).await?;
     let mut muscles_map = exercises::fetch_all_muscles(pool).await?;
+    let mut pose_types_map = exercises::fetch_all_pose_types(pool).await?;
 
     let result = rows
         .into_iter()
         .map(|row| {
             let tags = tags_map.remove(&row.id).unwrap_or_default();
             let (primary, secondary) = muscles_map.remove(&row.id).unwrap_or_default();
-            Exercise::from_parts(row, tags, primary, secondary)
+            let pose_types = pose_types_map.remove(&row.id).unwrap_or_default();
+            Exercise::from_parts(row, tags, primary, secondary, pose_types)
         })
         .collect();
 
@@ -147,10 +162,12 @@ pub async fn get(pool: &SqlitePool, id: &str) -> Result<Exercise, AppError> {
     let ids = vec![row.id.clone()];
     let mut tags_map = exercises::fetch_tags_for_ids(pool, &ids).await?;
     let mut muscles_map = exercises::fetch_muscles_for_ids(pool, &ids).await?;
+    let mut pose_types_map = exercises::fetch_pose_types_for_ids(pool, &ids).await?;
     let tags = tags_map.remove(&row.id).unwrap_or_default();
     let (primary, secondary) = muscles_map.remove(&row.id).unwrap_or_default();
+    let pose_types = pose_types_map.remove(&row.id).unwrap_or_default();
 
-    Ok(Exercise::from_parts(row, tags, primary, secondary))
+    Ok(Exercise::from_parts(row, tags, primary, secondary, pose_types))
 }
 
 pub async fn create(
@@ -160,6 +177,7 @@ pub async fn create(
     tags: &[String],
     meta: Option<&ExerciseMeta>,
     muscles: Option<&[ExerciseMuscleInput]>,
+    pose_types: Option<&[String]>,
 ) -> Result<Exercise, AppError> {
     if name.trim().is_empty() {
         return Err(AppError::Validation("name must not be empty".into()));
@@ -172,6 +190,10 @@ pub async fn create(
 
     if let Some(ms) = muscles {
         validate_muscles(ms)?;
+    }
+
+    if let Some(pts) = pose_types {
+        validate_pose_types(pts)?;
     }
 
     let id = Uuid::new_v4().to_string();
@@ -201,10 +223,17 @@ pub async fn create(
         exercises::set_muscles(&mut tx, &id, ms).await?;
     }
 
+    if let Some(pts) = pose_types {
+        exercises::set_pose_types(&mut tx, &id, pts).await?;
+    }
+
     tx.commit().await?;
 
     let (primary_muscles, secondary_muscles) =
         exercises::fetch_muscles_for_exercise(pool, &id).await?;
+    let mut conn = pool.acquire().await?;
+    let stored_pose_types = exercises::fetch_pose_types_for_exercise(&mut conn, &id).await?;
+    drop(conn);
 
     let mut sorted_tags = tags.to_vec();
     sorted_tags.sort();
@@ -213,6 +242,7 @@ pub async fn create(
         sorted_tags,
         primary_muscles,
         secondary_muscles,
+        stored_pose_types,
     ))
 }
 
@@ -224,6 +254,7 @@ pub async fn update(
     tags: &[String],
     meta: Option<&ExerciseMeta>,
     muscles: Option<&[ExerciseMuscleInput]>,
+    pose_types: Option<&[String]>,
 ) -> Result<Exercise, AppError> {
     if name.trim().is_empty() {
         return Err(AppError::Validation("name must not be empty".into()));
@@ -236,6 +267,10 @@ pub async fn update(
 
     if let Some(ms) = muscles {
         validate_muscles(ms)?;
+    }
+
+    if let Some(pts) = pose_types {
+        validate_pose_types(pts)?;
     }
 
     let mut tx = pool.begin().await?;
@@ -266,10 +301,17 @@ pub async fn update(
         exercises::set_muscles(&mut tx, id, ms).await?;
     }
 
+    if let Some(pts) = pose_types {
+        exercises::set_pose_types(&mut tx, id, pts).await?;
+    }
+
     tx.commit().await?;
 
     let (primary_muscles, secondary_muscles) =
         exercises::fetch_muscles_for_exercise(pool, id).await?;
+    let mut conn = pool.acquire().await?;
+    let stored_pose_types = exercises::fetch_pose_types_for_exercise(&mut conn, id).await?;
+    drop(conn);
 
     let mut sorted_tags = tags.to_vec();
     sorted_tags.sort();
@@ -278,6 +320,7 @@ pub async fn update(
         sorted_tags,
         primary_muscles,
         secondary_muscles,
+        stored_pose_types,
     ))
 }
 
@@ -372,6 +415,15 @@ fn validate_search_filters(filters: &ExerciseSearchFilters) -> Result<(), AppErr
             )));
         }
     }
+    if let Some(v) = &filters.pose_type {
+        if !VALID_EXERCISE_POSE_TYPES.contains(&v.as_str()) {
+            return Err(AppError::Validation(format!(
+                "invalid pose_type: '{}'. Valid values: {}",
+                v,
+                VALID_EXERCISE_POSE_TYPES.join(", ")
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -401,13 +453,15 @@ pub async fn search(
     let ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
     let mut tags_map = exercises::fetch_tags_for_ids(pool, &ids).await?;
     let mut muscles_map = exercises::fetch_muscles_for_ids(pool, &ids).await?;
+    let mut pose_types_map = exercises::fetch_pose_types_for_ids(pool, &ids).await?;
 
     let result = rows
         .into_iter()
         .map(|row| {
             let tags = tags_map.remove(&row.id).unwrap_or_default();
             let (primary, secondary) = muscles_map.remove(&row.id).unwrap_or_default();
-            Exercise::from_parts(row, tags, primary, secondary)
+            let pose_types = pose_types_map.remove(&row.id).unwrap_or_default();
+            Exercise::from_parts(row, tags, primary, secondary, pose_types)
         })
         .collect();
 

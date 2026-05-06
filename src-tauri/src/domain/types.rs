@@ -52,6 +52,21 @@ pub const VALID_EXERCISE_LEVELS: &[&str] = &["beginner", "intermediate", "expert
 pub const VALID_EXERCISE_MECHANICS: &[&str] = &["compound", "isolation"];
 pub const VALID_EXERCISE_FORCES: &[&str] = &["push", "pull", "static"];
 
+pub const VALID_EXERCISE_POSE_TYPES: &[&str] = &[
+    "standing",
+    "forward_bend",
+    "seated",
+    "arm_leg_support",
+    "back_bend",
+    "balancing",
+    "arm_balance",
+    "supine",
+    "prone",
+    "inversion",
+    "twist",
+    "lateral_bend",
+];
+
 pub const VALID_EXERCISE_MUSCLES: &[&str] = &[
     "abdominals",
     "abductors",
@@ -147,6 +162,7 @@ pub struct Exercise {
     pub instructions_json: Option<String>,
     pub primary_muscles: Vec<String>,
     pub secondary_muscles: Vec<String>,
+    pub pose_types: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -157,6 +173,7 @@ impl Exercise {
         tags: Vec<String>,
         primary_muscles: Vec<String>,
         secondary_muscles: Vec<String>,
+        pose_types: Vec<String>,
     ) -> Self {
         Self {
             id: row.id,
@@ -175,6 +192,7 @@ impl Exercise {
             instructions_json: row.instructions_json,
             primary_muscles,
             secondary_muscles,
+            pose_types,
             created_at: row.created_at,
             updated_at: row.updated_at,
         }
@@ -210,6 +228,8 @@ pub struct ExerciseSearchFilters {
     pub force: Option<String>,
     #[serde(default)]
     pub tag: Option<String>,
+    #[serde(default)]
+    pub pose_type: Option<String>,
     #[serde(default)]
     pub limit: Option<i64>,
     #[serde(default)]

@@ -189,6 +189,7 @@ for (const src of raw) {
     instructions_json: instructionsJson,
     primary_muscles: primaryMuscles,
     secondary_muscles: secondaryMuscles,
+    pose_types: [],
   });
 }
 

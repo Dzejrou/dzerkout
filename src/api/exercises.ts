@@ -16,6 +16,7 @@ export const exercisesApi = {
     tags: string[] = [],
     meta?: ExerciseMeta,
     muscles?: ExerciseMuscleInput[],
+    poseTypes?: string[],
   ) =>
     invoke<Exercise>("create_exercise", {
       name,
@@ -23,6 +24,7 @@ export const exercisesApi = {
       tags,
       meta: meta ?? null,
       muscles: muscles ?? null,
+      poseTypes: poseTypes ?? null,
     }),
 
   update: (
@@ -32,6 +34,7 @@ export const exercisesApi = {
     tags: string[] = [],
     meta?: ExerciseMeta,
     muscles?: ExerciseMuscleInput[],
+    poseTypes?: string[],
   ) =>
     invoke<Exercise>("update_exercise", {
       id,
@@ -40,6 +43,7 @@ export const exercisesApi = {
       tags,
       muscles: muscles ?? null,
       meta: meta ?? null,
+      poseTypes: poseTypes ?? null,
     }),
 
   getReferences: (id: string) =>

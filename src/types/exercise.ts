@@ -15,6 +15,7 @@ export interface Exercise {
   instructions_json: string | null;
   primary_muscles: string[];
   secondary_muscles: string[];
+  pose_types: string[];
   created_at: string;
   updated_at: string;
 }
@@ -64,6 +65,23 @@ export const EXERCISE_EQUIPMENT = [
   "e-z curl bar",
   "other",
 ] as const;
+
+export const EXERCISE_POSE_TYPES = [
+  "standing",
+  "forward_bend",
+  "seated",
+  "arm_leg_support",
+  "back_bend",
+  "balancing",
+  "arm_balance",
+  "supine",
+  "prone",
+  "inversion",
+  "twist",
+  "lateral_bend",
+] as const;
+
+export type ExercisePoseType = (typeof EXERCISE_POSE_TYPES)[number];
 
 export const EXERCISE_LEVELS = ["beginner", "intermediate", "expert"] as const;
 export const EXERCISE_MECHANICS = ["compound", "isolation"] as const;
@@ -124,6 +142,7 @@ export interface ExerciseSearchFilters {
   primary_muscle?: string;
   force?: string;
   tag?: string;
+  pose_type?: string;
   limit?: number;
   offset?: number;
 }

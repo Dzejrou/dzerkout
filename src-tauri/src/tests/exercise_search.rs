@@ -48,7 +48,7 @@ async fn seed_exercises(pool: &SqlitePool) {
             "intermediate",
             "push",
         )),
-        Some(&muscles(&[("chest", "primary"), ("triceps", "secondary")])),
+        Some(&muscles(&[("chest", "primary"), ("triceps", "secondary")])), None
     )
     .await
     .unwrap();
@@ -68,7 +68,7 @@ async fn seed_exercises(pool: &SqlitePool) {
         Some(&muscles(&[
             ("biceps", "primary"),
             ("forearms", "secondary"),
-        ])),
+        ])), None
     )
     .await
     .unwrap();
@@ -88,7 +88,7 @@ async fn seed_exercises(pool: &SqlitePool) {
         Some(&muscles(&[
             ("quadriceps", "primary"),
             ("glutes", "secondary"),
-        ])),
+        ])), None
     )
     .await
     .unwrap();
@@ -100,7 +100,7 @@ async fn seed_exercises(pool: &SqlitePool) {
         Some("personal variation"),
         &["push".to_string(), "core".to_string()],
         None,
-        Some(&muscles(&[("shoulders", "primary")])),
+        Some(&muscles(&[("shoulders", "primary")])), None
     )
     .await
     .unwrap();
@@ -148,7 +148,7 @@ async fn test_search_query_treats_like_wildcards_literally(pool: SqlitePool) {
         None,
         &[],
         None,
-        Some(&muscles(&[("shoulders", "primary")])),
+        Some(&muscles(&[("shoulders", "primary")])), None
     )
     .await
     .unwrap();
@@ -684,6 +684,120 @@ async fn test_search_negative_offset(pool: SqlitePool) {
     .unwrap_err();
     match err {
         AppError::Validation(msg) => assert!(msg.contains("invalid offset")),
+        _ => panic!("expected validation error"),
+    }
+}
+
+// ── Pose type filter ─────────────────────────────────────────────────────────
+
+async fn seed_yoga_poses(pool: &SqlitePool) {
+    exercise::create(
+        pool,
+        "Tree Pose",
+        None,
+        &["mobility".to_string(), "yoga".to_string()],
+        Some(&ExerciseMeta {
+            catalog_source: Some("yoga-poses".to_string()),
+            catalog_id: Some("tree-pose".to_string()),
+            is_catalog: true,
+            category: Some("yoga".to_string()),
+            equipment: Some("none".to_string()),
+            ..Default::default()
+        }),
+        None,
+        Some(&vec!["standing".to_string(), "balancing".to_string()]),
+    )
+    .await
+    .unwrap();
+
+    exercise::create(
+        pool,
+        "Bridge Pose",
+        None,
+        &["mobility".to_string(), "yoga".to_string()],
+        Some(&ExerciseMeta {
+            catalog_source: Some("yoga-poses".to_string()),
+            catalog_id: Some("bridge-pose".to_string()),
+            is_catalog: true,
+            category: Some("yoga".to_string()),
+            equipment: Some("none".to_string()),
+            ..Default::default()
+        }),
+        None,
+        Some(&vec!["supine".to_string(), "back_bend".to_string()]),
+    )
+    .await
+    .unwrap();
+}
+
+#[sqlx::test]
+async fn test_search_pose_type_filter(pool: SqlitePool) {
+    seed_yoga_poses(&pool).await;
+    let result = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            pose_type: Some("standing".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.total, 1);
+    assert_eq!(result.exercises[0].name, "Tree Pose");
+    let mut pts = result.exercises[0].pose_types.clone();
+    pts.sort();
+    assert_eq!(pts, vec!["balancing", "standing"]);
+}
+
+#[sqlx::test]
+async fn test_search_pose_type_composes_with_other_filters(pool: SqlitePool) {
+    seed_yoga_poses(&pool).await;
+    seed_exercises(&pool).await;
+
+    let result = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            category: Some("yoga".to_string()),
+            source: Some("catalog".to_string()),
+            pose_type: Some("back_bend".to_string()),
+            limit: Some(10),
+            offset: Some(0),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.total, 1);
+    assert_eq!(result.exercises[0].name, "Bridge Pose");
+
+    let page1 = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            pose_type: Some("standing".to_string()),
+            limit: Some(1),
+            offset: Some(0),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(page1.total, 1);
+    assert_eq!(page1.exercises.len(), 1);
+}
+
+#[sqlx::test]
+async fn test_search_invalid_pose_type(pool: SqlitePool) {
+    let err = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            pose_type: Some("nonexistent".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap_err();
+    match err {
+        AppError::Validation(msg) => assert!(msg.contains("invalid pose_type")),
         _ => panic!("expected validation error"),
     }
 }

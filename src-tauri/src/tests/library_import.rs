@@ -141,6 +141,113 @@ async fn test_cross_catalog_name_collision_gives_clear_error(pool: SqlitePool) {
     }
 }
 
+/// Old import payloads (pre pose_types) still import successfully — pose_types
+/// defaults to an empty array on deserialise.
+#[sqlx::test]
+async fn test_import_without_pose_types_succeeds(pool: SqlitePool) {
+    let ex = catalog_exercise("yoga-tree-old", "Tree Pose", "yoga-poses", "tree-pose");
+    let catalog = catalog_json(&[ex]);
+    let result = library::import_library_json(&pool, &catalog).await.unwrap();
+    assert_eq!(result.exercises_created, 1);
+
+    let stored = exercise::list(&pool).await.unwrap();
+    assert_eq!(stored.len(), 1);
+    assert!(
+        stored[0].pose_types.is_empty(),
+        "missing pose_types should default to empty"
+    );
+}
+
+/// Pose types round-trip through export → import: import populates the join
+/// table; export emits the stored values back.
+#[sqlx::test]
+async fn test_pose_types_roundtrip_through_import_and_export(pool: SqlitePool) {
+    let json = format!(
+        r#"{{
+          "schema": "dzerkout.library",
+          "version": 1,
+          "exported_at": "2024-01-01T00:00:00Z",
+          "exercises": [{{
+            "id": "yoga-warrior-i",
+            "name": "Warrior I",
+            "notes": null,
+            "tags": [],
+            "image_url": null,
+            "catalog_source": "yoga-poses",
+            "catalog_id": "warrior-i",
+            "is_catalog": true,
+            "category": "yoga",
+            "equipment": "none",
+            "level": null,
+            "mechanic": null,
+            "force": null,
+            "instructions_json": null,
+            "primary_muscles": [],
+            "secondary_muscles": [],
+            "pose_types": ["standing", "balancing"]
+          }}],
+          "set_templates": [],
+          "workout_templates": [],
+          "sessions": [],
+          "session_sets": [],
+          "session_exercises": []
+        }}"#
+    );
+
+    library::import_library_json(&pool, &json).await.unwrap();
+
+    let stored = exercise::list(&pool).await.unwrap();
+    assert_eq!(stored.len(), 1);
+    let mut got = stored[0].pose_types.clone();
+    got.sort();
+    assert_eq!(got, vec!["balancing", "standing"]);
+
+    // Export and confirm pose_types appears in the JSON.
+    let exported = library::export_full_library(&pool).await.unwrap();
+    assert!(exported.contains("\"pose_types\""));
+    assert!(exported.contains("standing"));
+    assert!(exported.contains("balancing"));
+}
+
+/// Invalid pose_type values are rejected at the import boundary.
+#[sqlx::test]
+async fn test_import_rejects_invalid_pose_type(pool: SqlitePool) {
+    let json = format!(
+        r#"{{
+          "schema": "dzerkout.library",
+          "version": 1,
+          "exported_at": "2024-01-01T00:00:00Z",
+          "exercises": [{{
+            "id": "yoga-bad",
+            "name": "Funny Pose",
+            "notes": null,
+            "tags": [],
+            "image_url": null,
+            "catalog_source": "yoga-poses",
+            "catalog_id": "bad",
+            "is_catalog": true,
+            "category": "yoga",
+            "equipment": "none",
+            "level": null,
+            "mechanic": null,
+            "force": null,
+            "instructions_json": null,
+            "primary_muscles": [],
+            "secondary_muscles": [],
+            "pose_types": ["upside-down"]
+          }}],
+          "set_templates": [],
+          "workout_templates": [],
+          "sessions": [],
+          "session_sets": [],
+          "session_exercises": []
+        }}"#
+    );
+
+    let err = library::import_library_json(&pool, &json).await.unwrap_err();
+    assert!(matches!(err, AppError::Validation(_)));
+}
+
 /// Within a single import payload, duplicate exercise names are rejected.
 #[sqlx::test]
 async fn test_duplicate_name_within_payload_rejected(pool: SqlitePool) {

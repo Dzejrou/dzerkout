@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT pose_type FROM exercise_pose_types\n         WHERE exercise_id = ? ORDER BY pose_type",
+  "describe": {
+    "columns": [
+      {
+        "name": "pose_type",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b85938f586ff266c5befeaa70189b0615b822454050003782d2085e158d0c010"
+}

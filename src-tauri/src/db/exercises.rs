@@ -305,6 +305,97 @@ pub async fn set_muscles(
     Ok(())
 }
 
+// ── Pose-type helpers ─────────────────────────────────────────────────────────
+
+/// Fetch pose types for all exercises in one query.
+/// Returns a map from exercise_id to sorted pose type list.
+pub async fn fetch_all_pose_types(
+    pool: &SqlitePool,
+) -> Result<HashMap<String, Vec<String>>, sqlx::Error> {
+    let rows = sqlx::query!(
+        "SELECT exercise_id, pose_type
+         FROM exercise_pose_types
+         ORDER BY exercise_id, pose_type"
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    for r in rows {
+        map.entry(r.exercise_id).or_default().push(r.pose_type);
+    }
+    Ok(map)
+}
+
+/// Fetch sorted pose types for a single exercise.
+pub async fn fetch_pose_types_for_exercise(
+    conn: &mut SqliteConnection,
+    exercise_id: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    let rows = sqlx::query!(
+        "SELECT pose_type FROM exercise_pose_types
+         WHERE exercise_id = ? ORDER BY pose_type",
+        exercise_id
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(rows.into_iter().map(|r| r.pose_type).collect())
+}
+
+/// Replace all pose-type rows for an exercise with the given slice.
+/// Must be called within the caller's transaction.
+pub async fn set_pose_types(
+    conn: &mut SqliteConnection,
+    exercise_id: &str,
+    pose_types: &[String],
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM exercise_pose_types WHERE exercise_id = ?",
+        exercise_id
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    for pt in pose_types {
+        sqlx::query!(
+            "INSERT INTO exercise_pose_types (exercise_id, pose_type) VALUES (?, ?)",
+            exercise_id,
+            pt
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+    Ok(())
+}
+
+/// Fetch pose types for a specific set of exercise IDs.
+pub async fn fetch_pose_types_for_ids(
+    pool: &SqlitePool,
+    ids: &[String],
+) -> Result<HashMap<String, Vec<String>>, sqlx::Error> {
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let placeholders: String = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT exercise_id, pose_type FROM exercise_pose_types
+         WHERE exercise_id IN ({}) ORDER BY exercise_id, pose_type",
+        placeholders
+    );
+    let mut query = sqlx::query(&sql);
+    for id in ids {
+        query = query.bind(id);
+    }
+    let rows = query.fetch_all(pool).await?;
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    for r in rows {
+        let eid: String = r.get("exercise_id");
+        let pt: String = r.get("pose_type");
+        map.entry(eid).or_default().push(pt);
+    }
+    Ok(map)
+}
+
 // ── Search ───────────────────────────────────────────────────────────────────
 
 fn escape_like(input: &str) -> String {
@@ -367,6 +458,11 @@ pub async fn search(
         joins.push_str(" JOIN exercise_tags et ON et.exercise_id = e.id");
         where_clauses.push(format!("et.tag = ?{}", params.len() + 1));
         params.push(tag.clone());
+    }
+    if let Some(pose_type) = &filters.pose_type {
+        joins.push_str(" JOIN exercise_pose_types ept ON ept.exercise_id = e.id");
+        where_clauses.push(format!("ept.pose_type = ?{}", params.len() + 1));
+        params.push(pose_type.clone());
     }
 
     let where_sql = if where_clauses.is_empty() {
