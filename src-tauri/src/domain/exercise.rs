@@ -79,6 +79,19 @@ fn validate_meta(meta: &ExerciseMeta) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Return a meta with empty/whitespace `sanskrit_name` collapsed to None.
+fn normalize_meta(meta: &ExerciseMeta) -> ExerciseMeta {
+    let mut out = meta.clone();
+    if let Some(s) = &out.sanskrit_name {
+        if s.trim().is_empty() {
+            out.sanskrit_name = None;
+        } else {
+            out.sanskrit_name = Some(s.trim().to_string());
+        }
+    }
+    out
+}
+
 fn validate_pose_types(pose_types: &[String]) -> Result<(), AppError> {
     for pt in pose_types {
         if !VALID_EXERCISE_POSE_TYPES.contains(&pt.as_str()) {
@@ -188,6 +201,7 @@ pub async fn create(
     let default_meta = ExerciseMeta::default();
     let effective_meta = meta.unwrap_or(&default_meta);
     validate_meta(effective_meta)?;
+    let effective_meta = normalize_meta(effective_meta);
 
     if let Some(ms) = muscles {
         validate_muscles(ms)?;
@@ -200,7 +214,7 @@ pub async fn create(
     let id = Uuid::new_v4().to_string();
     let mut tx = pool.begin().await?;
 
-    let row = exercises::insert(&mut tx, &id, name, notes, effective_meta)
+    let row = exercises::insert(&mut tx, &id, name, notes, &effective_meta)
         .await
         .map_err(|e| match &e {
             sqlx::Error::Database(db) if db.is_unique_violation() => {
@@ -262,9 +276,12 @@ pub async fn update(
     }
     validate_tags(tags)?;
 
-    if let Some(m) = meta {
+    let normalized_meta = if let Some(m) = meta {
         validate_meta(m)?;
-    }
+        Some(normalize_meta(m))
+    } else {
+        None
+    };
 
     if let Some(ms) = muscles {
         validate_muscles(ms)?;
@@ -288,7 +305,7 @@ pub async fn update(
 
     exercises::set_tags(&mut tx, id, tags).await?;
 
-    if let Some(m) = meta {
+    if let Some(m) = &normalized_meta {
         exercises::update_meta(&mut tx, id, m).await?;
         row.category = m.category.clone();
         row.equipment = m.equipment.clone();
@@ -296,6 +313,7 @@ pub async fn update(
         row.mechanic = m.mechanic.clone();
         row.force = m.force.clone();
         row.instructions_json = m.instructions_json.clone();
+        row.sanskrit_name = m.sanskrit_name.clone();
     }
 
     if let Some(ms) = muscles {

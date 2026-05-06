@@ -61,6 +61,8 @@ pub struct ExportedExercise {
     #[serde(default)]
     pub instructions_json: Option<String>,
     #[serde(default)]
+    pub sanskrit_name: Option<String>,
+    #[serde(default)]
     pub primary_muscles: Vec<String>,
     #[serde(default)]
     pub secondary_muscles: Vec<String>,
@@ -458,6 +460,7 @@ pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> 
                 mechanic: row.mechanic,
                 force: row.force,
                 instructions_json: row.instructions_json,
+                sanskrit_name: row.sanskrit_name,
                 primary_muscles,
                 secondary_muscles,
                 pose_types,
@@ -839,8 +842,9 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
             "INSERT INTO exercises
                  (id, name, notes, image_url,
                   catalog_source, catalog_id, is_catalog,
-                  category, equipment, level, mechanic, force, instructions_json)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  category, equipment, level, mechanic, force, instructions_json,
+                  sanskrit_name)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                name              = excluded.name,
                notes             = excluded.notes,
@@ -853,7 +857,8 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
                level             = excluded.level,
                mechanic          = excluded.mechanic,
                force             = excluded.force,
-               instructions_json = excluded.instructions_json",
+               instructions_json = excluded.instructions_json,
+               sanskrit_name     = excluded.sanskrit_name",
             ex.id,
             ex.name,
             ex.notes,
@@ -866,7 +871,8 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
             ex.level,
             ex.mechanic,
             ex.force,
-            ex.instructions_json
+            ex.instructions_json,
+            ex.sanskrit_name
         )
         .execute(&mut *tx)
         .await?;

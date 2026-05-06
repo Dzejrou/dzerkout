@@ -13,6 +13,7 @@ export interface Exercise {
   mechanic: string | null;
   force: string | null;
   instructions_json: string | null;
+  sanskrit_name: string | null;
   primary_muscles: string[];
   secondary_muscles: string[];
   pose_types: string[];
@@ -126,6 +127,7 @@ export interface ExerciseMeta {
   mechanic?: ExerciseMechanic | null;
   force?: ExerciseForce | null;
   instructions_json?: string | null;
+  sanskrit_name?: string | null;
 }
 
 export interface ExerciseMuscleInput {

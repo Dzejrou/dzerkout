@@ -20,6 +20,7 @@ import { tokens } from "../../theme/tokens";
 
 interface FormValues {
   name: string;
+  sanskrit_name: string;
   notes: string;
   category: string;
   equipment: string;
@@ -52,6 +53,7 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
   } = useForm<FormValues>({
     defaultValues: {
       name: "",
+      sanskrit_name: "",
       notes: "",
       category: "",
       equipment: "",
@@ -78,6 +80,7 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
     }
     reset({
       name: initial?.name ?? "",
+      sanskrit_name: initial?.sanskrit_name ?? "",
       notes: initial?.notes ?? "",
       category: initial?.category ?? "",
       equipment: initial?.equipment ?? "",
@@ -135,6 +138,7 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
       .map((l) => l.trim())
       .filter(Boolean);
 
+    const trimmedSanskrit = values.sanskrit_name.trim();
     const meta: ExerciseMeta = {
       category: (values.category as ExerciseMeta["category"]) || null,
       equipment: (values.equipment as ExerciseMeta["equipment"]) || null,
@@ -142,6 +146,7 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
       mechanic: (values.mechanic as ExerciseMeta["mechanic"]) || null,
       force: (values.force as ExerciseMeta["force"]) || null,
       instructions_json: instructionLines.length > 0 ? JSON.stringify(instructionLines) : null,
+      sanskrit_name: trimmedSanskrit || null,
     };
 
     const muscles: ExerciseMuscleInput[] = Array.from(muscleRoles.entries()).map(
@@ -184,6 +189,21 @@ export default function ExerciseForm({ initial, onSave, onCancel, saving }: Prop
           autoFocus
         />
         {errors.name && <p style={errorStyle}>{errors.name.message}</p>}
+      </div>
+
+      {/* Sanskrit name */}
+      <div>
+        <label style={labelStyle}>
+          Sanskrit name{" "}
+          <span style={{ color: tokens.textMuted, fontWeight: 400, fontSize: 11 }}>
+            optional, yoga
+          </span>
+        </label>
+        <input
+          {...register("sanskrit_name")}
+          style={inputStyle}
+          placeholder="e.g. Adho Mukha Svanasana"
+        />
       </div>
 
       {/* Notes */}

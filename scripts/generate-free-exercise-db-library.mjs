@@ -205,6 +205,7 @@ for (const src of raw) {
     mechanic: src.mechanic ?? null,
     force: src.force ?? null,
     instructions_json: instructionsJson,
+    sanskrit_name: null,
     primary_muscles: primaryMuscles,
     secondary_muscles: secondaryMuscles,
     pose_types: [],

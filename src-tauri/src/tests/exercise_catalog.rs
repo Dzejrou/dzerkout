@@ -27,6 +27,7 @@ fn meta(
         mechanic: Some(mechanic.to_string()),
         force: Some(force.to_string()),
         instructions_json: Some(r#"["Lie flat.", "Press the bar."]"#.to_string()),
+        sanskrit_name: None,
     }
 }
 
@@ -415,6 +416,82 @@ async fn test_delete_cascades_pose_types(pool: SqlitePool) {
     .unwrap();
 
     assert_eq!(count, 0, "pose type rows should be cascade-deleted");
+}
+
+// ── sanskrit_name: create stores it ───────────────────────────────────────────
+
+#[sqlx::test]
+async fn test_create_with_sanskrit_name(pool: SqlitePool) {
+    let m = ExerciseMeta {
+        sanskrit_name: Some("Adho Mukha Svanasana".into()),
+        ..Default::default()
+    };
+    let ex = exercise::create(&pool, "Downward-Facing Dog", None, &[], Some(&m), None, None)
+        .await
+        .unwrap();
+    assert_eq!(ex.sanskrit_name.as_deref(), Some("Adho Mukha Svanasana"));
+}
+
+// ── sanskrit_name: update can set/change it ───────────────────────────────────
+
+#[sqlx::test]
+async fn test_update_changes_sanskrit_name(pool: SqlitePool) {
+    let ex = exercise::create(&pool, "Tree Pose", None, &[], None, None, None)
+        .await
+        .unwrap();
+    assert!(ex.sanskrit_name.is_none());
+
+    let m = ExerciseMeta {
+        sanskrit_name: Some("Vrksasana".into()),
+        ..Default::default()
+    };
+    let updated = exercise::update(
+        &pool, &ex.id, "Tree Pose", None, &[], Some(&m), None, None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated.sanskrit_name.as_deref(), Some("Vrksasana"));
+
+    // Change it again.
+    let m2 = ExerciseMeta {
+        sanskrit_name: Some("Vrkshasana".into()),
+        ..Default::default()
+    };
+    let updated2 = exercise::update(
+        &pool, &ex.id, "Tree Pose", None, &[], Some(&m2), None, None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated2.sanskrit_name.as_deref(), Some("Vrkshasana"));
+}
+
+// ── sanskrit_name: empty/whitespace normalizes to null ────────────────────────
+
+#[sqlx::test]
+async fn test_sanskrit_name_whitespace_normalizes_to_null(pool: SqlitePool) {
+    let cases = ["", "   ", "\t\n  "];
+    for raw in cases {
+        let m = ExerciseMeta {
+            sanskrit_name: Some(raw.to_string()),
+            ..Default::default()
+        };
+        let ex = exercise::create(
+            &pool,
+            &format!("Pose-{raw:?}"),
+            None,
+            &[],
+            Some(&m),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(
+            ex.sanskrit_name.is_none(),
+            "expected None for input {raw:?}, got {:?}",
+            ex.sanskrit_name
+        );
+    }
 }
 
 // ── empty instructions_json array is valid ────────────────────────────────────

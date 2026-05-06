@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO exercises (\n             id, name, notes,\n             catalog_source, catalog_id, is_catalog,\n             category, equipment, level, mechanic, force, instructions_json\n         )\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n         RETURNING id, name, notes, image_url,\n                   catalog_source, catalog_id, is_catalog,\n                   category, equipment, level, mechanic, force, instructions_json,\n                   created_at, updated_at",
+  "query": "INSERT INTO exercises (\n             id, name, notes,\n             catalog_source, catalog_id, is_catalog,\n             category, equipment, level, mechanic, force, instructions_json,\n             sanskrit_name\n         )\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n         RETURNING id, name, notes, image_url,\n                   catalog_source, catalog_id, is_catalog,\n                   category, equipment, level, mechanic, force, instructions_json,\n                   sanskrit_name,\n                   created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -69,18 +69,23 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "sanskrit_name",
         "ordinal": 13,
         "type_info": "Text"
       },
       {
-        "name": "updated_at",
+        "name": "created_at",
         "ordinal": 14,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 15,
         "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 12
+      "Right": 13
     },
     "nullable": [
       false,
@@ -96,9 +101,10 @@
       true,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "6b7d28d70a6815a30ad058a26915f25488e0e99559b73e2b2eedd612bf60217d"
+  "hash": "5eb46d1ae50667452ff1d1a5be7281514065e268ab76bc38fee8bd306f6bc5c3"
 }

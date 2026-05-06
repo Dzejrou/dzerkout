@@ -113,6 +113,10 @@ pub struct ExerciseMeta {
     /// Validated in the domain layer before writing.
     #[serde(default)]
     pub instructions_json: Option<String>,
+    /// Optional structured Sanskrit name (yoga). Empty/whitespace is normalized
+    /// to None in the domain layer before writing.
+    #[serde(default)]
+    pub sanskrit_name: Option<String>,
 }
 
 /// One muscle assignment for an exercise.
@@ -139,6 +143,7 @@ pub struct ExerciseRow {
     pub mechanic: Option<String>,
     pub force: Option<String>,
     pub instructions_json: Option<String>,
+    pub sanskrit_name: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -160,6 +165,7 @@ pub struct Exercise {
     pub mechanic: Option<String>,
     pub force: Option<String>,
     pub instructions_json: Option<String>,
+    pub sanskrit_name: Option<String>,
     pub primary_muscles: Vec<String>,
     pub secondary_muscles: Vec<String>,
     pub pose_types: Vec<String>,
@@ -190,6 +196,7 @@ impl Exercise {
             mechanic: row.mechanic,
             force: row.force,
             instructions_json: row.instructions_json,
+            sanskrit_name: row.sanskrit_name,
             primary_muscles,
             secondary_muscles,
             pose_types,

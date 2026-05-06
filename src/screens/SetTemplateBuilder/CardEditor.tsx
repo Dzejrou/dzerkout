@@ -306,6 +306,17 @@ function ExercisePicker({
                     whiteSpace: "nowrap",
                   }}>
                     {ex.name}
+                    {ex.sanskrit_name && (
+                      <span style={{
+                        fontSize: 11,
+                        fontStyle: "italic",
+                        fontWeight: 400,
+                        color: tokens.textSecondary,
+                        marginLeft: 6,
+                      }}>
+                        {ex.sanskrit_name}
+                      </span>
+                    )}
                   </div>
                   <div style={{
                     fontSize: 11,

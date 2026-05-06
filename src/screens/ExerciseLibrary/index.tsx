@@ -55,6 +55,9 @@ function DetailPane({
       <div style={detailHeaderStyle}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={detailTitleStyle}>{exercise.name}</h1>
+          {exercise.sanskrit_name && (
+            <div style={detailSanskritStyle}>{exercise.sanskrit_name}</div>
+          )}
           {exercise.is_catalog && (
             <span style={catalogBadgeDetailStyle}>Catalog</span>
           )}
@@ -539,6 +542,9 @@ export default function ExerciseLibrary() {
               >
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                   <div style={exNameStyle}>{ex.name}</div>
+                  {ex.sanskrit_name && (
+                    <div style={exSanskritStyle}>{ex.sanskrit_name}</div>
+                  )}
                   <div style={exTagsRowStyle}>
                     {ex.is_catalog && (
                       <span style={catalogBadgeStyle}>Catalog</span>
@@ -771,6 +777,16 @@ const exNameStyle: React.CSSProperties = {
   marginBottom: 2,
 };
 
+const exSanskritStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontStyle: "italic",
+  color: TEXT_SECONDARY,
+  marginTop: 1,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
 const exNotesStyle: React.CSSProperties = {
   fontSize: 13,
   color: TEXT_SECONDARY,
@@ -868,6 +884,14 @@ const detailTitleStyle: React.CSSProperties = {
   margin: "0 0 4px",
   letterSpacing: "-0.02em",
   color: TEXT_PRIMARY,
+};
+
+const detailSanskritStyle: React.CSSProperties = {
+  fontSize: 14,
+  fontStyle: "italic",
+  color: TEXT_SECONDARY,
+  marginTop: -2,
+  marginBottom: 4,
 };
 
 

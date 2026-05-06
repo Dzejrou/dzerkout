@@ -14,6 +14,7 @@ pub async fn find_all(pool: &SqlitePool) -> Result<Vec<ExerciseRow>, sqlx::Error
         "SELECT id, name, notes, image_url,
                 catalog_source, catalog_id, is_catalog,
                 category, equipment, level, mechanic, force, instructions_json,
+                sanskrit_name,
                 created_at, updated_at
          FROM exercises ORDER BY name"
     )
@@ -30,6 +31,7 @@ pub async fn find_by_id(
         "SELECT id, name, notes, image_url,
                 catalog_source, catalog_id, is_catalog,
                 category, equipment, level, mechanic, force, instructions_json,
+                sanskrit_name,
                 created_at, updated_at
          FROM exercises WHERE id = ?",
         id
@@ -51,12 +53,14 @@ pub async fn insert(
         "INSERT INTO exercises (
              id, name, notes,
              catalog_source, catalog_id, is_catalog,
-             category, equipment, level, mechanic, force, instructions_json
+             category, equipment, level, mechanic, force, instructions_json,
+             sanskrit_name
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id, name, notes, image_url,
                    catalog_source, catalog_id, is_catalog,
                    category, equipment, level, mechanic, force, instructions_json,
+                   sanskrit_name,
                    created_at, updated_at",
         id,
         name,
@@ -69,7 +73,8 @@ pub async fn insert(
         meta.level,
         meta.mechanic,
         meta.force,
-        meta.instructions_json
+        meta.instructions_json,
+        meta.sanskrit_name
     )
     .fetch_one(conn)
     .await
@@ -88,6 +93,7 @@ pub async fn update(
          RETURNING id, name, notes, image_url,
                    catalog_source, catalog_id, is_catalog,
                    category, equipment, level, mechanic, force, instructions_json,
+                   sanskrit_name,
                    created_at, updated_at",
         name,
         notes,
@@ -105,7 +111,7 @@ pub async fn update_meta(
     sqlx::query!(
         "UPDATE exercises
          SET category = ?, equipment = ?, level = ?, mechanic = ?, force = ?,
-             instructions_json = ?
+             instructions_json = ?, sanskrit_name = ?
          WHERE id = ?",
         meta.category,
         meta.equipment,
@@ -113,6 +119,7 @@ pub async fn update_meta(
         meta.mechanic,
         meta.force,
         meta.instructions_json,
+        meta.sanskrit_name,
         id
     )
     .execute(conn)
@@ -443,9 +450,13 @@ pub async fn search(
 
     if let Some(q) = &filters.query {
         if !q.is_empty() {
+            // Match either English name OR sanskrit_name (NULL-safe via the
+            // single bound param; SQLite returns NULL for LIKE on NULL which
+            // is treated as false in the OR).
+            let pos = params.len() + 1;
             where_clauses.push(format!(
-                "LOWER(e.name) LIKE LOWER(?{}) ESCAPE '\\'",
-                params.len() + 1
+                "(LOWER(e.name) LIKE LOWER(?{pos}) ESCAPE '\\' \
+                  OR LOWER(e.sanskrit_name) LIKE LOWER(?{pos}) ESCAPE '\\')"
             ));
             params.push(format!("%{}%", escape_like(q)));
         }
@@ -511,6 +522,7 @@ pub async fn search(
         "SELECT DISTINCT e.id, e.name, e.notes, e.image_url,
                 e.catalog_source, e.catalog_id, e.is_catalog,
                 e.category, e.equipment, e.level, e.mechanic, e.force, e.instructions_json,
+                e.sanskrit_name,
                 e.created_at, e.updated_at
          FROM exercises e{joins}{where_sql}
          ORDER BY e.name COLLATE NOCASE ASC, e.id ASC

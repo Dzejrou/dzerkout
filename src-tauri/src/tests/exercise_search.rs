@@ -22,6 +22,7 @@ fn catalog_meta(
         mechanic: Some("compound".to_string()),
         force: Some(force.to_string()),
         instructions_json: None,
+        sanskrit_name: None,
     }
 }
 
@@ -783,6 +784,106 @@ async fn test_search_pose_type_composes_with_other_filters(pool: SqlitePool) {
     .unwrap();
     assert_eq!(page1.total, 1);
     assert_eq!(page1.exercises.len(), 1);
+}
+
+// ── Sanskrit name search ─────────────────────────────────────────────────────
+
+async fn seed_sanskrit_pose(pool: &SqlitePool) {
+    let m = ExerciseMeta {
+        catalog_source: Some("yoga-poses".into()),
+        catalog_id: Some("downward-facing-dog".into()),
+        is_catalog: true,
+        category: Some("yoga".into()),
+        equipment: Some("none".into()),
+        sanskrit_name: Some("Adho Mukha Svanasana".into()),
+        ..Default::default()
+    };
+    exercise::create(pool, "Downward-Facing Dog", None, &[], Some(&m), None, None)
+        .await
+        .unwrap();
+}
+
+#[sqlx::test]
+async fn test_search_by_sanskrit_substring_matches(pool: SqlitePool) {
+    seed_sanskrit_pose(&pool).await;
+    let r = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            query: Some("adho".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.total, 1);
+    assert_eq!(r.exercises[0].name, "Downward-Facing Dog");
+}
+
+#[sqlx::test]
+async fn test_search_english_name_still_works(pool: SqlitePool) {
+    seed_sanskrit_pose(&pool).await;
+    let r = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            query: Some("downward".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.total, 1);
+    assert_eq!(r.exercises[0].name, "Downward-Facing Dog");
+}
+
+#[sqlx::test]
+async fn test_search_query_with_null_sanskrit_name_safe(pool: SqlitePool) {
+    seed_exercises(&pool).await; // none have sanskrit_name
+    let r = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            query: Some("bench".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.total, 1);
+    assert_eq!(r.exercises[0].name, "Barbell Bench Press");
+}
+
+#[sqlx::test]
+async fn test_search_sanskrit_query_treats_wildcards_literally(pool: SqlitePool) {
+    let m = ExerciseMeta {
+        sanskrit_name: Some("100% literal".into()),
+        ..Default::default()
+    };
+    exercise::create(&pool, "Literal Marker", None, &[], Some(&m), None, None)
+        .await
+        .unwrap();
+    seed_exercises(&pool).await;
+
+    let percent = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            query: Some("%".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(percent.total, 1);
+    assert_eq!(percent.exercises[0].name, "Literal Marker");
+
+    let underscore = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            query: Some("_".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(underscore.total, 0);
 }
 
 // ── Catalog source filter ────────────────────────────────────────────────────

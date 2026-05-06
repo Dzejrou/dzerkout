@@ -248,6 +248,63 @@ async fn test_import_rejects_invalid_pose_type(pool: SqlitePool) {
     assert!(matches!(err, AppError::Validation(_)));
 }
 
+/// Sanskrit name round-trips through export → import.
+#[sqlx::test]
+async fn test_sanskrit_name_roundtrip(pool: SqlitePool) {
+    let json = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [{
+        "id": "yoga-tree-1",
+        "name": "Tree Pose",
+        "notes": null,
+        "tags": [],
+        "image_url": null,
+        "catalog_source": "yoga-poses",
+        "catalog_id": "tree-pose",
+        "is_catalog": true,
+        "category": "yoga",
+        "equipment": "none",
+        "level": null,
+        "mechanic": null,
+        "force": null,
+        "instructions_json": null,
+        "sanskrit_name": "Vrksasana",
+        "primary_muscles": [],
+        "secondary_muscles": [],
+        "pose_types": ["standing"]
+      }],
+      "set_templates": [],
+      "workout_templates": [],
+      "sessions": [],
+      "session_sets": [],
+      "session_exercises": []
+    }"#;
+
+    library::import_library_json(&pool, json).await.unwrap();
+
+    let stored = exercise::list(&pool).await.unwrap();
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].sanskrit_name.as_deref(), Some("Vrksasana"));
+
+    let exported = library::export_full_library(&pool).await.unwrap();
+    assert!(exported.contains("\"sanskrit_name\""));
+    assert!(exported.contains("Vrksasana"));
+}
+
+/// Old payloads without `sanskrit_name` still import — defaults to None.
+#[sqlx::test]
+async fn test_import_without_sanskrit_name_succeeds(pool: SqlitePool) {
+    let ex = catalog_exercise("yoga-old-1", "Old Pose", "yoga-poses", "old-pose");
+    let catalog = catalog_json(&[ex]);
+    library::import_library_json(&pool, &catalog).await.unwrap();
+
+    let stored = exercise::list(&pool).await.unwrap();
+    assert_eq!(stored.len(), 1);
+    assert!(stored[0].sanskrit_name.is_none());
+}
+
 /// Within a single import payload, duplicate exercise names are rejected.
 #[sqlx::test]
 async fn test_duplicate_name_within_payload_rejected(pool: SqlitePool) {

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, name, notes, image_url,\n                catalog_source, catalog_id, is_catalog,\n                category, equipment, level, mechanic, force, instructions_json,\n                created_at, updated_at\n         FROM exercises ORDER BY name",
+  "query": "SELECT id, name, notes, image_url,\n                catalog_source, catalog_id, is_catalog,\n                category, equipment, level, mechanic, force, instructions_json,\n                sanskrit_name,\n                created_at, updated_at\n         FROM exercises ORDER BY name",
   "describe": {
     "columns": [
       {
@@ -69,13 +69,18 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "sanskrit_name",
         "ordinal": 13,
         "type_info": "Text"
       },
       {
-        "name": "updated_at",
+        "name": "created_at",
         "ordinal": 14,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 15,
         "type_info": "Text"
       }
     ],
@@ -96,9 +101,10 @@
       true,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "f77b10f2e62fa605ab6ec988628874b589d80b81c864504071a05794014dc460"
+  "hash": "6de8aadbda33720ab9c1c8e0b1718e8df53b9d63b53b29e93727616eaa2bdcf2"
 }

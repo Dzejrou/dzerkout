@@ -2518,6 +2518,7 @@ async fn test_export_includes_catalog_metadata_and_muscles(pool: SqlitePool) {
         mechanic: Some("compound".into()),
         force: Some("push".into()),
         instructions_json: Some(r#"["Stand tall.", "Descend."]"#.into()),
+        sanskrit_name: None,
     };
     let muscles = vec![
         ExerciseMuscleInput { muscle: "quadriceps".into(), role: "primary".into() },

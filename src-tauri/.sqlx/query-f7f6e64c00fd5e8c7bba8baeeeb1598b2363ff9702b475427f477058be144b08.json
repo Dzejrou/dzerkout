@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE exercises\n         SET category = ?, equipment = ?, level = ?, mechanic = ?, force = ?,\n             instructions_json = ?, sanskrit_name = ?\n         WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "f7f6e64c00fd5e8c7bba8baeeeb1598b2363ff9702b475427f477058be144b08"
+}

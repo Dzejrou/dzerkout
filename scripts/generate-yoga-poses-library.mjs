@@ -10,7 +10,8 @@
  *     image_url is always null in the output.
  *   - pose_type is emitted as first-class metadata via the pose_types array,
  *     using normalized DB enum values (e.g. "Standing" → "standing").
- *   - Sanskrit name remains folded into notes for now ("Sanskrit: <name>").
+ *   - Sanskrit name is emitted as the structured `sanskrit_name` field (no
+ *     longer folded into notes). Empty/whitespace becomes null.
  *
  * Usage:
  *   node scripts/generate-yoga-poses-library.mjs [options]
@@ -174,9 +175,10 @@ function normalizePoseTypes(arr, ctx) {
   return out;
 }
 
-function buildNotes(sanskritName) {
-  const sanskrit = (sanskritName ?? "").trim();
-  return sanskrit ? `Sanskrit: ${sanskrit}` : null;
+function normalizeSanskritName(raw) {
+  if (raw == null) return null;
+  const trimmed = String(raw).trim();
+  return trimmed === "" ? null : trimmed;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -248,7 +250,9 @@ for (let idx = 0; idx < raw.length; idx++) {
   }
 
   const poseTypes = normalizePoseTypes(src?.pose_type, `record ${idx} ("${name}")`);
-  const notes = buildNotes(src?.sanskrit_name);
+  const sanskritName = normalizeSanskritName(src?.sanskrit_name);
+  // No other note content for yoga poses today; Sanskrit moved to its own field.
+  const notes = null;
 
   // Disambiguate if the display name collides with a free-exercise-db exercise.
   // The UUID is derived from the original `<source>:<slug>` identity, never
@@ -275,6 +279,7 @@ for (let idx = 0; idx < raw.length; idx++) {
     mechanic: null,
     force: null,
     instructions_json: null,
+    sanskrit_name: sanskritName,
     primary_muscles: [],
     secondary_muscles: [],
     pose_types: poseTypes,
@@ -402,6 +407,11 @@ if (skipped.length > 0) {
 
     if (fedDisplayNames.has(ex.name)) {
       console.error(`  VALIDATION ERROR: name "${ex.name}" still collides with free-exercise-db after disambiguation`);
+      validationErrors++;
+    }
+
+    if (ex.sanskrit_name !== null && typeof ex.sanskrit_name !== "string") {
+      console.error(`  VALIDATION ERROR: sanskrit_name must be string|null on "${ex.name}" (got ${typeof ex.sanskrit_name})`);
       validationErrors++;
     }
 

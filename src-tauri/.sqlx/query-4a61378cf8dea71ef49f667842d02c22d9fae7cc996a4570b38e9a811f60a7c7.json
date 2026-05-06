@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "UPDATE exercises SET name = ?, notes = ?\n         WHERE id = ?\n         RETURNING id, name, notes, image_url,\n                   catalog_source, catalog_id, is_catalog,\n                   category, equipment, level, mechanic, force, instructions_json,\n                   created_at, updated_at",
+  "query": "UPDATE exercises SET name = ?, notes = ?\n         WHERE id = ?\n         RETURNING id, name, notes, image_url,\n                   catalog_source, catalog_id, is_catalog,\n                   category, equipment, level, mechanic, force, instructions_json,\n                   sanskrit_name,\n                   created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -69,13 +69,18 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "sanskrit_name",
         "ordinal": 13,
         "type_info": "Text"
       },
       {
-        "name": "updated_at",
+        "name": "created_at",
         "ordinal": 14,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 15,
         "type_info": "Text"
       }
     ],
@@ -96,9 +101,10 @@
       true,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "de518fce14b446ed6190ce51af6bcff8fe3b963d9c6387c2141c2734342c2a57"
+  "hash": "4a61378cf8dea71ef49f667842d02c22d9fae7cc996a4570b38e9a811f60a7c7"
 }
