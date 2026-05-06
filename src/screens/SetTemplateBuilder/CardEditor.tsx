@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { exercisesApi } from "../../api/exercises";
@@ -70,6 +70,8 @@ function PickerFilterSelect({
   );
 }
 
+const PICKER_PAGE_SIZE = 40;
+
 // ── ExercisePicker ────────────────────────────────────────────────────────────
 
 function ExercisePicker({
@@ -90,10 +92,15 @@ function ExercisePicker({
   const [fMuscle, setFMuscle] = useState("");
   const [fForce, setFForce] = useState("");
   const [fTag, setFTag] = useState("");
+  const [page, setPage] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const selectedEx = selectedExercise;
 
   const activeFilterCount = [fCategory, fEquipment, fLevel, fMuscle, fForce, fTag].filter(Boolean).length;
+
+  // Reset to page 0 whenever any search/filter value changes.
+  useEffect(() => { setPage(0); }, [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag]);
 
   const pickerFilters: ExerciseSearchFilters = useMemo(() => ({
     query: search || undefined,
@@ -103,8 +110,9 @@ function ExercisePicker({
     primary_muscle: fMuscle || undefined,
     force: fForce || undefined,
     tag: fTag || undefined,
-    limit: 80,
-  }), [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag]);
+    limit: PICKER_PAGE_SIZE,
+    offset: page * PICKER_PAGE_SIZE,
+  }), [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, page]);
 
   const { data: searchResult } = useQuery({
     queryKey: ["exercises", "search", "picker", pickerFilters],
@@ -114,11 +122,20 @@ function ExercisePicker({
 
   const filtered = searchResult?.exercises ?? [];
   const totalCount = searchResult?.total ?? 0;
-  const hiddenCount = totalCount - filtered.length;
+  const pageStart = page * PICKER_PAGE_SIZE + 1;
+  const pageEnd = page * PICKER_PAGE_SIZE + filtered.length;
+  const hasNext = pageEnd < totalCount;
+  const hasPrev = page > 0;
 
   function clearFilters() {
     setFCategory(""); setFEquipment(""); setFLevel("");
     setFMuscle(""); setFForce(""); setFTag("");
+  }
+
+  function goToPage(nextPage: number) {
+    setPage(nextPage);
+    // Scroll list back to top when changing pages.
+    listRef.current?.scrollTo({ top: 0 });
   }
 
   function pickExercise(ex: Exercise) {
@@ -210,7 +227,7 @@ function ExercisePicker({
           </button>
         )}
         <span style={{ marginLeft: "auto", fontSize: 11, color: tokens.textMuted }}>
-          {totalCount} result{totalCount !== 1 ? "s" : ""}
+          {totalCount} total
         </span>
       </div>
 
@@ -227,14 +244,13 @@ function ExercisePicker({
       )}
 
       {/* Scrollable exercise list */}
-      <div style={pickerListStyle}>
+      <div ref={listRef} style={pickerListStyle}>
         {filtered.length === 0 ? (
           <p style={{ color: tokens.textSecondary, fontSize: 13, padding: "12px 10px", margin: 0, textAlign: "center" }}>
             No exercises match.
           </p>
         ) : (
-          <>
-          {filtered.map((ex) => {
+          filtered.map((ex) => {
             const isSelected = ex.id === value;
             return (
               <button
@@ -281,15 +297,36 @@ function ExercisePicker({
                 )}
               </button>
             );
-          })}
-          {hiddenCount > 0 && (
-            <p style={pickerOverflowNoteStyle}>
-              Showing first {filtered.length} of {totalCount}. Narrow your search or filters.
-            </p>
-          )}
-          </>
+          })
         )}
       </div>
+
+      {/* Paging footer — shown whenever there are results */}
+      {totalCount > 0 && (
+        <div style={pickerPagingFooterStyle}>
+          <span style={{ fontSize: 10, color: tokens.textMuted }}>
+            {`${pageStart}–${pageEnd} of ${totalCount}`}
+          </span>
+          <div style={{ display: "flex", gap: 3 }}>
+            <button
+              type="button"
+              onClick={() => goToPage(page - 1)}
+              disabled={!hasPrev}
+              style={pickerPagingBtnStyle(!hasPrev)}
+            >
+              ‹ Prev
+            </button>
+            <button
+              type="button"
+              onClick={() => goToPage(page + 1)}
+              disabled={!hasNext}
+              style={pickerPagingBtnStyle(!hasNext)}
+            >
+              Next ›
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -646,11 +683,24 @@ const pickerRowStyle: React.CSSProperties = {
   textAlign: "left",
 };
 
-const pickerOverflowNoteStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "8px 10px",
-  fontSize: 11,
-  color: tokens.textMuted,
-  textAlign: "center",
+const pickerPagingFooterStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "4px 4px 2px",
   borderTop: `1px solid ${tokens.divider}`,
 };
+
+function pickerPagingBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    fontSize: 11,
+    fontWeight: 500,
+    padding: "3px 8px",
+    borderRadius: 5,
+    border: `1px solid ${tokens.border}`,
+    background: "transparent",
+    color: disabled ? tokens.textMuted : tokens.textSecondary,
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.4 : 1,
+  };
+}

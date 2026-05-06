@@ -237,11 +237,15 @@ function EmptyState({ isFiltered }: { isFiltered: boolean }) {
   );
 }
 
+const PAGE_SIZE = 50;
+
 export default function ExerciseLibrary() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [page, setPage] = useState(0);
   const [modal, setModal] = useState<Modal | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -258,6 +262,9 @@ export default function ExerciseLibrary() {
     filterCategory, filterEquipment, filterLevel, filterMuscle, filterTag, filterForce,
   ].filter(Boolean).length;
 
+  // Reset to page 0 whenever any search/filter value changes.
+  useEffect(() => { setPage(0); }, [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag]);
+
   const searchFilters: ExerciseSearchFilters = useMemo(() => ({
     query: search || undefined,
     source: filterSource || undefined,
@@ -267,7 +274,9 @@ export default function ExerciseLibrary() {
     primary_muscle: filterMuscle || undefined,
     force: filterForce || undefined,
     tag: filterTag || undefined,
-  }), [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag]);
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+  }), [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, page]);
 
   const { data: searchResult, isLoading } = useQuery({
     queryKey: ["exercises", "search", searchFilters],
@@ -286,19 +295,18 @@ export default function ExerciseLibrary() {
     setFilterForce("");
   }
 
-  const selected = filtered.find((e) => e.id === selectedId) ?? null;
-
+  // Auto-select first exercise when nothing is selected (initial load or after clearing).
   useEffect(() => {
-    if (!selectedId && filtered.length > 0) {
+    if (selectedId === null && filtered.length > 0) {
       setSelectedId(filtered[0].id);
+      setSelectedExercise(filtered[0]);
     }
   }, [filtered, selectedId]);
 
-  useEffect(() => {
-    if (selectedId && !filtered.find((e) => e.id === selectedId)) {
-      setSelectedId(filtered.length > 0 ? filtered[0].id : null);
-    }
-  }, [filtered, selectedId]);
+  // When the user selects an exercise from the current page, cache it so the
+  // detail pane stays visible even after paging to a different page.
+  const selectedInPage = filtered.find((e) => e.id === selectedId) ?? null;
+  const displayedExercise = selectedInPage ?? selectedExercise;
 
   const invalidateExercises = () => qc.invalidateQueries({ queryKey: ["exercises"] });
 
@@ -312,6 +320,7 @@ export default function ExerciseLibrary() {
     onSuccess: (created) => {
       invalidateExercises();
       setSelectedId(created.id);
+      setSelectedExercise(created);
       setModal(null);
     },
   });
@@ -457,7 +466,7 @@ export default function ExerciseLibrary() {
             return (
               <button
                 key={ex.id}
-                onClick={() => setSelectedId(ex.id)}
+                onClick={() => { setSelectedId(ex.id); setSelectedExercise(ex); }}
                 style={{
                   ...exerciseRowStyle,
                   background: isSelected ? SURFACE_SELECTED : "transparent",
@@ -482,23 +491,39 @@ export default function ExerciseLibrary() {
               </button>
             );
           })}
-          {filtered.length > 0 && (
-            <p style={listCountStyle}>
-              {filtered.length === totalCount
-                ? `${totalCount} exercise${totalCount !== 1 ? "s" : ""}`
-                : `${filtered.length} of ${totalCount} exercises`}
-            </p>
+          {totalCount > 0 && (
+            <div style={pagingFooterStyle}>
+              <span style={pagingInfoStyle}>
+                {`${page * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE + filtered.length, totalCount)} of ${totalCount}`}
+              </span>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button
+                  onClick={() => setPage((p) => p - 1)}
+                  disabled={page === 0}
+                  style={pagingBtnStyle(page === 0)}
+                >
+                  ‹ Prev
+                </button>
+                <button
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={page * PAGE_SIZE + filtered.length >= totalCount}
+                  style={pagingBtnStyle(page * PAGE_SIZE + filtered.length >= totalCount)}
+                >
+                  Next ›
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
       {/* ── Right panel ── */}
       <div style={rightPanelStyle}>
-        {selected ? (
+        {displayedExercise ? (
           <DetailPane
-            exercise={selected}
-            onEdit={() => setModal({ type: "edit", exercise: selected })}
-            onDelete={() => handleDeleteClick(selected)}
+            exercise={displayedExercise}
+            onEdit={() => setModal({ type: "edit", exercise: displayedExercise })}
+            onDelete={() => handleDeleteClick(displayedExercise)}
           />
         ) : (
           <EmptyState isFiltered={!!search || !!filterSource || activeFilterCount > 0} />
@@ -726,13 +751,32 @@ const chevronStyle: React.CSSProperties = {
   lineHeight: 1,
 };
 
-const listCountStyle: React.CSSProperties = {
-  textAlign: "center",
-  fontSize: 12,
-  color: TEXT_SECONDARY,
-  padding: "12px 0",
-  margin: 0,
+const pagingFooterStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "8px 16px",
+  borderTop: `1px solid ${DIVIDER}`,
 };
+
+const pagingInfoStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: TEXT_SECONDARY,
+};
+
+function pagingBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    fontSize: 12,
+    fontWeight: 500,
+    padding: "4px 10px",
+    borderRadius: 6,
+    border: `1px solid ${BORDER}`,
+    background: "transparent",
+    color: disabled ? TEXT_SECONDARY : TEXT_PRIMARY,
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.4 : 1,
+  };
+}
 
 const rightPanelStyle: React.CSSProperties = {
   flex: 1,

@@ -546,3 +546,144 @@ async fn test_search_includes_tags_and_muscles(pool: SqlitePool) {
     assert_eq!(ex.primary_muscles, vec!["chest"]);
     assert_eq!(ex.secondary_muscles, vec!["triceps"]);
 }
+
+// ── Pagination ───────────────────────────────────────────────────────────────
+// seed_exercises inserts 4 exercises.  Alphabetical order:
+//   0  Barbell Bench Press
+//   1  Bodyweight Squat
+//   2  Dumbbell Curl
+//   3  My Custom Press
+
+#[sqlx::test]
+async fn test_search_paging_page1_and_page2_cover_all(pool: SqlitePool) {
+    seed_exercises(&pool).await;
+
+    let page1 = exercise::search(
+        &pool,
+        &ExerciseSearchFilters { limit: Some(2), offset: Some(0), ..Default::default() },
+    )
+    .await
+    .unwrap();
+    assert_eq!(page1.exercises.len(), 2);
+    assert_eq!(page1.total, 4, "total is full count, not page count");
+    assert_eq!(page1.exercises[0].name, "Barbell Bench Press");
+    assert_eq!(page1.exercises[1].name, "Bodyweight Squat");
+
+    let page2 = exercise::search(
+        &pool,
+        &ExerciseSearchFilters { limit: Some(2), offset: Some(2), ..Default::default() },
+    )
+    .await
+    .unwrap();
+    assert_eq!(page2.exercises.len(), 2);
+    assert_eq!(page2.total, 4, "total is unchanged on page 2");
+    assert_eq!(page2.exercises[0].name, "Dumbbell Curl");
+    assert_eq!(page2.exercises[1].name, "My Custom Press");
+
+    // Together they are the full set with no overlap.
+    let mut all_names: Vec<_> = page1.exercises.iter()
+        .chain(page2.exercises.iter())
+        .map(|e| e.name.as_str())
+        .collect();
+    all_names.sort_unstable();
+    assert_eq!(
+        all_names,
+        ["Barbell Bench Press", "Bodyweight Squat", "Dumbbell Curl", "My Custom Press"]
+    );
+}
+
+#[sqlx::test]
+async fn test_search_filters_plus_paging_compose(pool: SqlitePool) {
+    seed_exercises(&pool).await;
+    // catalog exercises in alphabetical order: Barbell Bench Press, Bodyweight Squat, Dumbbell Curl
+
+    let page1 = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            source: Some("catalog".to_string()),
+            limit: Some(2),
+            offset: Some(0),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(page1.total, 3, "3 catalog exercises total");
+    assert_eq!(page1.exercises.len(), 2);
+    assert_eq!(page1.exercises[0].name, "Barbell Bench Press");
+    assert_eq!(page1.exercises[1].name, "Bodyweight Squat");
+
+    let page2 = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            source: Some("catalog".to_string()),
+            limit: Some(2),
+            offset: Some(2),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(page2.total, 3);
+    assert_eq!(page2.exercises.len(), 1, "only one item on last partial page");
+    assert_eq!(page2.exercises[0].name, "Dumbbell Curl");
+}
+
+#[sqlx::test]
+async fn test_search_offset_beyond_total_returns_empty(pool: SqlitePool) {
+    seed_exercises(&pool).await;
+    let result = exercise::search(
+        &pool,
+        &ExerciseSearchFilters {
+            limit: Some(10),
+            offset: Some(100),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert!(result.exercises.is_empty(), "no rows past end of result set");
+    assert_eq!(result.total, 4, "total still reflects full matching count");
+}
+
+#[sqlx::test]
+async fn test_search_invalid_limit(pool: SqlitePool) {
+    let err = exercise::search(
+        &pool,
+        &ExerciseSearchFilters { limit: Some(0), ..Default::default() },
+    )
+    .await
+    .unwrap_err();
+    match err {
+        AppError::Validation(msg) => assert!(msg.contains("invalid limit")),
+        _ => panic!("expected validation error"),
+    }
+}
+
+#[sqlx::test]
+async fn test_search_negative_limit(pool: SqlitePool) {
+    let err = exercise::search(
+        &pool,
+        &ExerciseSearchFilters { limit: Some(-5), ..Default::default() },
+    )
+    .await
+    .unwrap_err();
+    match err {
+        AppError::Validation(msg) => assert!(msg.contains("invalid limit")),
+        _ => panic!("expected validation error"),
+    }
+}
+
+#[sqlx::test]
+async fn test_search_negative_offset(pool: SqlitePool) {
+    let err = exercise::search(
+        &pool,
+        &ExerciseSearchFilters { offset: Some(-1), ..Default::default() },
+    )
+    .await
+    .unwrap_err();
+    match err {
+        AppError::Validation(msg) => assert!(msg.contains("invalid offset")),
+        _ => panic!("expected validation error"),
+    }
+}

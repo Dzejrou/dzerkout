@@ -293,6 +293,20 @@ const DEFAULT_SEARCH_LIMIT: i64 = 80;
 const MAX_SEARCH_LIMIT: i64 = 200;
 
 fn validate_search_filters(filters: &ExerciseSearchFilters) -> Result<(), AppError> {
+    if let Some(limit) = filters.limit {
+        if limit <= 0 {
+            return Err(AppError::Validation(format!(
+                "invalid limit: {limit}; must be a positive integer"
+            )));
+        }
+    }
+    if let Some(offset) = filters.offset {
+        if offset < 0 {
+            return Err(AppError::Validation(format!(
+                "invalid offset: {offset}; must be a non-negative integer"
+            )));
+        }
+    }
     if let Some(src) = &filters.source {
         match src.as_str() {
             "all" | "user" | "catalog" => {}
