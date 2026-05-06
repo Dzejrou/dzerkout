@@ -44,6 +44,24 @@ const includeRaw = flag("--include-category");
 const EXCLUDE_CATS = excludeRaw ? excludeRaw.split(",").map((s) => s.trim()) : DEFAULT_EXCLUDE;
 const INCLUDE_CATS = includeRaw ? new Set(includeRaw.split(",").map((s) => s.trim())) : null;
 
+// ── Catalog identity ──────────────────────────────────────────────────────────
+//
+// Each catalog generator owns its identity in one place:
+//   source            stored in catalog_source on every output row, also used
+//                     in the UUID v5 namespace key. Must not change once
+//                     released — it's the stable cross-catalog identifier.
+//   label             human-readable name; used in logs.
+//   duplicateSuffix   appended in parens to the *display name only* when this
+//                     catalog's name collides with another catalog's. Not
+//                     currently applied (free-exercise-db is the base catalog),
+//                     but defined here for symmetry and future cross-catalog
+//                     disambiguation passes.
+const CATALOG = {
+  source: "free-exercise-db",
+  label: "Free Exercise DB",
+  duplicateSuffix: "Exercise",
+};
+
 // ── Valid enum sets (mirrors Rust domain/types.rs) ────────────────────────────
 
 const VALID_CATEGORIES = new Set([
@@ -79,7 +97,7 @@ function uuidV5(namespace, name) {
 }
 
 function catalogId(sourceId) {
-  return uuidV5(NS_OID, `free-exercise-db:${sourceId}`);
+  return uuidV5(NS_OID, `${CATALOG.source}:${sourceId}`);
 }
 
 // ── Tag derivation ────────────────────────────────────────────────────────────
@@ -178,7 +196,7 @@ for (const src of raw) {
     notes: null,
     tags: deriveTags(src),
     image_url: null,
-    catalog_source: "free-exercise-db",
+    catalog_source: CATALOG.source,
     catalog_id: src.id,
     is_catalog: true,
     category: src.category ?? null,
@@ -305,10 +323,15 @@ if (skipped.length > 0) {
     catalogPairs.add(pair);
 
     if (names.has(ex.name)) {
-      console.error(`  VALIDATION ERROR: duplicate name within catalog: "${ex.name}"`);
+      console.error(`  VALIDATION ERROR: duplicate name within ${CATALOG.label} catalog: "${ex.name}"`);
       validationErrors++;
     }
     names.add(ex.name);
+
+    if (ex.catalog_source !== CATALOG.source) {
+      console.error(`  VALIDATION ERROR: catalog_source "${ex.catalog_source}" does not match expected "${CATALOG.source}" on "${ex.name}"`);
+      validationErrors++;
+    }
   }
 
   if (validationErrors > 0) {

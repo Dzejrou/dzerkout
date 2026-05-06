@@ -63,6 +63,23 @@ const VALID_TAGS = new Set([
   "cardio", "isotonic", "isometric", "concentric", "eccentric",
 ]);
 
+// ── Catalog identity ──────────────────────────────────────────────────────────
+//
+// Each catalog generator owns its identity in one place:
+//   source            stored in catalog_source on every output row, also used
+//                     in the UUID v5 namespace key. Must not change once
+//                     released — it's the stable cross-catalog identifier.
+//   label             human-readable name; used in logs and (potentially) UI.
+//   duplicateSuffix   appended in parens to the *display name only* when this
+//                     catalog's name collides with another catalog's. The app
+//                     enforces globally unique exercise names; this is how we
+//                     resolve cross-catalog clashes without touching IDs.
+const CATALOG = {
+  source: "yoga-poses",
+  label: "Yoga",
+  duplicateSuffix: "Yoga",
+};
+
 const CATEGORY = "yoga";
 const EQUIPMENT = "none";
 const TAGS = ["mobility", "yoga"]; // alphabetical, mirrors Rust sort order
@@ -169,8 +186,9 @@ if (!existsSync(INPUT_PATH)) {
   process.exit(1);
 }
 
-// Load free-exercise-db display names so we can disambiguate cross-catalog collisions.
-// Any yoga pose whose name exactly matches a free-exercise-db exercise gets "(Yoga)" appended.
+// Load free-exercise-db display names so we can disambiguate cross-catalog
+// collisions. Any pose whose name exactly matches a free-exercise-db exercise
+// gets ` (${CATALOG.duplicateSuffix})` appended.
 const fedDisplayNames = new Set();
 if (existsSync(FED_INPUT_PATH)) {
   const fedRaw = JSON.parse(readFileSync(FED_INPUT_PATH, "utf8"));
@@ -233,20 +251,22 @@ for (let idx = 0; idx < raw.length; idx++) {
   const notes = buildNotes(src?.sanskrit_name);
 
   // Disambiguate if the display name collides with a free-exercise-db exercise.
-  // The UUID is derived from the original slug (not the display name) so it stays stable.
+  // The UUID is derived from the original `<source>:<slug>` identity, never
+  // from the suffixed display name — IDs stay stable even if we later change
+  // the suffix wording.
   let displayName = name;
   if (fedDisplayNames.has(name)) {
-    displayName = `${name} (Yoga)`;
+    displayName = `${name} (${CATALOG.duplicateSuffix})`;
     disambiguated.push({ original: name, final: displayName });
   }
 
   exercises.push({
-    id: uuidV5(NS_OID, `yoga-poses:${slug}`),
+    id: uuidV5(NS_OID, `${CATALOG.source}:${slug}`),
     name: displayName,
     notes,
     tags: [...TAGS],
     image_url: null,
-    catalog_source: "yoga-poses",
+    catalog_source: CATALOG.source,
     catalog_id: slug,
     is_catalog: true,
     category: CATEGORY,
@@ -370,10 +390,15 @@ if (skipped.length > 0) {
     catalogPairs.add(pair);
 
     if (names.has(ex.name)) {
-      console.error(`  VALIDATION ERROR: duplicate name within yoga catalog: "${ex.name}"`);
+      console.error(`  VALIDATION ERROR: duplicate name within ${CATALOG.label} catalog: "${ex.name}"`);
       validationErrors++;
     }
     names.add(ex.name);
+
+    if (ex.catalog_source !== CATALOG.source) {
+      console.error(`  VALIDATION ERROR: catalog_source "${ex.catalog_source}" does not match expected "${CATALOG.source}" on "${ex.name}"`);
+      validationErrors++;
+    }
 
     if (fedDisplayNames.has(ex.name)) {
       console.error(`  VALIDATION ERROR: name "${ex.name}" still collides with free-exercise-db after disambiguation`);
