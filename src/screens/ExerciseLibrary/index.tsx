@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { exercisesApi } from "../../api/exercises";
+import { setTemplatesApi } from "../../api/setTemplates";
 import type { Exercise, ExerciseMeta, ExerciseMuscleInput, ExerciseSearchFilters } from "../../types/exercise";
 import {
   EXERCISE_CATEGORIES, EXERCISE_EQUIPMENT, EXERCISE_LEVELS,
@@ -17,7 +18,8 @@ const { bg: BG, card: CARD, divider: DIVIDER, textPrimary: TEXT_PRIMARY, textSec
 type Modal =
   | { type: "create" }
   | { type: "edit"; exercise: Exercise }
-  | { type: "delete"; exercise: Exercise; refs: number };
+  | { type: "delete"; exercise: Exercise; refs: number }
+  | { type: "addToSet"; exercise: Exercise };
 
 function formatDateFull(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
@@ -30,10 +32,12 @@ function DetailPane({
   exercise,
   onEdit,
   onDelete,
+  onAddToSet,
 }: {
   exercise: Exercise;
   onEdit: () => void;
   onDelete: () => void;
+  onAddToSet: () => void;
 }) {
   const hasMuscles = exercise.primary_muscles.length > 0 || exercise.secondary_muscles.length > 0;
   const hasMetaRow =
@@ -62,7 +66,10 @@ function DetailPane({
             <span style={catalogBadgeDetailStyle}>Catalog</span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <button onClick={onAddToSet} style={addToSetBtnStyle}>
+            <span style={{ marginRight: 5 }}>+</span>Add to set
+          </button>
           <button onClick={onEdit} style={editBtnStyle}>
             <span style={{ marginRight: 5 }}>✏</span>Edit
           </button>
@@ -244,6 +251,176 @@ function FilterSelect({
   );
 }
 
+function AddToSetModal({
+  exercise,
+  onClose,
+  onAdded,
+}: {
+  exercise: Exercise;
+  onClose: () => void;
+  onAdded: (setName: string) => void;
+}) {
+  const qc = useQueryClient();
+  const { data: sets = [], isLoading } = useQuery({
+    queryKey: ["set-templates"],
+    queryFn: () => setTemplatesApi.list(),
+  });
+  // Library sets only — list_set_templates already filters out workout-local
+  // (forked) sets at the SQL layer, but make the intent explicit here.
+  const librarySets = sets.filter((s) => s.owning_workout_template_id == null);
+
+  const [setId, setSetId] = useState("");
+  const [durationStr, setDurationStr] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!setId && librarySets.length > 0) setSetId(librarySets[0].id);
+  }, [librarySets, setId]);
+
+  const addMut = useMutation({
+    mutationFn: (params: {
+      setId: string;
+      durationHintSec: number | null;
+      notes: string | null;
+    }) =>
+      setTemplatesApi.addCard({
+        setId: params.setId,
+        cardType: "concrete",
+        exerciseId: exercise.id,
+        durationHintSec: params.durationHintSec,
+        notes: params.notes,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["set-templates"] });
+      qc.invalidateQueries({ queryKey: ["set-template", setId] });
+      const target = librarySets.find((s) => s.id === setId);
+      onAdded(target?.name ?? "set");
+      onClose();
+    },
+    onError: (e) => setError(String(e)),
+  });
+
+  function onSubmit() {
+    setError(null);
+    if (!setId) {
+      setError("Choose a set.");
+      return;
+    }
+    let durationHintSec: number | null = null;
+    if (durationStr.trim() !== "") {
+      const n = Number(durationStr);
+      if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
+        setError("Duration must be a positive whole number of seconds.");
+        return;
+      }
+      durationHintSec = n;
+    }
+    const trimmedNotes = notes.trim();
+    addMut.mutate({
+      setId,
+      durationHintSec,
+      notes: trimmedNotes === "" ? null : trimmedNotes,
+    });
+  }
+
+  return (
+    <div style={overlayStyle}>
+      <div style={modalStyle}>
+        <h3 style={modalTitleStyle}>Add to set</h3>
+
+        <div style={addToSetSubtitleStyle}>
+          <span style={{ color: TEXT_SECONDARY, fontSize: 12 }}>Exercise:</span>{" "}
+          <strong style={{ color: TEXT_PRIMARY, fontSize: 14 }}>{exercise.name}</strong>
+        </div>
+
+        {isLoading ? (
+          <p style={{ color: TEXT_SECONDARY, fontSize: 13, margin: "16px 0" }}>Loading sets…</p>
+        ) : librarySets.length === 0 ? (
+          <p style={addToSetEmptyStyle}>
+            No sets yet. Create a set first in the Sets page.
+          </p>
+        ) : (
+          <>
+            <div style={{ marginBottom: 12 }}>
+              <label style={addToSetLabelStyle}>Target set</label>
+              <select
+                value={setId}
+                onChange={(e) => setSetId(e.target.value)}
+                style={addToSetSelectStyle}
+              >
+                {librarySets.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.card_count} card{s.card_count === 1 ? "" : "s"})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={addToSetLabelStyle}>
+                Duration hint{" "}
+                <span style={{ color: tokens.textMuted, fontWeight: 400, fontSize: 11 }}>
+                  optional, seconds
+                </span>
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={durationStr}
+                onChange={(e) => setDurationStr(e.target.value)}
+                placeholder="e.g. 45"
+                style={addToSetInputStyle}
+              />
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={addToSetLabelStyle}>
+                Notes{" "}
+                <span style={{ color: tokens.textMuted, fontWeight: 400, fontSize: 11 }}>
+                  optional
+                </span>
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Cue for this card"
+                style={{ ...addToSetInputStyle, height: 60, resize: "vertical" }}
+              />
+            </div>
+          </>
+        )}
+
+        {error && <p style={addToSetErrorStyle}>{error}</p>}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={addMut.isPending}
+            style={modalCancelBtnStyle}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={librarySets.length === 0 || addMut.isPending || !setId}
+            style={{
+              ...modalConfirmBtnStyle,
+              opacity: librarySets.length === 0 || addMut.isPending || !setId ? 0.5 : 1,
+              cursor:
+                librarySets.length === 0 || addMut.isPending || !setId ? "not-allowed" : "pointer",
+            }}
+          >
+            {addMut.isPending ? "Adding…" : "Add"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({ isFiltered }: { isFiltered: boolean }) {
   return (
     <div style={emptyDetailStyle}>
@@ -267,6 +444,13 @@ export default function ExerciseLibrary() {
   const [page, setPage] = useState(0);
   const [modal, setModal] = useState<Modal | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const t = setTimeout(() => setToastMessage(null), 2400);
+    return () => clearTimeout(t);
+  }, [toastMessage]);
 
   const [filterSource, setFilterSource] = useState<"" | "user" | "catalog">("");
   const [filterCategory, setFilterCategory] = useState("");
@@ -594,6 +778,7 @@ export default function ExerciseLibrary() {
             exercise={displayedExercise}
             onEdit={() => setModal({ type: "edit", exercise: displayedExercise })}
             onDelete={() => handleDeleteClick(displayedExercise)}
+            onAddToSet={() => setModal({ type: "addToSet", exercise: displayedExercise })}
           />
         ) : (
           <EmptyState isFiltered={!!search || !!filterSource || activeFilterCount > 0} />
@@ -625,6 +810,18 @@ export default function ExerciseLibrary() {
           </div>
         </div>
       )}
+
+      {/* Add to set modal */}
+      {modal?.type === "addToSet" && (
+        <AddToSetModal
+          exercise={modal.exercise}
+          onClose={() => setModal(null)}
+          onAdded={(setName) => setToastMessage(`Added to "${setName}"`)}
+        />
+      )}
+
+      {/* Transient success toast */}
+      {toastMessage && <div style={toastStyle}>{toastMessage}</div>}
 
       {/* Delete confirm */}
       {modal?.type === "delete" && (
@@ -1188,4 +1385,110 @@ const catalogDetailNoteStyle: React.CSSProperties = {
   borderRadius: 7,
   border: `1px solid ${tokens.purpleBorder}`,
   background: tokens.purpleBg,
+};
+
+const addToSetBtnStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  padding: "7px 14px",
+  borderRadius: 8,
+  border: "none",
+  background: tokens.green,
+  color: "#fff",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 600,
+  whiteSpace: "nowrap",
+};
+
+const addToSetSubtitleStyle: React.CSSProperties = {
+  margin: "-4px 0 14px",
+  fontSize: 13,
+  color: TEXT_PRIMARY,
+};
+
+const addToSetLabelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 600,
+  marginBottom: 5,
+  color: TEXT_SECONDARY,
+  letterSpacing: "0.02em",
+};
+
+const addToSetInputStyle: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "8px 10px",
+  border: `1px solid ${tokens.borderMedium}`,
+  borderRadius: 8,
+  fontSize: 14,
+  background: BG,
+  color: TEXT_PRIMARY,
+  outline: "none",
+  fontFamily: "inherit",
+};
+
+const addToSetSelectStyle: React.CSSProperties = {
+  ...addToSetInputStyle,
+  paddingRight: 30,
+  cursor: "pointer",
+  appearance: "none",
+  WebkitAppearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238e8e93' d='M6 8L0 0h12z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 10px center",
+};
+
+const addToSetEmptyStyle: React.CSSProperties = {
+  margin: "8px 0 12px",
+  padding: "12px 14px",
+  borderRadius: 8,
+  border: `1px solid ${BORDER}`,
+  background: tokens.cardSubtle,
+  color: TEXT_SECONDARY,
+  fontSize: 13,
+  lineHeight: 1.5,
+};
+
+const addToSetErrorStyle: React.CSSProperties = {
+  margin: "0 0 6px",
+  fontSize: 12,
+  color: tokens.red,
+};
+
+const modalCancelBtnStyle: React.CSSProperties = {
+  padding: "8px 16px",
+  borderRadius: 8,
+  border: `1px solid ${tokens.borderMedium}`,
+  background: "transparent",
+  color: TEXT_SECONDARY,
+  cursor: "pointer",
+  fontSize: 14,
+};
+
+const modalConfirmBtnStyle: React.CSSProperties = {
+  padding: "8px 16px",
+  borderRadius: 8,
+  border: "none",
+  background: tokens.green,
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+};
+
+const toastStyle: React.CSSProperties = {
+  position: "fixed",
+  bottom: 24,
+  left: "50%",
+  transform: "translateX(-50%)",
+  background: tokens.bgElevated,
+  color: TEXT_PRIMARY,
+  border: `1px solid ${tokens.greenBadgeBorder}`,
+  borderRadius: 8,
+  padding: "8px 16px",
+  fontSize: 13,
+  fontWeight: 600,
+  boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+  zIndex: 200,
 };
