@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { statsApi } from "../../api/stats";
 import { tokens } from "../../theme/tokens";
-import type { StatsRange, TagStat, ExerciseStat } from "../../types/stats";
+import type { StatsRange, TagStat, ExerciseStat, MetadataStat } from "../../types/stats";
 
 // ── Token aliases ─────────────────────────────────────────────────────────────
 
@@ -39,14 +39,40 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+// ── Humanization helpers ──────────────────────────────────────────────────────
+
+function humanize(str: string): string {
+  return str.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
+function humanizeSource(key: string): string {
+  if (key === "local") return "Local";
+  if (key === "free-exercise-db") return "Free Exercise DB";
+  if (key === "yoga-poses") return "Yoga";
+  return key;
+}
+
 // ── Category + range definitions ──────────────────────────────────────────────
 
-type StatsCategory = "summary" | "by-tag" | "top-exercises";
+type StatsCategory =
+  | "summary"
+  | "by-tag"
+  | "by-category"
+  | "by-equipment"
+  | "by-muscle"
+  | "by-pose-type"
+  | "by-source"
+  | "top-exercises";
 
 const CATEGORIES: { value: StatsCategory; label: string; desc: string }[] = [
-  { value: "summary",       label: "Summary",       desc: "Totals and time overview"    },
-  { value: "by-tag",        label: "By Tag",        desc: "Time and reps per tag"       },
-  { value: "top-exercises", label: "Top Exercises", desc: "Exercise leaderboard"        },
+  { value: "summary",       label: "Summary",       desc: "Totals and time overview"       },
+  { value: "by-tag",        label: "By Tag",        desc: "Time and reps per tag"          },
+  { value: "by-category",   label: "By Category",   desc: "Time per exercise category"     },
+  { value: "by-equipment",  label: "By Equipment",  desc: "Time per equipment type"        },
+  { value: "by-muscle",     label: "By Muscle",     desc: "Primary muscles worked"         },
+  { value: "by-pose-type",  label: "By Pose Type",  desc: "Yoga pose type breakdown"       },
+  { value: "by-source",     label: "By Source",     desc: "Local vs catalog breakdown"     },
+  { value: "top-exercises", label: "Top Exercises", desc: "Exercise leaderboard"           },
 ];
 
 const RANGES: { value: StatsRange; label: string }[] = [
@@ -232,6 +258,68 @@ function TopExercisesView({ range }: { range: StatsRange }) {
   );
 }
 
+function MetadataRow({ stat, labelFn }: { stat: MetadataStat; labelFn: (key: string) => string }) {
+  return (
+    <div style={tableRowStyle}>
+      <div style={{ flex: 2, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 500, color: TEXT_PRIMARY }}>{labelFn(stat.key)}</div>
+        {stat.skipped_count > 0 && (
+          <div style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2 }}>{stat.skipped_count} skipped</div>
+        )}
+      </div>
+      <span style={{ ...tableColStyle, textAlign: "right" }}>{fmtDuration(stat.duration_sec)}</span>
+      <span style={{ ...tableColStyle, textAlign: "right", color: TEXT_SECONDARY }}>{stat.exercise_count}×</span>
+    </div>
+  );
+}
+
+function MetadataTable({
+  rows, labelFn, colLabel, note,
+}: { rows: MetadataStat[]; labelFn: (key: string) => string; colLabel: string; note?: string }) {
+  return (
+    <>
+      {note && (
+        <p style={{ fontSize: 11, color: TEXT_MUTED, margin: "0 0 12px" }}>{note}</p>
+      )}
+      <div style={tableStyle}>
+        <div style={{ ...tableRowStyle, borderBottom: `1px solid ${DIVIDER}` }}>
+          <span style={thStyle(2)}>{colLabel}</span>
+          <span style={{ ...thStyle(1), textAlign: "right" }}>Time</span>
+          <span style={{ ...thStyle(1), textAlign: "right" }}>Reps</span>
+        </div>
+        {rows.map((r) => <MetadataRow key={r.key} stat={r} labelFn={labelFn} />)}
+      </div>
+    </>
+  );
+}
+
+function MetadataView({
+  range, field, colLabel, labelFn, emptyMsg, note,
+}: {
+  range: StatsRange;
+  field: "by_category" | "by_equipment" | "by_primary_muscle" | "by_pose_type" | "by_source";
+  colLabel: string;
+  labelFn: (key: string) => string;
+  emptyMsg: string;
+  note?: string;
+}) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["stats", range],
+    queryFn: () => statsApi.getStats(range),
+  });
+
+  if (isLoading) return <p style={statusTextStyle}>Loading…</p>;
+  if (isError)   return <p style={{ ...statusTextStyle, color: tokens.red }}>Failed to load stats.</p>;
+  if (!data || data.summary.completed_workouts === 0) return <EmptyCategoryState />;
+
+  const rows = data[field];
+  if (rows.length === 0) return (
+    <p style={{ color: TEXT_MUTED, fontSize: 14, marginTop: 8 }}>{emptyMsg}</p>
+  );
+
+  return <MetadataTable rows={rows} labelFn={labelFn} colLabel={colLabel} note={note} />;
+}
+
 function EmptyCategoryState() {
   return (
     <div style={emptyStyle}>
@@ -262,9 +350,56 @@ function StatsDetail({
 
       {/* Category-specific content */}
       <div style={detailBodyStyle}>
-        {category === "summary"       && <SummaryView       range={range} />}
-        {category === "by-tag"        && <ByTagView         range={range} />}
-        {category === "top-exercises" && <TopExercisesView  range={range} />}
+        {category === "summary"       && <SummaryView      range={range} />}
+        {category === "by-tag"        && <ByTagView        range={range} />}
+        {category === "by-category"   && (
+          <MetadataView
+            range={range}
+            field="by_category"
+            colLabel="Category"
+            labelFn={humanize}
+            emptyMsg="No category data for this period."
+          />
+        )}
+        {category === "by-equipment"  && (
+          <MetadataView
+            range={range}
+            field="by_equipment"
+            colLabel="Equipment"
+            labelFn={humanize}
+            emptyMsg="No equipment data for this period."
+          />
+        )}
+        {category === "by-muscle"     && (
+          <MetadataView
+            range={range}
+            field="by_primary_muscle"
+            colLabel="Muscle"
+            labelFn={humanize}
+            emptyMsg="No muscle data for this period."
+            note="Totals may exceed overall exercise duration — one exercise can target multiple primary muscles."
+          />
+        )}
+        {category === "by-pose-type"  && (
+          <MetadataView
+            range={range}
+            field="by_pose_type"
+            colLabel="Pose type"
+            labelFn={humanize}
+            emptyMsg="No pose type data for this period."
+            note="Totals may exceed overall exercise duration — one exercise can have multiple pose types."
+          />
+        )}
+        {category === "by-source"     && (
+          <MetadataView
+            range={range}
+            field="by_source"
+            colLabel="Source"
+            labelFn={humanizeSource}
+            emptyMsg="No source data for this period."
+          />
+        )}
+        {category === "top-exercises" && <TopExercisesView range={range} />}
       </div>
     </div>
   );

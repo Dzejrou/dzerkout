@@ -2502,6 +2502,317 @@ async fn test_stats_invalid_range_returns_validation_error(pool: SqlitePool) {
     drop(pool);
 }
 
+// ── Stats: metadata breakdowns ────────────────────────────────────────────────
+
+// Helper: insert a completed session row + one session set, return (session_id, set_id).
+async fn insert_completed_session(pool: &SqlitePool, suffix: &str) -> (String, String) {
+    let sid = format!("s-{suffix}");
+    let ssid = format!("ss-{suffix}");
+    sqlx::query(
+        "INSERT INTO workout_sessions (id, status, started_at, ended_at, created_at, updated_at)
+         VALUES (?, 'completed',
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now','-60 seconds'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).bind(&sid).execute(pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO workout_session_sets (id, workout_session_id, order_index, paused_total_sec, created_at, updated_at)
+         VALUES (?, ?, 0, 0,
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).bind(&ssid).bind(&sid).execute(pool).await.unwrap();
+    (sid, ssid)
+}
+
+// Helper: insert a session exercise row.
+async fn insert_session_exercise(
+    pool: &SqlitePool,
+    id: &str,
+    set_id: &str,
+    order_index: i64,
+    exercise_id: Option<&str>,
+    display_name: &str,
+    duration_sec: Option<i64>,
+    skipped: i64,
+) {
+    sqlx::query(
+        "INSERT INTO workout_session_exercises
+         (id, workout_session_set_id, order_index, exercise_id, display_name,
+          status, skipped, paused_offset_sec, performed_duration_sec, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?,
+                 CASE WHEN ? = 1 THEN 'skipped' ELSE 'completed' END,
+                 ?, 0, ?,
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    )
+    .bind(id).bind(set_id).bind(order_index)
+    .bind(exercise_id).bind(display_name)
+    .bind(skipped).bind(skipped).bind(duration_sec)
+    .execute(pool).await.unwrap();
+}
+
+#[sqlx::test]
+async fn test_stats_category_breakdown(pool: SqlitePool) {
+    use crate::domain::types::ExerciseMeta;
+
+    let strength_meta = ExerciseMeta {
+        catalog_source: Some("free-exercise-db".into()), catalog_id: Some("bench".into()),
+        is_catalog: true, category: Some("strength".into()), equipment: Some("barbell".into()),
+        level: None, mechanic: None, force: None, instructions_json: None, sanskrit_name: None,
+    };
+    let yoga_meta = ExerciseMeta {
+        catalog_source: Some("yoga-poses".into()), catalog_id: Some("tree".into()),
+        is_catalog: true, category: Some("yoga".into()), equipment: Some("none".into()),
+        level: None, mechanic: None, force: None, instructions_json: None, sanskrit_name: None,
+    };
+
+    let ex1 = exercise::create(&pool, "Bench Press", None, &[], Some(&strength_meta), None, None).await.unwrap();
+    let ex2 = exercise::create(&pool, "Tree Pose",   None, &[], Some(&yoga_meta),     None, None).await.unwrap();
+
+    let (_, ss) = insert_completed_session(&pool, "c1").await;
+    insert_session_exercise(&pool, "e1", &ss, 0, Some(&ex1.id), "Bench Press", Some(60), 0).await;
+    // Skipped exercises have NULL performed_duration_sec in practice
+    insert_session_exercise(&pool, "e2", &ss, 1, Some(&ex2.id), "Tree Pose",   None,     1).await;
+
+    let payload = stats::get_stats(&pool, "all").await.unwrap();
+    let by_cat = &payload.by_category;
+
+    let strength = by_cat.iter().find(|r| r.key == "strength").expect("strength row");
+    assert_eq!(strength.exercise_count, 1);
+    assert_eq!(strength.duration_sec, 60);
+    assert_eq!(strength.completed_count, 1);
+    assert_eq!(strength.skipped_count, 0);
+
+    let yoga = by_cat.iter().find(|r| r.key == "yoga").expect("yoga row");
+    assert_eq!(yoga.exercise_count, 1);
+    assert_eq!(yoga.duration_sec, 0, "skipped exercise has NULL duration → 0");
+    assert_eq!(yoga.completed_count, 0);
+    assert_eq!(yoga.skipped_count, 1);
+}
+
+#[sqlx::test]
+async fn test_stats_equipment_breakdown(pool: SqlitePool) {
+    use crate::domain::types::ExerciseMeta;
+
+    let barbell_meta = ExerciseMeta {
+        catalog_source: None, catalog_id: None, is_catalog: false,
+        category: Some("strength".into()), equipment: Some("barbell".into()),
+        level: None, mechanic: None, force: None, instructions_json: None, sanskrit_name: None,
+    };
+    let dumbbell_meta = ExerciseMeta {
+        catalog_source: None, catalog_id: None, is_catalog: false,
+        category: Some("strength".into()), equipment: Some("dumbbell".into()),
+        level: None, mechanic: None, force: None, instructions_json: None, sanskrit_name: None,
+    };
+
+    let ex1 = exercise::create(&pool, "Squat",       None, &[], Some(&barbell_meta),  None, None).await.unwrap();
+    let ex2 = exercise::create(&pool, "Dumbbell Row", None, &[], Some(&dumbbell_meta), None, None).await.unwrap();
+
+    let (_, ss) = insert_completed_session(&pool, "e1").await;
+    insert_session_exercise(&pool, "se1", &ss, 0, Some(&ex1.id), "Squat",        Some(45), 0).await;
+    insert_session_exercise(&pool, "se2", &ss, 1, Some(&ex2.id), "Dumbbell Row", Some(20), 0).await;
+
+    let payload = stats::get_stats(&pool, "all").await.unwrap();
+    let bb = payload.by_equipment.iter().find(|r| r.key == "barbell").expect("barbell row");
+    let db = payload.by_equipment.iter().find(|r| r.key == "dumbbell").expect("dumbbell row");
+    assert_eq!(bb.duration_sec, 45);
+    assert_eq!(db.duration_sec, 20);
+}
+
+#[sqlx::test]
+async fn test_stats_primary_muscle_excludes_secondary_only(pool: SqlitePool) {
+    use crate::domain::types::{ExerciseMeta, ExerciseMuscleInput};
+
+    let meta = ExerciseMeta {
+        catalog_source: None, catalog_id: None, is_catalog: false,
+        category: Some("strength".into()), equipment: None,
+        level: None, mechanic: None, force: None, instructions_json: None, sanskrit_name: None,
+    };
+
+    // ex_primary: chest=primary, triceps=secondary
+    let ex_primary = exercise::create(
+        &pool, "Push-up", None, &[], Some(&meta),
+        Some(&[
+            ExerciseMuscleInput { muscle: "chest".into(),   role: "primary".into() },
+            ExerciseMuscleInput { muscle: "triceps".into(), role: "secondary".into() },
+        ]), None,
+    ).await.unwrap();
+
+    // ex_secondary_only: shoulders=secondary only (no primary muscle)
+    let ex_sec_only = exercise::create(
+        &pool, "Lateral Raise", None, &[], Some(&meta),
+        Some(&[
+            ExerciseMuscleInput { muscle: "shoulders".into(), role: "secondary".into() },
+        ]), None,
+    ).await.unwrap();
+
+    let (_, ss) = insert_completed_session(&pool, "m1").await;
+    insert_session_exercise(&pool, "me1", &ss, 0, Some(&ex_primary.id),  "Push-up",      Some(40), 0).await;
+    insert_session_exercise(&pool, "me2", &ss, 1, Some(&ex_sec_only.id), "Lateral Raise", Some(20), 0).await;
+
+    let payload = stats::get_stats(&pool, "all").await.unwrap();
+
+    // chest appears because it is a primary muscle of Push-up
+    let chest = payload.by_primary_muscle.iter().find(|r| r.key == "chest").expect("chest row");
+    assert_eq!(chest.exercise_count, 1);
+    assert_eq!(chest.duration_sec, 40);
+
+    // triceps must NOT appear (secondary only for Push-up)
+    assert!(payload.by_primary_muscle.iter().all(|r| r.key != "triceps"), "triceps is secondary — must not appear");
+
+    // shoulders must NOT appear (secondary-only exercise)
+    assert!(payload.by_primary_muscle.iter().all(|r| r.key != "shoulders"), "shoulders is secondary-only — must not appear");
+}
+
+#[sqlx::test]
+async fn test_stats_pose_type_multi_valued(pool: SqlitePool) {
+    use crate::domain::types::ExerciseMeta;
+
+    let meta = ExerciseMeta {
+        catalog_source: Some("yoga-poses".into()), catalog_id: Some("warrior-ii".into()),
+        is_catalog: true, category: Some("yoga".into()), equipment: Some("none".into()),
+        level: None, mechanic: None, force: None, instructions_json: None, sanskrit_name: None,
+    };
+
+    let pose_types = vec!["standing".to_string(), "balancing".to_string()];
+
+    // Exercise with two pose types: standing + balancing
+    let ex = exercise::create(
+        &pool, "Warrior II", None, &[], Some(&meta), None, Some(&pose_types),
+    ).await.unwrap();
+
+    let (_, ss) = insert_completed_session(&pool, "pt1").await;
+    insert_session_exercise(&pool, "pte1", &ss, 0, Some(&ex.id), "Warrior II", Some(50), 0).await;
+
+    let payload = stats::get_stats(&pool, "all").await.unwrap();
+
+    let standing  = payload.by_pose_type.iter().find(|r| r.key == "standing").expect("standing row");
+    let balancing = payload.by_pose_type.iter().find(|r| r.key == "balancing").expect("balancing row");
+
+    // Both pose types receive the full duration because the exercise has two types
+    assert_eq!(standing.exercise_count,  1);
+    assert_eq!(standing.duration_sec,    50, "standing gets full exercise duration");
+    assert_eq!(balancing.exercise_count, 1);
+    assert_eq!(balancing.duration_sec,   50, "balancing gets full exercise duration");
+}
+
+#[sqlx::test]
+async fn test_stats_source_breakdown(pool: SqlitePool) {
+    use crate::domain::types::ExerciseMeta;
+
+    let local_meta = ExerciseMeta {
+        catalog_source: None, catalog_id: None, is_catalog: false,
+        category: None, equipment: None, level: None, mechanic: None, force: None,
+        instructions_json: None, sanskrit_name: None,
+    };
+    let fed_meta = ExerciseMeta {
+        catalog_source: Some("free-exercise-db".into()), catalog_id: Some("bench".into()),
+        is_catalog: true, category: Some("strength".into()), equipment: None,
+        level: None, mechanic: None, force: None, instructions_json: None, sanskrit_name: None,
+    };
+    let yoga_meta = ExerciseMeta {
+        catalog_source: Some("yoga-poses".into()), catalog_id: Some("tree".into()),
+        is_catalog: true, category: Some("yoga".into()), equipment: None,
+        level: None, mechanic: None, force: None, instructions_json: None, sanskrit_name: None,
+    };
+
+    let ex_local = exercise::create(&pool, "Local Move",   None, &[], Some(&local_meta), None, None).await.unwrap();
+    let ex_fed   = exercise::create(&pool, "Bench Press",  None, &[], Some(&fed_meta),   None, None).await.unwrap();
+    let ex_yoga  = exercise::create(&pool, "Tree Pose",    None, &[], Some(&yoga_meta),  None, None).await.unwrap();
+
+    // Catalog exercise with is_catalog=1 but null catalog_source → 'catalog' bucket
+    sqlx::query(
+        "INSERT INTO exercises (id, name, is_catalog, created_at, updated_at)
+         VALUES ('ex-cat-null', 'Mystery Catalog', 1,
+                 strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).execute(&pool).await.unwrap();
+
+    let (_, ss) = insert_completed_session(&pool, "src1").await;
+    insert_session_exercise(&pool, "src-e1", &ss, 0, Some(&ex_local.id), "Local Move",     Some(10), 0).await;
+    insert_session_exercise(&pool, "src-e2", &ss, 1, Some(&ex_fed.id),   "Bench Press",    Some(20), 0).await;
+    insert_session_exercise(&pool, "src-e3", &ss, 2, Some(&ex_yoga.id),  "Tree Pose",      Some(30), 0).await;
+    insert_session_exercise(&pool, "src-e4", &ss, 3, Some("ex-cat-null"), "Mystery Catalog", Some(5), 0).await;
+
+    let payload = stats::get_stats(&pool, "all").await.unwrap();
+
+    let local   = payload.by_source.iter().find(|r| r.key == "local").expect("local row");
+    let fed     = payload.by_source.iter().find(|r| r.key == "free-exercise-db").expect("free-exercise-db row");
+    let yoga    = payload.by_source.iter().find(|r| r.key == "yoga-poses").expect("yoga-poses row");
+    let catalog = payload.by_source.iter().find(|r| r.key == "catalog").expect("catalog row");
+
+    assert_eq!(local.duration_sec,   10);
+    assert_eq!(fed.duration_sec,     20);
+    assert_eq!(yoga.duration_sec,    30);
+    assert_eq!(catalog.duration_sec,  5);
+}
+
+#[sqlx::test]
+async fn test_stats_metadata_range_filter(pool: SqlitePool) {
+    use crate::domain::types::ExerciseMeta;
+
+    let meta = ExerciseMeta {
+        catalog_source: None, catalog_id: None, is_catalog: false,
+        category: Some("strength".into()), equipment: Some("barbell".into()),
+        level: None, mechanic: None, force: None, instructions_json: None, sanskrit_name: None,
+    };
+    let ex = exercise::create(&pool, "Deadlift", None, &[], Some(&meta), None, None).await.unwrap();
+
+    // Recent session (now)
+    let (_, ss_now) = insert_completed_session(&pool, "rf1").await;
+    insert_session_exercise(&pool, "rf-e1", &ss_now, 0, Some(&ex.id), "Deadlift", Some(60), 0).await;
+
+    // Old session (2020)
+    sqlx::query(
+        "INSERT INTO workout_sessions (id, status, started_at, ended_at, created_at, updated_at)
+         VALUES ('rf-old', 'completed',
+                 '2020-01-01T10:00:00.000Z', '2020-01-01T11:00:00.000Z',
+                 '2020-01-01T10:00:00.000Z', '2020-01-01T10:00:00.000Z')"
+    ).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO workout_session_sets (id, workout_session_id, order_index, paused_total_sec, created_at, updated_at)
+         VALUES ('rf-ss-old', 'rf-old', 0, 0,
+                 '2020-01-01T10:00:00.000Z', '2020-01-01T10:00:00.000Z')"
+    ).execute(&pool).await.unwrap();
+    insert_session_exercise(&pool, "rf-e-old", "rf-ss-old", 0, Some(&ex.id), "Deadlift", Some(90), 0).await;
+
+    let all  = stats::get_stats(&pool, "all").await.unwrap();
+    let week = stats::get_stats(&pool, "7d").await.unwrap();
+
+    let all_cat  = all.by_category.iter().find(|r| r.key == "strength").expect("strength/all");
+    let week_cat = week.by_category.iter().find(|r| r.key == "strength").expect("strength/7d");
+
+    assert_eq!(all_cat.duration_sec,  150, "all: both sessions");
+    assert_eq!(week_cat.duration_sec,  60, "7d: recent session only");
+}
+
+#[sqlx::test]
+async fn test_stats_deleted_exercises_excluded_from_metadata(pool: SqlitePool) {
+    use crate::domain::types::ExerciseMeta;
+
+    let meta = ExerciseMeta {
+        catalog_source: None, catalog_id: None, is_catalog: false,
+        category: Some("strength".into()), equipment: Some("barbell".into()),
+        level: None, mechanic: None, force: None, instructions_json: None, sanskrit_name: None,
+    };
+    let ex = exercise::create(&pool, "Ghost Lift", None, &[], Some(&meta), None, None).await.unwrap();
+
+    let (_, ss) = insert_completed_session(&pool, "del1").await;
+    insert_session_exercise(&pool, "del-e1", &ss, 0, Some(&ex.id), "Ghost Lift", Some(50), 0).await;
+
+    // Exercise appears in metadata before deletion
+    let before = stats::get_stats(&pool, "all").await.unwrap();
+    assert!(before.by_category.iter().any(|r| r.key == "strength"), "strength present before delete");
+
+    // Delete — exercise_id in session row is set to NULL via ON DELETE SET NULL
+    exercise::delete_with_unlink(&pool, &ex.id, true).await.unwrap();
+
+    let after = stats::get_stats(&pool, "all").await.unwrap();
+    assert!(after.by_category.is_empty(),  "category empty after delete (NULL exercise_id excluded)");
+    assert!(after.by_equipment.is_empty(), "equipment empty after delete");
+    assert!(after.by_source.is_empty(),    "source empty after delete");
+}
+
 // ── Library export/import: catalog metadata and muscles ───────────────────────
 
 #[sqlx::test]

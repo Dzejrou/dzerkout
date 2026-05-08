@@ -25,9 +25,22 @@ export interface ExerciseStat {
   last_performed_at: string | null;
 }
 
+export interface MetadataStat {
+  key: string;
+  exercise_count: number;
+  duration_sec: number;
+  completed_count: number;
+  skipped_count: number;
+}
+
 export interface StatsPayload {
   range: string;
   summary: StatsSummary;
   tags: TagStat[];
   exercises: ExerciseStat[];
+  by_category: MetadataStat[];
+  by_equipment: MetadataStat[];
+  by_primary_muscle: MetadataStat[];
+  by_pose_type: MetadataStat[];
+  by_source: MetadataStat[];
 }

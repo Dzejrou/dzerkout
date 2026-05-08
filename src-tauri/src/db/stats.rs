@@ -28,6 +28,14 @@ pub struct ExerciseStatRow {
     pub last_performed_at: Option<String>,
 }
 
+pub struct MetadataStatRow {
+    pub key: String,
+    pub exercise_count: i64,
+    pub duration_sec: i64,
+    pub completed_count: i64,
+    pub skipped_count: i64,
+}
+
 /// Fetch session-level summary for completed sessions.
 /// `cutoff` is an ISO 8601 timestamp lower bound on `ended_at`; None = no lower bound.
 pub async fn fetch_session_summary(
@@ -122,6 +130,173 @@ pub async fn fetch_tag_stats(
             duration_sec: r.get::<i64, _>("duration_sec"),
         })
         .collect())
+}
+
+fn map_metadata_rows(rows: Vec<sqlx::sqlite::SqliteRow>) -> Vec<MetadataStatRow> {
+    rows.into_iter()
+        .map(|r| MetadataStatRow {
+            key:             r.get::<String, _>("key"),
+            exercise_count:  r.get::<i64, _>("exercise_count"),
+            duration_sec:    r.get::<i64, _>("duration_sec"),
+            completed_count: r.get::<i64, _>("completed_count"),
+            skipped_count:   r.get::<i64, _>("skipped_count"),
+        })
+        .collect()
+}
+
+/// Fetch per-category stats joining current exercise metadata. Deleted exercises excluded.
+pub async fn fetch_category_stats(
+    pool: &SqlitePool,
+    cutoff: Option<&str>,
+) -> Result<Vec<MetadataStatRow>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT
+           e.category as key,
+           COUNT(*) as exercise_count,
+           COALESCE(SUM(COALESCE(wse.performed_duration_sec, 0)), 0) as duration_sec,
+           COALESCE(SUM(CASE WHEN wse.skipped = 0 THEN 1 ELSE 0 END), 0) as completed_count,
+           COALESCE(SUM(wse.skipped), 0) as skipped_count
+         FROM workout_session_exercises wse
+         JOIN workout_session_sets wss ON wse.workout_session_set_id = wss.id
+         JOIN workout_sessions ws ON wss.workout_session_id = ws.id
+         JOIN exercises e ON e.id = wse.exercise_id
+         WHERE ws.status = 'completed'
+           AND e.category IS NOT NULL
+           AND (? IS NULL OR ws.ended_at >= ?)
+         GROUP BY e.category
+         ORDER BY duration_sec DESC, exercise_count DESC",
+    )
+    .bind(cutoff)
+    .bind(cutoff)
+    .fetch_all(pool)
+    .await?;
+    Ok(map_metadata_rows(rows))
+}
+
+/// Fetch per-equipment stats joining current exercise metadata. Deleted exercises excluded.
+pub async fn fetch_equipment_stats(
+    pool: &SqlitePool,
+    cutoff: Option<&str>,
+) -> Result<Vec<MetadataStatRow>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT
+           e.equipment as key,
+           COUNT(*) as exercise_count,
+           COALESCE(SUM(COALESCE(wse.performed_duration_sec, 0)), 0) as duration_sec,
+           COALESCE(SUM(CASE WHEN wse.skipped = 0 THEN 1 ELSE 0 END), 0) as completed_count,
+           COALESCE(SUM(wse.skipped), 0) as skipped_count
+         FROM workout_session_exercises wse
+         JOIN workout_session_sets wss ON wse.workout_session_set_id = wss.id
+         JOIN workout_sessions ws ON wss.workout_session_id = ws.id
+         JOIN exercises e ON e.id = wse.exercise_id
+         WHERE ws.status = 'completed'
+           AND e.equipment IS NOT NULL
+           AND (? IS NULL OR ws.ended_at >= ?)
+         GROUP BY e.equipment
+         ORDER BY duration_sec DESC, exercise_count DESC",
+    )
+    .bind(cutoff)
+    .bind(cutoff)
+    .fetch_all(pool)
+    .await?;
+    Ok(map_metadata_rows(rows))
+}
+
+/// Fetch per-primary-muscle stats. One exercise may have multiple primary muscles;
+/// each occurrence counts toward each matched muscle independently.
+/// Only role='primary' rows are joined; exercises with only secondary muscles are excluded.
+/// Deleted exercises (NULL exercise_id) are excluded via the INNER JOIN.
+pub async fn fetch_primary_muscle_stats(
+    pool: &SqlitePool,
+    cutoff: Option<&str>,
+) -> Result<Vec<MetadataStatRow>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT
+           em.muscle as key,
+           COUNT(*) as exercise_count,
+           COALESCE(SUM(COALESCE(wse.performed_duration_sec, 0)), 0) as duration_sec,
+           COALESCE(SUM(CASE WHEN wse.skipped = 0 THEN 1 ELSE 0 END), 0) as completed_count,
+           COALESCE(SUM(wse.skipped), 0) as skipped_count
+         FROM workout_session_exercises wse
+         JOIN workout_session_sets wss ON wse.workout_session_set_id = wss.id
+         JOIN workout_sessions ws ON wss.workout_session_id = ws.id
+         JOIN exercise_muscles em ON em.exercise_id = wse.exercise_id AND em.role = 'primary'
+         WHERE ws.status = 'completed'
+           AND (? IS NULL OR ws.ended_at >= ?)
+         GROUP BY em.muscle
+         ORDER BY duration_sec DESC, exercise_count DESC",
+    )
+    .bind(cutoff)
+    .bind(cutoff)
+    .fetch_all(pool)
+    .await?;
+    Ok(map_metadata_rows(rows))
+}
+
+/// Fetch per-pose-type stats. One exercise may have multiple pose types;
+/// each occurrence counts toward each matched pose type independently.
+/// Deleted exercises (NULL exercise_id) are excluded via the INNER JOIN.
+pub async fn fetch_pose_type_stats(
+    pool: &SqlitePool,
+    cutoff: Option<&str>,
+) -> Result<Vec<MetadataStatRow>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT
+           ept.pose_type as key,
+           COUNT(*) as exercise_count,
+           COALESCE(SUM(COALESCE(wse.performed_duration_sec, 0)), 0) as duration_sec,
+           COALESCE(SUM(CASE WHEN wse.skipped = 0 THEN 1 ELSE 0 END), 0) as completed_count,
+           COALESCE(SUM(wse.skipped), 0) as skipped_count
+         FROM workout_session_exercises wse
+         JOIN workout_session_sets wss ON wse.workout_session_set_id = wss.id
+         JOIN workout_sessions ws ON wss.workout_session_id = ws.id
+         JOIN exercise_pose_types ept ON ept.exercise_id = wse.exercise_id
+         WHERE ws.status = 'completed'
+           AND (? IS NULL OR ws.ended_at >= ?)
+         GROUP BY ept.pose_type
+         ORDER BY duration_sec DESC, exercise_count DESC",
+    )
+    .bind(cutoff)
+    .bind(cutoff)
+    .fetch_all(pool)
+    .await?;
+    Ok(map_metadata_rows(rows))
+}
+
+/// Fetch per-source stats.
+///   is_catalog=0              → key 'local'
+///   is_catalog=1, source set  → key = catalog_source (e.g. 'free-exercise-db')
+///   is_catalog=1, source null → key 'catalog'
+/// Deleted exercises (NULL exercise_id) are excluded via the INNER JOIN.
+pub async fn fetch_source_stats(
+    pool: &SqlitePool,
+    cutoff: Option<&str>,
+) -> Result<Vec<MetadataStatRow>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT
+           CASE
+             WHEN e.is_catalog = 0 THEN 'local'
+             WHEN e.catalog_source IS NOT NULL THEN e.catalog_source
+             ELSE 'catalog'
+           END as key,
+           COUNT(*) as exercise_count,
+           COALESCE(SUM(COALESCE(wse.performed_duration_sec, 0)), 0) as duration_sec,
+           COALESCE(SUM(CASE WHEN wse.skipped = 0 THEN 1 ELSE 0 END), 0) as completed_count,
+           COALESCE(SUM(wse.skipped), 0) as skipped_count
+         FROM workout_session_exercises wse
+         JOIN workout_session_sets wss ON wse.workout_session_set_id = wss.id
+         JOIN workout_sessions ws ON wss.workout_session_id = ws.id
+         JOIN exercises e ON e.id = wse.exercise_id
+         WHERE ws.status = 'completed'
+           AND (? IS NULL OR ws.ended_at >= ?)
+         GROUP BY key
+         ORDER BY duration_sec DESC, exercise_count DESC",
+    )
+    .bind(cutoff)
+    .bind(cutoff)
+    .fetch_all(pool)
+    .await?;
+    Ok(map_metadata_rows(rows))
 }
 
 /// Fetch top-10 exercise leaderboard by duration across completed sessions.
