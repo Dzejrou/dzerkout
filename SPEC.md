@@ -22,6 +22,7 @@ There are no cloud accounts and no image upload workflows in v1. All data lives 
 |---|---|---|
 | id | UUID | PK |
 | name | TEXT NOT NULL | Unique display name |
+| sanskrit_name | TEXT NULLABLE | Sanskrit name for yoga poses (e.g., `Adho Mukha Svanasana`); null for non-yoga exercises |
 | notes | TEXT | Optional freeform notes |
 | image_url | TEXT NULLABLE | Reserved; not surfaced in UI |
 | is_catalog | BOOLEAN | True for exercises imported from a catalog source |
@@ -41,6 +42,9 @@ Each exercise carries a set of tags stored in a separate `exercise_tags` table (
 
 **Muscles**
 Each exercise may have zero or more associated muscles stored in an `exercise_muscles` table (one row per muscle+role pair). Each muscle entry has a `role` of `primary` or `secondary`. Muscle names are validated against a fixed vocabulary (e.g., `quadriceps`, `hamstrings`, `chest`, `lats`, `shoulders`, etc.).
+
+**Pose types**
+Each exercise may have zero or more pose types stored in an `exercise_pose_types` table (one row per pose type). Pose types describe yoga-style positional categories and are validated against a fixed vocabulary: `standing`, `forward_bend`, `seated`, `arm_leg_support`, `back_bend`, `balancing`, `arm_balance`, `supine`, `prone`, `inversion`, `twist`, `lateral_bend`. Non-yoga exercises typically have no pose types. Pose types are exported and imported with the exercise and are searchable/filterable in the Exercise Library and the set-card exercise picker.
 
 **Rules**
 - Name must be non-empty and unique.
@@ -236,22 +240,32 @@ One card as it was performed (or skipped) within a session set.
 
 **States**
 - **Empty**: "No exercises yet. Create one to get started." prompt.
-- **List**: Scrollable list of exercise cards. Selecting an exercise shows its detail pane.
-- **Search / filter**: Backend-backed search and filter; results update as the user types or changes filters.
-- **Detail pane**: Shows name, catalog badge (if applicable), tags, notes, muscles (primary and secondary), instructions (step list, catalog exercises only), and catalog metadata (category, equipment, level, mechanic, force, catalog source, catalog ID).
+- **List**: Paginated list of exercise cards (page size 50). Selecting an exercise shows its detail pane. The selected exercise remains stable across page changes.
+- **Search / filter**: Backend-backed search and filter with server-side pagination; results update as the user types or changes filters. Any change to the search text or filters resets the view to the first page.
+- **Detail pane**: Shows name, Sanskrit name as secondary text (when present), catalog badge (if applicable), tags, notes, muscles (primary and secondary), pose types (when present), instructions (step list, catalog exercises only), catalog metadata (category, equipment, level, mechanic, force, catalog source, catalog ID), and an **Add to set** action.
 - **Edit form**: Name (required), notes, tags (multi-select from vocabulary), muscles (primary/secondary multi-select), and catalog metadata fields.
 
+**Search**
+The search field matches the typed query against both the exercise's English `name` and its `sanskrit_name`. Sanskrit name is structured metadata, not a filter — it is used for display and as a search-match target.
+
 **Filters**
-Exercises can be filtered by any combination of: source (`user` / `catalog`), category, equipment, level, primary muscle, force, tag. Filtering is performed server-side (Rust backend).
+Exercises can be filtered by any combination of: **Library** (broad source: all / user / catalog), **Source** (specific catalog source value, e.g. `free-exercise-db`, `yoga-poses`, `default`), category, equipment, level, primary muscle, force, tag, and pose type. Combining `Library = user` with a specific `Source` is invalid (a user-created exercise cannot have a catalog source); the UI prevents this combination. The Source filter composes with all other filters and with paging. Filtering is performed server-side (Rust backend).
+
+**Add to set**
+The detail pane offers an **Add to set** action. The user selects a target set template from the global (library) sets — workout-local forked sets are not valid targets. The selected exercise is appended as a concrete card to that set using the backend's append semantics for `order_index`. Duplicates are allowed (the same exercise may already exist on the target set). The user may optionally provide a duration hint and notes for the new card.
 
 **User stories**
 - As a user I can create an exercise with a name, optional notes, and optional tags.
 - As a user I can tag an exercise with movement-pattern labels (push, pull, legs, core, mobility, yoga, cardio, etc.) to group it with similar exercises.
 - As a user I can record primary and secondary muscle groups for an exercise.
+- As a user I can record a Sanskrit name for a yoga exercise and have it displayed alongside the English name.
 - As a user I can edit an exercise's name, notes, tags, and muscles at any time.
-- As a user I can filter and search the exercise library by name, source (user/catalog), category, equipment, level, primary muscle, force, or tag to find what I need.
+- As a user I can search the exercise library by typing English or Sanskrit name fragments.
+- As a user I can filter the library by Library (user/catalog), Source (specific catalog), category, equipment, level, primary muscle, force, tag, or pose type, and combine filters freely.
+- As a user I can browse the library page by page (50 per page) without losing my selected exercise.
+- As a user I can add a selected exercise directly to a global set template from the detail pane.
 - As a user I can delete an exercise; if it is in use, I am shown which set templates reference it and I must confirm before proceeding.
-- As a user I can view full details (category, equipment, instructions, muscles) for catalog exercises.
+- As a user I can view full details (category, equipment, instructions, muscles, pose types, Sanskrit name) for catalog exercises.
 
 **Catalog exercises**
 Exercises imported from an external catalog (`is_catalog = true`) display a **Catalog** badge. Their detail pane includes read-only metadata such as instructions, category, equipment, and level. They can be edited normally, but a note warns that local edits may be overwritten if the catalog is re-imported via Settings → Data → Import.
@@ -283,7 +297,7 @@ Exercises imported from an external catalog (`is_catalog = true`) display a **Ca
 - As a user I can delete a set template; if it is referenced by a workout template, I am warned.
 
 **Exercise picker**
-When adding or editing a concrete card, the exercise picker is a searchable, filterable sheet backed by the server. Filters include: category, equipment, level, primary muscle, force, and tag. The picker shows exercise name, category, equipment, level, and primary muscles for each result.
+When adding or editing a concrete card, the exercise picker is a searchable, filterable, **paginated** sheet backed by the server (page size 40). The search query matches both English name and Sanskrit name. Filters include: Library (user/catalog), Source (specific catalog), category, equipment, level, primary muscle, force, tag, and pose type. Search and filter changes reset to the first page. The picker shows exercise name, Sanskrit name (when present), category, equipment, level, and primary muscles for each result.
 
 **Edge cases**
 - A set template may have zero cards (empty set); this is valid to save and usable within a workout template, but empty sets are silently skipped during session snapshot — no `WorkoutSessionSet` is created for them.
@@ -668,7 +682,7 @@ These are not v1 deliverables but the schema supports them:
 - **Muscle analytics**: Muscle data (`exercise_muscles` table) and exercise tags are already stored per-exercise. Future analytics screens can aggregate by muscle group or movement pattern.
 - **Image support**: `image_url` field is present on `Exercise`; the UI field is shown but disabled.
 - **Ad-hoc sessions**: `workout_template_id` is nullable on `WorkoutSession`; a future "quick start" flow can create sessions without a template.
-- **Catalog tooling**: Two Node.js scripts (`scripts/generate-free-exercise-db-library.mjs`, `scripts/generate-yoga-poses-library.mjs`) convert external datasets into dzerkout library JSON for evaluation and manual import. Generated files are not committed or automatically seeded; see `scripts/README.md`.
+- **Catalog tooling**: Two Node.js scripts (`scripts/generate-free-exercise-db-library.mjs`, `scripts/generate-yoga-poses-library.mjs`) convert external datasets into dzerkout library JSON for evaluation and manual import. Generated files are not committed or automatically seeded. The bundled default library (`src-tauri/seeds/default_library.json`) is produced by importing both generated catalogs into a fresh app, exporting the result, and replacing the seed file with that export — generated catalogs themselves are not the seed. Bundled defaults remain catalog-filterable because `catalog_source`, `catalog_id`, and `is_catalog` are preserved through export/import. See `scripts/README.md` for the full workflow.
 
 ---
 

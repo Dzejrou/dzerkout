@@ -72,7 +72,7 @@ The generated file is **not** automatically used by the app. It is a standalone 
 ### Import for evaluation
 
 1. Open the app.
-2. Go to **Settings → Library → Import**.
+2. Go to **Settings → Data → Import**.
 3. Select the generated JSON file.
 4. The app will import all exercises as catalog entries (`is_catalog: true`).
 
@@ -123,7 +123,7 @@ node scripts/generate-yoga-poses-library.mjs \
 - `expertise_level` is mapped: `Beginner → beginner`, `Intermediate → intermediate`, `Advanced → expert`. Empty/unknown becomes `null`.
 - `image_url` is **always `null`**. Source `photo_url` points at `pocketyoga.com` and is not redistributed.
 - `pose_type` is emitted as first-class metadata via the `pose_types` array, normalized to the DB enum (e.g. `"Standing"` → `"standing"`, `"Forward Bend"` → `"forward_bend"`).
-- `sanskrit_name` is still folded into `notes` as `"Sanskrit: <name>"` until the schema gains a dedicated column.
+- `sanskrit_name` is emitted as a first-class field on the exercise (no longer folded into `notes`). The free-exercise-db generator emits `sanskrit_name: null` so both catalogs share the same shape.
 - When a yoga pose name collides with a free-exercise-db exercise name, the display name gets ` (Yoga)` appended (driven by the catalog's `duplicateSuffix`). The `id` and `catalog_id` are unaffected.
 - `primary_muscles`, `secondary_muscles`, `instructions_json`, `mechanic`, `force` — all empty/null; the dataset doesn't carry that information.
 - `catalog_source` = `"yoga-poses"`, `catalog_id` = slugified pose name, `id` = UUID v5 over `"yoga-poses:<slug>"`. Re-imports update existing rows.
@@ -131,5 +131,28 @@ node scripts/generate-yoga-poses-library.mjs \
 ### Import for evaluation
 
 1. Open the app.
-2. Go to **Settings → Library → Import**.
+2. Go to **Settings → Data → Import**.
 3. Select the generated JSON file.
+
+---
+
+## Bundling both catalogs into the default library
+
+`src-tauri/seeds/default_library.json` ships inside the app binary via
+`include_str!` and is the seed applied on first run. Generated catalog files in
+`scripts/generated/` are **not committed** and are not the seed directly. To
+rebuild the bundled default library with both catalogs included:
+
+1. `npm run generate:free-exercise-db`
+2. `npm run generate:yoga-poses`
+3. In a clean app instance, **Clear local data** (Settings → Data → Clear).
+   This is important: the export step below includes session history if any
+   exists, and the seed should be catalog-only.
+4. Import both generated JSON files via Settings → Data → Import.
+5. **Export** the app data via Settings → Data → Export.
+6. Replace `src-tauri/seeds/default_library.json` with the exported JSON.
+7. Rebuild the app / APK.
+
+The bundled defaults remain catalog-filterable in the Exercise Library because
+`catalog_source`, `catalog_id`, and `is_catalog` are preserved end-to-end
+through export and import.

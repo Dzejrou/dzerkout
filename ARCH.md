@@ -84,7 +84,9 @@ dzerkout/
 │   │   ├── 004_exercise_performed_duration.sql
 │   │   ├── 005_rest_between_sets.sql
 │   │   ├── 006_exercise_tags.sql
-│   │   └── 007_exercise_catalog_metadata.sql
+│   │   ├── 007_exercise_catalog_metadata.sql
+│   │   ├── 008_exercise_pose_types.sql
+│   │   └── 009_exercise_sanskrit_name.sql
 │   ├── seeds/
 │   │   └── default_library.json      # bundled via include_str! in lib.rs
 │   └── src/
@@ -94,6 +96,7 @@ dzerkout/
 │       ├── db/
 │       │   ├── mod.rs                # SqlitePool init, after_connect pragmas
 │       │   ├── exercises.rs          # SQL functions for exercises + tags + muscles
+│       │   │                         #   + pose types + catalog source listing
 │       │   ├── set_templates.rs      # SQL functions for templates + cards
 │       │   ├── workout_templates.rs  # SQL for templates, set refs, assignments
 │       │   ├── sessions.rs           # SQL for sessions, sets, exercises
@@ -398,6 +401,36 @@ to prevent stale replays when the app opens mid-countdown.
 Sound cues are enabled by `settingsStore.soundCues`. The `phaseId` is
 `null` for untimed exercises (no cues fire).
 
+### 4.8 Exercise Library and Set-Card Exercise Picker
+
+The Exercise Library screen and the `CardEditor` exercise picker share the same
+backend-backed paginated search:
+
+- **Data source.** Both views call `exercisesApi.searchExercises(filters)` →
+  Rust `search_exercises` (see §5.2). Filtering and pagination happen on the
+  server; the frontend never holds the full library in memory.
+- **Filter state.** `ExerciseSearchFilters` carries free-text `query` (matched
+  against `name` OR `sanskrit_name`), `source` (`all` / `user` / `catalog`),
+  `catalog_source` (specific catalog), `category`, `equipment`, `level`,
+  `force`, `primary_muscle`, `tag`, `pose_type`, plus `limit` and `offset`.
+  `source = user` combined with a non-null `catalog_source` is rejected
+  client-side before invoking; the UI hides the Source filter in that mode.
+- **Source dropdown.** Both screens populate the **Source** filter from
+  `exercisesApi.listCatalogSources()` (one row per distinct `catalog_source`
+  with its row count). The broader **Library** filter (`all` / `user` /
+  `catalog`) is a separate three-way control.
+- **Page sizes.** Exercise Library uses `limit = 50`; the set-card picker uses
+  `limit = 40`. Any change to query text or any filter resets `offset` to 0.
+- **Selection stability.** In the Exercise Library, the selected exercise in
+  the detail pane is preserved across page changes — the selected `id` is
+  tracked in component state, not derived from the current page slice.
+- **Add to set.** The Exercise Library detail pane's **Add to set** action
+  reuses `setTemplatesApi.addCard` to append a `concrete` card to a chosen
+  global (library) set. Workout-local forked sets are excluded from the target
+  list. Duplicates are allowed; the optional duration hint and notes fields
+  flow through to `addCard` unchanged. After success, TanStack Query
+  invalidates `['set-templates']` and `['set-template', targetSetId]`.
+
 ---
 
 ## 5. Rust Backend Architecture
@@ -417,8 +450,16 @@ No SQL, no business logic, no UUID generation in command handlers.
 - `list_exercises() → Vec<Exercise>`
 - `get_exercise(id) → Exercise`
 - `search_exercises(filters: ExerciseSearchFilters) → ExerciseSearchResult`
-- `create_exercise(name, notes, tags?, muscles?, catalog metadata?) → Exercise`
-- `update_exercise(id, name, notes, tags?, muscles?) → Exercise`
+  — `ExerciseSearchFilters` includes free-text `query` (matched against both
+  `name` and `sanskrit_name`), broad `source` (`all` / `user` / `catalog`),
+  specific `catalog_source`, `category`, `equipment`, `level`, `force`,
+  `primary_muscle`, `tag`, `pose_type`, plus `limit` and `offset` for
+  pagination. Returns rows + total count for the page UI.
+- `list_catalog_sources() → Vec<{ source: String, count: i64 }>`
+  — drives the **Source** filter dropdown in Exercise Library and the
+  set-card exercise picker.
+- `create_exercise(name, sanskrit_name?, notes, tags?, muscles?, pose_types?, catalog metadata?) → Exercise`
+- `update_exercise(id, name, sanskrit_name?, notes, tags?, muscles?, pose_types?) → Exercise`
 - `get_exercise_references(id) → ExerciseReferences`
 - `delete_exercise(id) → ()`
 
@@ -617,7 +658,7 @@ while writes proceed. `seed_if_empty` gates on all three template tables
 
 ### 6.3 Migration Files
 
-Seven migrations apply sequentially at startup:
+Migrations apply sequentially at startup:
 
 | File | Change |
 |---|---|
@@ -628,6 +669,8 @@ Seven migrations apply sequentially at startup:
 | `005_rest_between_sets.sql` | Adds `rest_duration_sec`, `rest_started_at` to `workout_session_sets` |
 | `006_exercise_tags.sql` | Adds `exercise_tags` table (normalized, ON DELETE CASCADE) |
 | `007_exercise_catalog_metadata.sql` | Adds catalog fields to exercises; adds `exercise_muscles` table; adds partial unique index |
+| `008_exercise_pose_types.sql` | Adds `exercise_pose_types` table (normalized, ON DELETE CASCADE) with CHECK-constrained vocabulary |
+| `009_exercise_sanskrit_name.sql` | Adds `sanskrit_name TEXT` (nullable) to `exercises`; no index — search uses `LIKE '%query%'` |
 
 The file name convention is `{NNN}_{description}.sql`. All migrations are
 additive only; no existing columns or tables are dropped.
@@ -1201,7 +1244,17 @@ npm run generate:yoga-poses
 - Exercise IDs: deterministic UUID v5, keyed on `{catalog_source}:{catalog_id}`.
   Re-importing the same file is safe; rows are updated, not duplicated.
 - The bundled seed (`src-tauri/seeds/default_library.json`) is **not** modified
-  automatically by these scripts.
+  automatically by these scripts (see *Default library bundling workflow* below).
+- Each generator declares its own `CATALOG = { source, label, duplicateSuffix }`
+  config block at the top of the file. `duplicateSuffix` is appended in parens
+  to the **display name only** on cross-catalog name collisions; row identity
+  (`id`, `catalog_id`) is derived from `<source>:<slug>` and unaffected by the
+  suffix. The current real collision is `Child's Pose` (free-exercise-db) vs.
+  `Child's Pose` (yoga-poses) → the yoga generator emits `Child's Pose (Yoga)`.
+- Both generators emit `pose_types: string[]` (normalized DB enum values) and
+  `sanskrit_name: string | null` as first-class fields. The free-exercise-db
+  generator emits `pose_types: []` and `sanskrit_name: null`; the yoga
+  generator emits real values from the source dataset.
 
 ### Import for evaluation
 
@@ -1209,3 +1262,21 @@ npm run generate:yoga-poses
 2. Go to **Settings → Data → Import**.
 3. Select the generated JSON file.
 4. The app upserts all exercises as catalog entries (`is_catalog: true`).
+
+### Default library bundling workflow
+
+The default seed at `src-tauri/seeds/default_library.json` is rebuilt manually
+from both generated catalogs:
+
+1. `npm run generate:free-exercise-db`
+2. `npm run generate:yoga-poses`
+3. In a clean app instance, **Clear local data** so session history does not
+   leak into the seed.
+4. Import both generated JSON files via Settings → Data → Import.
+5. **Export** via Settings → Data → Export.
+6. Replace `src-tauri/seeds/default_library.json` with the exported JSON.
+7. Rebuild the app / APK.
+
+Bundled defaults remain catalog-filterable because `catalog_source`,
+`catalog_id`, and `is_catalog` are preserved through both export and import.
+Generated catalog files in `scripts/generated/` are still **not committed**.

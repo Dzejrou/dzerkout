@@ -15,6 +15,7 @@
 erDiagram
     exercises ||--o{ exercise_tags              : "has"
     exercises ||--o{ exercise_muscles           : "has"
+    exercises ||--o{ exercise_pose_types        : "has"
     exercises ||--o{ set_template_cards         : "referenced by"
     set_templates ||--|{ set_template_cards      : "owns"
     set_templates ||--o{ workout_template_set_refs : "referenced by"
@@ -32,6 +33,7 @@ erDiagram
 ### Two-layer split
 
 **Template layer** (`exercises`, `exercise_tags`, `exercise_muscles`,
+`exercise_pose_types`,
 `set_templates`, `set_template_cards`,
 `workout_templates`, `workout_template_set_refs`,
 `workout_template_card_assignments`) — reusable, mutable, never directly
@@ -114,6 +116,7 @@ Stores all exercises available to the user — both user-created and catalog-imp
 CREATE TABLE exercises (
     id          TEXT NOT NULL PRIMARY KEY,
     name        TEXT NOT NULL,
+    sanskrit_name TEXT,                 -- migration 009; nullable; null for non-yoga exercises
     notes       TEXT,
     image_url   TEXT,                   -- reserved; not surfaced in v1 UI
     -- Catalog metadata (migration 007); all nullable so user-created rows are unaffected
@@ -168,6 +171,14 @@ CREATE INDEX idx_exercises_force     ON exercises (force)     WHERE force     IS
 uniqueness enforced by `uq_exercises_catalog` partial index on the non-null pair.
 No FK dependencies.
 
+**`sanskrit_name` semantics (migration 009):**
+- Optional. `NULL` for non-yoga exercises and yoga exercises without a recorded Sanskrit name.
+- Empty / whitespace-only input is normalized to `NULL` in the domain layer.
+- Used as a **search-match target** alongside `name` (see §11 query catalog) and surfaced
+  in the Exercise Library detail pane as secondary text.
+- No index. Search uses `LIKE '%query%'`, which a normal index cannot accelerate; the
+  table is small enough at v1 scale (low thousands of rows) that a sequential scan is fine.
+
 ---
 
 ### 3.2 `exercise_tags`
@@ -221,6 +232,40 @@ CREATE INDEX idx_exercise_muscles_by_exercise ON exercise_muscles (exercise_id);
 **FK notes:**
 - `exercise_id CASCADE`: muscle rows are owned by the exercise; deletion of the
   exercise automatically removes all its muscle rows (no domain-layer step needed).
+
+---
+
+### 3.3a `exercise_pose_types`
+
+Tracks yoga-style pose types per exercise. Added in migration 008.
+
+```sql
+CREATE TABLE exercise_pose_types (
+    exercise_id TEXT NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+    pose_type   TEXT NOT NULL CHECK (pose_type IN (
+        'standing', 'forward_bend', 'seated', 'arm_leg_support',
+        'back_bend', 'balancing', 'arm_balance', 'supine', 'prone',
+        'inversion', 'twist', 'lateral_bend'
+    )),
+    PRIMARY KEY (exercise_id, pose_type)
+);
+
+CREATE INDEX idx_exercise_pose_types_by_type
+    ON exercise_pose_types (pose_type);
+CREATE INDEX idx_exercise_pose_types_by_exercise
+    ON exercise_pose_types (exercise_id);
+```
+
+**Semantics:**
+- An exercise may have zero or more pose types. Each pose type appears at most once per exercise.
+- Validated at the DB layer via `CHECK`; the domain layer mirrors the same vocabulary for
+  early error reporting.
+- Searched via JOIN (`idx_exercise_pose_types_by_type`) when the user filters by pose type;
+  loaded by `idx_exercise_pose_types_by_exercise` for detail-pane display.
+
+**FK notes:**
+- `exercise_id CASCADE`: pose-type rows are owned by the exercise; deletion of the
+  exercise automatically removes all its pose-type rows (no domain-layer step needed).
 
 ---
 
@@ -590,6 +635,7 @@ import).
 |---|---|---|---|
 | `exercise_tags.exercise_id` | `exercises(id)` | CASCADE | Tags owned by exercise |
 | `exercise_muscles.exercise_id` | `exercises(id)` | CASCADE | Muscles owned by exercise |
+| `exercise_pose_types.exercise_id` | `exercises(id)` | CASCADE | Pose types owned by exercise |
 | `set_template_cards.set_template_id` | `set_templates(id)` | CASCADE | Cards owned by set |
 | `set_template_cards.exercise_id` | `exercises(id)` | RESTRICT | Service converts card before delete |
 | `set_templates.owning_workout_template_id` | `workout_templates(id)` | CASCADE | Local set owned by workout; deleted with it |
@@ -635,7 +681,7 @@ WHERE exercise_id = :id;
 -- 4. Delete the exercise.
 --    SQLite automatically:
 --      SET NULL on workout_session_exercises.exercise_id (via ON DELETE SET NULL FK)
---      CASCADE DELETE on exercise_tags and exercise_muscles rows
+--      CASCADE DELETE on exercise_tags, exercise_muscles, and exercise_pose_types rows
 --    Steps 2 & 3 have already removed all RESTRICT-guarded references,
 --    so this DELETE succeeds.
 DELETE FROM exercises WHERE id = :id;
@@ -644,7 +690,7 @@ DELETE FROM exercises WHERE id = :id;
 After step 2, `set_template_cards` has no remaining `exercise_id = :id` rows,
 so the RESTRICT FK is satisfied at step 4. Step 4 triggers SQLite's built-in
 SET NULL cascade on `workout_session_exercises`, preserving `display_name`, and
-CASCADE DELETE on `exercise_tags` and `exercise_muscles`.
+CASCADE DELETE on `exercise_tags`, `exercise_muscles`, and `exercise_pose_types`.
 
 ---
 
@@ -660,6 +706,8 @@ CASCADE DELETE on `exercise_tags` and `exercise_muscles`.
 | `idx_exercises_force` | `exercises(force)` partial WHERE non-null | Catalog filter queries |
 | `idx_exercise_muscles_by_muscle` | `exercise_muscles(muscle, role)` | Filter exercises by muscle + role |
 | `idx_exercise_muscles_by_exercise` | `exercise_muscles(exercise_id)` | Load muscles for a given exercise |
+| `idx_exercise_pose_types_by_type` | `exercise_pose_types(pose_type)` | Filter exercises by pose type |
+| `idx_exercise_pose_types_by_exercise` | `exercise_pose_types(exercise_id)` | Load pose types for a given exercise |
 | `uq_stc_set_order` | `set_template_cards(set_template_id, order_index)` UNIQUE | Ordered card retrieval; prevents duplicate positions within a set |
 | `uq_wtsr_workout_order` | `workout_template_set_refs(workout_template_id, order_index)` UNIQUE | Ordered set ref retrieval; prevents duplicate positions within a workout |
 | *(implicit)* | `workout_template_card_assignments(workout_template_set_ref_id, set_template_card_id)` UNIQUE | Backed by the inline `UNIQUE` constraint; no separate index needed |
@@ -740,6 +788,18 @@ Adds catalog columns to `exercises` (`catalog_source`, `catalog_id`,
 `instructions_json`) and creates the `exercise_muscles` table (see §3.3).
 Also creates `uq_exercises_catalog` and the four catalog partial indexes.
 
+### `migrations/008_exercise_pose_types.sql`
+
+Creates the `exercise_pose_types` table (see §3.3a) and its two indexes
+(`idx_exercise_pose_types_by_type`, `idx_exercise_pose_types_by_exercise`).
+The CHECK constraint enforces the pose-type vocabulary at the DB layer.
+
+### `migrations/009_exercise_sanskrit_name.sql`
+
+Adds `sanskrit_name TEXT` (nullable) to `exercises`. No index — search uses
+`LIKE '%query%'` which a normal index cannot accelerate. Empty/whitespace
+input is normalized to `NULL` in the domain layer.
+
 ### Startup seed
 
 At app startup, `seed_if_empty(pool, seed_json)` is called with
@@ -750,7 +810,7 @@ Session/history tables are not consulted for the emptiness check.
 
 ### Future migration naming
 
-`008_add_column.sql`, etc. All v1 migrations are additive. SQLite does not
+`010_add_column.sql`, etc. All v1 migrations are additive. SQLite does not
 support `ALTER COLUMN` or `DROP CONSTRAINT`; constraint changes require
 `CREATE TABLE … AS SELECT … DROP … RENAME` (the standard SQLite table-rebuild
 pattern, handled in the migration file).
@@ -766,7 +826,8 @@ src-tauri/src/
 ├── db/
 │   ├── mod.rs                # pool init, pragma setup, migration runner
 │   ├── exercises.rs          # repository functions: SELECT/INSERT/UPDATE/DELETE,
-│   │                         #   tags, muscles, catalog search
+│   │                         #   tags, muscles, pose types, catalog search,
+│   │                         #   list_catalog_sources
 │   ├── set_templates.rs
 │   ├── workout_templates.rs  # includes set_refs and assignments
 │   ├── sessions.rs           # all session + set + exercise row operations
@@ -804,7 +865,9 @@ pub async fn delete(conn: &mut SqliteConnection, id: &str) -> Result<(), sqlx::E
 pub async fn find_referencing_cards(conn: &mut SqliteConnection, exercise_id: &str) -> Result<Vec<ExerciseCardRef>, sqlx::Error>;
 pub async fn set_tags(conn: &mut SqliteConnection, id: &str, tags: &[String]) -> Result<(), sqlx::Error>;
 pub async fn set_muscles(conn: &mut SqliteConnection, id: &str, muscles: &[ExerciseMuscleInput]) -> Result<(), sqlx::Error>;
+pub async fn set_pose_types(conn: &mut SqliteConnection, id: &str, pose_types: &[String]) -> Result<(), sqlx::Error>;
 pub async fn search(pool: &SqlitePool, filters: &ExerciseSearchFilters, limit: i64, offset: i64) -> Result<(Vec<ExerciseRow>, i64), sqlx::Error>;
+pub async fn list_catalog_sources(pool: &SqlitePool) -> Result<Vec<CatalogSourceSummary>, sqlx::Error>;
 ```
 
 **Service functions** (`domain/*.rs`) open transactions and compose repository
@@ -1373,30 +1436,53 @@ timer expires) are **frontend/local settings**, not persisted in the DB.
 
 ```sql
 -- list
-SELECT id, name, notes, image_url,
+SELECT id, name, sanskrit_name, notes, image_url,
        catalog_source, catalog_id, is_catalog,
        category, equipment, level, mechanic, force, instructions_json,
        created_at, updated_at
 FROM exercises ORDER BY name;
 
 -- get by id
-SELECT id, name, notes, image_url,
+SELECT id, name, sanskrit_name, notes, image_url,
        catalog_source, catalog_id, is_catalog,
        category, equipment, level, mechanic, force, instructions_json,
        created_at, updated_at
 FROM exercises WHERE id = ?;
 
--- search (dynamic WHERE clauses built in Rust; example for name + category + source)
-SELECT e.*, COUNT(*) OVER() as total_count
+-- search (dynamic WHERE clauses built in Rust)
+-- Notes:
+--  * Free-text query matches name OR sanskrit_name.
+--  * :source is the broad library filter ('all' | 'user' | 'catalog'); 'all' = no clause.
+--  * :catalog_source is the specific catalog source (e.g. 'free-exercise-db', 'yoga-poses').
+--    Combining :source = 'user' with a non-null :catalog_source is rejected by the service.
+--  * :pose_type filters via JOIN on exercise_pose_types.
+--  * Pagination is required (limit + offset). Total count is returned alongside.
+SELECT e.*, COUNT(*) OVER() AS total_count
 FROM exercises e
-WHERE (:query IS NULL OR e.name LIKE '%' || :query || '%')
-  AND (:category IS NULL OR e.category = :category)
+WHERE (:query IS NULL
+       OR e.name          LIKE '%' || :query || '%'
+       OR e.sanskrit_name LIKE '%' || :query || '%')
   AND (:source = 'catalog' AND e.is_catalog = 1
        OR :source = 'user' AND e.is_catalog = 0
        OR :source IS NULL)
-  -- additional filters: equipment, level, force, primary_muscle (via JOIN), tag (via JOIN)
+  AND (:catalog_source IS NULL OR e.catalog_source = :catalog_source)
+  AND (:category   IS NULL OR e.category   = :category)
+  AND (:equipment  IS NULL OR e.equipment  = :equipment)
+  AND (:level      IS NULL OR e.level      = :level)
+  AND (:force      IS NULL OR e.force      = :force)
+  AND (:pose_type IS NULL OR EXISTS (
+         SELECT 1 FROM exercise_pose_types ept
+         WHERE ept.exercise_id = e.id AND ept.pose_type = :pose_type))
+  -- additional filters: primary_muscle (via JOIN exercise_muscles), tag (via JOIN exercise_tags)
 ORDER BY e.name
 LIMIT :limit OFFSET :offset;
+
+-- list distinct catalog sources with row counts (drives the Source filter)
+SELECT catalog_source AS source, COUNT(*) AS count
+FROM exercises
+WHERE catalog_source IS NOT NULL
+GROUP BY catalog_source
+ORDER BY catalog_source;
 
 -- check name availability
 SELECT id FROM exercises WHERE name = ? AND id != ?;
@@ -1408,14 +1494,18 @@ JOIN set_templates st ON st.id = stc.set_template_id
 WHERE stc.exercise_id = ?;
 
 -- insert
-INSERT INTO exercises (id, name, notes, image_url,
+INSERT INTO exercises (id, name, sanskrit_name, notes, image_url,
                        catalog_source, catalog_id, is_catalog,
                        category, equipment, level, mechanic, force, instructions_json,
                        created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- update
-UPDATE exercises SET name=?, notes=?, updated_at=? WHERE id=?;
+UPDATE exercises SET name=?, sanskrit_name=?, notes=?, updated_at=? WHERE id=?;
+
+-- replace pose types for an exercise (DELETE + INSERT inside a transaction)
+DELETE FROM exercise_pose_types WHERE exercise_id = ?;
+INSERT INTO exercise_pose_types (exercise_id, pose_type) VALUES (?, ?);  -- per pose type
 
 -- delete (see §5 for safe transaction sequence)
 DELETE FROM exercises WHERE id=?;
@@ -1608,7 +1698,7 @@ async fn test_schema_applies_cleanly(pool: SqlitePool) {
     // verify all tables exist and FK pragmas are applied
     let count: (i32,) = sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
         .fetch_one(&pool).await.unwrap();
-    assert!(count.0 >= 11);  // 9 core tables + exercise_tags + exercise_muscles
+    assert!(count.0 >= 12);  // 9 core tables + exercise_tags + exercise_muscles + exercise_pose_types
 }
 ```
 
@@ -1788,7 +1878,7 @@ Assert: rest set has rest_duration_sec=NULL, rest_started_at=NULL
   "schema": "dzerkout.library",
   "version": 1,
   "exported_at": "...",
-  "exercises": [...],       // includes tags, muscles, catalog metadata
+  "exercises": [...],       // includes tags, muscles, pose_types, sanskrit_name, catalog metadata
   "set_templates": [...],   // includes owning_workout_template_id and cards
   "workout_templates": [...],// includes rest_between_sets_sec, set_refs with
                              //   source_set_template_id and assignments
@@ -1807,13 +1897,14 @@ there is no per-entity export; the export always includes everything.
 `import_library_json` is **upsert-based and idempotent**:
 - Re-importing the same export produces the same result.
 - Exercises, sets, and workouts are upserted by `id` (`ON CONFLICT(id) DO UPDATE`).
-- Tags and muscles are replaced wholesale (DELETE then INSERT) per exercise.
+- Tags, muscles, and pose types are replaced wholesale (DELETE then INSERT) per exercise.
+- `sanskrit_name` is upserted as part of the exercise row.
 - Cards and set_refs use the two-phase upsert to avoid transient UNIQUE violations.
 - Sessions are upserted by `id`; session_sets and session_exercises follow.
 - All writes happen in a single transaction; failure rolls back completely.
 
 **Validation before write (in-memory + DB-side):**
-- Exercise tags, catalog metadata enum values, instructions_json format.
+- Exercise tags, pose types, catalog metadata enum values, instructions_json format.
 - Card type invariants (`concrete` requires `exercise_id`, `placeholder` requires `placeholder_tag`).
 - Assignment cross-set integrity (card must belong to the set the ref points to).
 - FK references: concrete card `exercise_id` must exist in import payload or DB;
@@ -1836,8 +1927,14 @@ transaction, leaving the DB **empty**. It does not re-seed.
 ```
 session_exercises → session_sets → sessions
 → assignments → set_refs → set_template_cards → set_templates
-→ exercise_tags → exercises → workout_templates
+→ exercise_pose_types → exercise_muscles → exercise_tags
+→ exercises → workout_templates
 ```
+
+Note: the `exercise_*` child tables all have `ON DELETE CASCADE` from
+`exercises`, so deleting the parent rows alone is sufficient. The explicit
+deletes above are listed for clarity in import-test fixtures and to make the
+order easy to audit.
 
 Exposed as the `clear_local_data` Tauri command.
 
@@ -1884,8 +1981,11 @@ manual review and optional import:
 - Converts yoga poses to `ExportedExercise` format with `catalog_source = "yoga-poses"`,
   `is_catalog = true`, `category = "yoga"`.
 - `image_url` is always `null` (photo URLs point at third-party CDN).
-- Sanskrit name and pose type are folded into the `notes` field until dedicated
-  columns exist.
+- Emits `sanskrit_name` as a structured field (no longer folded into `notes`).
+- Emits `pose_types` as a structured array of normalized DB enum values
+  (e.g. `"Standing"` → `"standing"`, `"Forward Bend"` → `"forward_bend"`).
+- The free-exercise-db generator emits `sanskrit_name: null` and `pose_types: []`
+  so both catalogs share the same export shape.
 - Supports `--max` and `--output` flags.
 
 ### Key constraints
@@ -1896,3 +1996,28 @@ manual review and optional import:
   `seeds/default_library.json`.
 - IDs are deterministic UUID v5 values derived from `(catalog_source, catalog_id)`,
   ensuring re-running the generator produces the same IDs (import is idempotent).
+- Each generator declares its own `CATALOG = { source, label, duplicateSuffix }`
+  config block. `duplicateSuffix` is appended in parens to the **display name only**
+  on cross-catalog name collisions (current real collision: `Child's Pose` →
+  `Child's Pose (Yoga)`). UUID `id` and `catalog_id` are derived from
+  `<source>:<slug>` and never include the suffix, so renaming the suffix later
+  does not change row identity.
+
+### Default library bundling workflow
+
+The bundled default library at `src-tauri/seeds/default_library.json` is **not**
+written by the generators directly. To rebuild it with both catalogs included:
+
+1. `npm run generate:free-exercise-db`
+2. `npm run generate:yoga-poses`
+3. In a clean app instance, **Clear local data** (so session history does not leak
+   into the seed).
+4. Import both generated JSON files via Settings → Data → Import.
+5. **Export** the app data via Settings → Data → Export.
+6. Replace `src-tauri/seeds/default_library.json` with the exported JSON.
+7. Rebuild the app / APK.
+
+The bundled defaults remain catalog-filterable because `catalog_source`,
+`catalog_id`, and `is_catalog` are preserved through both export and import.
+**Warning:** the export includes session history if any exists — clear local data
+first if the seed should be catalog-only.
