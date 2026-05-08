@@ -452,7 +452,6 @@ export default function ExerciseLibrary() {
     return () => clearTimeout(t);
   }, [toastMessage]);
 
-  const [filterSource, setFilterSource] = useState<"" | "user" | "catalog">("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterEquipment, setFilterEquipment] = useState("");
   const [filterLevel, setFilterLevel] = useState("");
@@ -463,22 +462,16 @@ export default function ExerciseLibrary() {
   const [filterCatalogSource, setFilterCatalogSource] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  // Selecting "user" library makes catalog_source contradictory — clear it.
-  useEffect(() => {
-    if (filterSource === "user" && filterCatalogSource) setFilterCatalogSource("");
-  }, [filterSource, filterCatalogSource]);
-
   const activeFilterCount = [
     filterCategory, filterEquipment, filterLevel, filterMuscle,
     filterTag, filterForce, filterPoseType, filterCatalogSource,
   ].filter(Boolean).length;
 
   // Reset to page 0 whenever any search/filter value changes.
-  useEffect(() => { setPage(0); }, [search, filterSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, filterPoseType, filterCatalogSource]);
+  useEffect(() => { setPage(0); }, [search, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, filterPoseType, filterCatalogSource]);
 
   const searchFilters: ExerciseSearchFilters = useMemo(() => ({
     query: search || undefined,
-    source: filterSource || undefined,
     catalog_source: filterCatalogSource || undefined,
     category: filterCategory || undefined,
     equipment: filterEquipment || undefined,
@@ -489,7 +482,7 @@ export default function ExerciseLibrary() {
     pose_type: filterPoseType || undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
-  }), [search, filterSource, filterCatalogSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, filterPoseType, page]);
+  }), [search, filterCatalogSource, filterCategory, filterEquipment, filterLevel, filterMuscle, filterForce, filterTag, filterPoseType, page]);
 
   const { data: catalogSources = [] } = useQuery({
     queryKey: ["exercises", "catalog-sources"],
@@ -577,42 +570,27 @@ export default function ExerciseLibrary() {
       <div style={leftPanelStyle}>
         <div style={leftHeaderStyle}>
           <button onClick={() => navigate("/")} style={backBtnStyle}>← Back</button>
-          <h1 style={pageTitleStyle}>Exercises</h1>
-          <p style={pageSubtitleStyle}>Manage your exercise library.</p>
-
-          <div style={toolbarStyle}>
-            <div style={searchWrapStyle}>
-              <span style={searchIconStyle}>⌕</span>
-              <input
-                type="text"
-                placeholder="Search exercises…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={searchInputStyle}
-              />
-            </div>
-            <button onClick={() => setModal({ type: "create" })} style={newBtnStyle}>
-              + New Exercise
+          <div style={titleRowStyle}>
+            <h1 style={pageTitleStyle}>Exercises</h1>
+            <button
+              onClick={() => setModal({ type: "create" })}
+              style={newBtnCompactStyle}
+              title="New exercise"
+              aria-label="New exercise"
+            >
+              +
             </button>
           </div>
 
-          {/* Library (broad ownership) toggle.
-              Renamed from "Source" to avoid clashing with the catalog Source
-              filter below; backend field name is still `source`. */}
-          <div style={libraryToggleHeaderStyle}>Library</div>
-          <div style={sourceToggleRowStyle}>
-            {(["", "user", "catalog"] as const).map((src) => (
-              <button
-                key={src || "all"}
-                onClick={() => setFilterSource(src)}
-                style={{
-                  ...sourceToggleBtnStyle,
-                  ...(filterSource === src ? sourceToggleActiveBtnStyle : {}),
-                }}
-              >
-                {src === "" ? "All" : src === "user" ? "My exercises" : "Catalog"}
-              </button>
-            ))}
+          <div style={searchWrapStyle}>
+            <span style={searchIconStyle}>⌕</span>
+            <input
+              type="text"
+              placeholder="Search exercises…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={searchInputStyle}
+            />
           </div>
 
           {/* Filters toggle row */}
@@ -683,14 +661,10 @@ export default function ExerciseLibrary() {
                 <select
                   value={filterCatalogSource}
                   onChange={(e) => setFilterCatalogSource(e.target.value)}
-                  disabled={filterSource === "user"}
-                  title={filterSource === "user" ? "Disabled while Library is set to 'My exercises'" : undefined}
                   style={{
                     ...filterSelectStyle,
                     border: `1px solid ${filterCatalogSource ? tokens.greenBadgeBorder : BORDER}`,
                     color: filterCatalogSource ? TEXT_PRIMARY : TEXT_SECONDARY,
-                    opacity: filterSource === "user" ? 0.5 : 1,
-                    cursor: filterSource === "user" ? "not-allowed" : "pointer",
                   }}
                 >
                   <option value="">Any source</option>
@@ -709,7 +683,7 @@ export default function ExerciseLibrary() {
           {isLoading && <p style={{ color: TEXT_SECONDARY, padding: "16px 20px" }}>Loading…</p>}
           {!isLoading && filtered.length === 0 && (
             <p style={{ color: TEXT_SECONDARY, padding: "16px 20px", textAlign: "center" }}>
-              {search || filterSource || activeFilterCount > 0 ? "No matches" : "No exercises yet"}
+              {search || activeFilterCount > 0 ? "No matches" : "No exercises yet"}
             </p>
           )}
           {filtered.map((ex) => {
@@ -781,7 +755,7 @@ export default function ExerciseLibrary() {
             onAddToSet={() => setModal({ type: "addToSet", exercise: displayedExercise })}
           />
         ) : (
-          <EmptyState isFiltered={!!search || !!filterSource || activeFilterCount > 0} />
+          <EmptyState isFiltered={!!search || activeFilterCount > 0} />
         )}
       </div>
 
@@ -884,28 +858,38 @@ const backBtnStyle: React.CSSProperties = {
   marginBottom: 10,
 };
 
+const titleRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: 8,
+};
+
 const pageTitleStyle: React.CSSProperties = {
   fontSize: 34,
   fontWeight: 800,
-  margin: "0 0 4px",
+  margin: 0,
   letterSpacing: "-0.02em",
   color: TEXT_PRIMARY,
 };
 
-const pageSubtitleStyle: React.CSSProperties = {
-  margin: "0 0 14px",
-  fontSize: 14,
-  color: TEXT_SECONDARY,
-};
-
-const toolbarStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 8,
-  alignItems: "center",
+const newBtnCompactStyle: React.CSSProperties = {
+  flexShrink: 0,
+  width: 34,
+  height: 34,
+  borderRadius: 8,
+  border: "none",
+  background: tokens.green,
+  color: "#fff",
+  cursor: "pointer",
+  fontSize: 22,
+  fontWeight: 400,
+  lineHeight: "34px",
+  textAlign: "center",
+  padding: 0,
 };
 
 const searchWrapStyle: React.CSSProperties = {
-  flex: 1,
   display: "flex",
   alignItems: "center",
   gap: 8,
@@ -913,7 +897,6 @@ const searchWrapStyle: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: 8,
   padding: "6px 10px",
-  minWidth: 0,
   overflow: "hidden",
 };
 
@@ -931,19 +914,6 @@ const searchInputStyle: React.CSSProperties = {
   fontSize: 14,
   color: TEXT_PRIMARY,
   minWidth: 0,
-};
-
-const newBtnStyle: React.CSSProperties = {
-  flexShrink: 0,
-  padding: "7px 14px",
-  borderRadius: 8,
-  border: "none",
-  background: tokens.green,
-  color: "#fff",
-  cursor: "pointer",
-  fontSize: 13,
-  fontWeight: 600,
-  whiteSpace: "nowrap",
 };
 
 const listStyle: React.CSSProperties = {
@@ -1311,42 +1281,6 @@ const filterSelectStyle: React.CSSProperties = {
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238e8e93' d='M5 6L0 0h10z'/%3E%3C/svg%3E")`,
   backgroundRepeat: "no-repeat",
   backgroundPosition: "right 7px center",
-};
-
-const libraryToggleHeaderStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 600,
-  letterSpacing: "0.05em",
-  textTransform: "uppercase",
-  color: TEXT_SECONDARY,
-  marginTop: 10,
-  marginBottom: 4,
-};
-
-const sourceToggleRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 4,
-  marginBottom: 2,
-};
-
-const sourceToggleBtnStyle: React.CSSProperties = {
-  flex: 1,
-  padding: "5px 0",
-  borderRadius: 6,
-  border: `1px solid ${BORDER}`,
-  background: "transparent",
-  color: TEXT_SECONDARY,
-  cursor: "pointer",
-  fontSize: 12,
-  fontWeight: 500,
-  textAlign: "center",
-};
-
-const sourceToggleActiveBtnStyle: React.CSSProperties = {
-  background: tokens.purpleBg,
-  border: `1px solid ${tokens.purpleBorder}`,
-  color: tokens.purple,
-  fontWeight: 700,
 };
 
 const catalogBadgeStyle: React.CSSProperties = {
