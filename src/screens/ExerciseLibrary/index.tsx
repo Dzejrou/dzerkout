@@ -472,7 +472,8 @@ export default function ExerciseLibrary() {
 
   const searchFilters: ExerciseSearchFilters = useMemo(() => ({
     query: search || undefined,
-    catalog_source: filterCatalogSource || undefined,
+    source: filterCatalogSource === "local" ? "user" : filterCatalogSource ? "catalog" : undefined,
+    catalog_source: filterCatalogSource && filterCatalogSource !== "local" ? filterCatalogSource : undefined,
     category: filterCategory || undefined,
     equipment: filterEquipment || undefined,
     level: filterLevel || undefined,
@@ -657,24 +658,23 @@ export default function ExerciseLibrary() {
                 placeholder="Pose type"
                 options={EXERCISE_POSE_TYPES}
               />
-              {catalogSources.length > 0 && (
-                <select
-                  value={filterCatalogSource}
-                  onChange={(e) => setFilterCatalogSource(e.target.value)}
-                  style={{
-                    ...filterSelectStyle,
-                    border: `1px solid ${filterCatalogSource ? tokens.greenBadgeBorder : BORDER}`,
-                    color: filterCatalogSource ? TEXT_PRIMARY : TEXT_SECONDARY,
-                  }}
-                >
-                  <option value="">Any source</option>
-                  {catalogSources.map((cs) => (
-                    <option key={cs.source} value={cs.source}>
-                      {cs.source} ({cs.count})
-                    </option>
-                  ))}
-                </select>
-              )}
+              <select
+                value={filterCatalogSource}
+                onChange={(e) => setFilterCatalogSource(e.target.value)}
+                style={{
+                  ...filterSelectStyle,
+                  border: `1px solid ${filterCatalogSource ? tokens.greenBadgeBorder : BORDER}`,
+                  color: filterCatalogSource ? TEXT_PRIMARY : TEXT_SECONDARY,
+                }}
+              >
+                <option value="">Any source</option>
+                <option value="local">Local</option>
+                {catalogSources.map((cs) => (
+                  <option key={cs.source} value={cs.source}>
+                    {cs.source} ({cs.count})
+                  </option>
+                ))}
+              </select>
             </div>
           )}
         </div>

@@ -114,7 +114,8 @@ function ExercisePicker({
     force: fForce || undefined,
     tag: fTag || undefined,
     pose_type: fPoseType || undefined,
-    catalog_source: fCatalogSource || undefined,
+    source: fCatalogSource === "local" ? "user" : fCatalogSource ? "catalog" : undefined,
+    catalog_source: fCatalogSource && fCatalogSource !== "local" ? fCatalogSource : undefined,
     limit: PICKER_PAGE_SIZE,
     offset: page * PICKER_PAGE_SIZE,
   }), [search, fCategory, fEquipment, fLevel, fMuscle, fForce, fTag, fPoseType, fCatalogSource, page]);
@@ -253,24 +254,23 @@ function ExercisePicker({
           <PickerFilterSelect value={fForce} onChange={setFForce} placeholder="Force" options={EXERCISE_FORCES} />
           <PickerFilterSelect value={fTag} onChange={setFTag} placeholder="Tag" options={EXERCISE_TAGS} />
           <PickerFilterSelect value={fPoseType} onChange={setFPoseType} placeholder="Pose type" options={EXERCISE_POSE_TYPES} />
-          {catalogSources.length > 0 && (
-            <select
-              value={fCatalogSource}
-              onChange={(e) => setFCatalogSource(e.target.value)}
-              style={{
-                ...pickerFilterSelectStyle,
-                border: `1px solid ${fCatalogSource ? tokens.greenBadgeBorder : tokens.border}`,
-                color: fCatalogSource ? tokens.textPrimary : tokens.textSecondary,
-              }}
-            >
-              <option value="">Any source</option>
-              {catalogSources.map((cs) => (
-                <option key={cs.source} value={cs.source}>
-                  {cs.source} ({cs.count})
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            value={fCatalogSource}
+            onChange={(e) => setFCatalogSource(e.target.value)}
+            style={{
+              ...pickerFilterSelectStyle,
+              border: `1px solid ${fCatalogSource ? tokens.greenBadgeBorder : tokens.border}`,
+              color: fCatalogSource ? tokens.textPrimary : tokens.textSecondary,
+            }}
+          >
+            <option value="">Any source</option>
+            <option value="local">Local</option>
+            {catalogSources.map((cs) => (
+              <option key={cs.source} value={cs.source}>
+                {cs.source} ({cs.count})
+              </option>
+            ))}
+          </select>
         </div>
       )}
 
