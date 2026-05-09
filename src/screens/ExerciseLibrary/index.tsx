@@ -253,12 +253,14 @@ function FilterSelect({
 
 function AddToSetModal({
   exercise,
+  initialSetId,
   onClose,
   onAdded,
 }: {
   exercise: Exercise;
+  initialSetId: string | null;
   onClose: () => void;
-  onAdded: (setName: string) => void;
+  onAdded: (setName: string, setId: string) => void;
 }) {
   const qc = useQueryClient();
   const { data: sets = [], isLoading } = useQuery({
@@ -269,14 +271,22 @@ function AddToSetModal({
   // (forked) sets at the SQL layer, but make the intent explicit here.
   const librarySets = sets.filter((s) => s.owning_workout_template_id == null);
 
-  const [setId, setSetId] = useState("");
+  const [setId, setSetId] = useState(initialSetId ?? "");
   const [durationStr, setDurationStr] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!setId && librarySets.length > 0) setSetId(librarySets[0].id);
-  }, [librarySets, setId]);
+    if (librarySets.length === 0) {
+      if (setId) setSetId("");
+      return;
+    }
+    if (librarySets.some((s) => s.id === setId)) return;
+    const rememberedSet = initialSetId
+      ? librarySets.find((s) => s.id === initialSetId)
+      : null;
+    setSetId((rememberedSet ?? librarySets[0]).id);
+  }, [initialSetId, librarySets, setId]);
 
   const addMut = useMutation({
     mutationFn: (params: {
@@ -295,7 +305,7 @@ function AddToSetModal({
       qc.invalidateQueries({ queryKey: ["set-templates"] });
       qc.invalidateQueries({ queryKey: ["set-template", setId] });
       const target = librarySets.find((s) => s.id === setId);
-      onAdded(target?.name ?? "set");
+      onAdded(target?.name ?? "set", setId);
       onClose();
     },
     onError: (e) => setError(String(e)),
@@ -445,6 +455,7 @@ export default function ExerciseLibrary() {
   const [modal, setModal] = useState<Modal | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [lastAddToSetId, setLastAddToSetId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -789,8 +800,12 @@ export default function ExerciseLibrary() {
       {modal?.type === "addToSet" && (
         <AddToSetModal
           exercise={modal.exercise}
+          initialSetId={lastAddToSetId}
           onClose={() => setModal(null)}
-          onAdded={(setName) => setToastMessage(`Added to "${setName}"`)}
+          onAdded={(setName, setId) => {
+            setLastAddToSetId(setId);
+            setToastMessage(`Added to "${setName}"`);
+          }}
         />
       )}
 
