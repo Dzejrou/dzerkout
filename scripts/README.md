@@ -88,7 +88,7 @@ Converts a yoga pose dataset into dzerkout library JSON format for evaluation an
 
 - Data file: `vendor/yoga/yoga_poses.json` (gitignored)
 - License: **not yet documented** — drop a `LICENSE` / `README.md` into `vendor/yoga/` before shipping anything that depends on this output.
-- The dataset's `photo_url` values point at `pocketyoga.com` (a commercial app's CDN). Those URLs are **intentionally not used** by this generator — `image_url` is always `null` in the output.
+- The dataset's `photo_url` values point at `pocketyoga.com` (a commercial app's CDN). The generator does **not** embed those URLs into `image_url`. Instead it checks for a locally-downloaded copy at `public/catalog/yoga-poses/<catalog_id>.png` and emits `image_url: "catalog/yoga-poses/<catalog_id>.png"` (app-relative, **no leading slash**) only if that file exists. If the file is missing, `image_url` stays `null`. Run `npm run download:yoga-images` first to populate the local images (mac/dev only — see [Local yoga pose images](#local-yoga-pose-images-mac--dev-only) below).
 
 ### Generate
 
@@ -121,7 +121,7 @@ node scripts/generate-yoga-poses-library.mjs \
 
 - `category` = `"yoga"`, `equipment` = `"none"`, `tags` = `["mobility", "yoga"]`.
 - `expertise_level` is mapped: `Beginner → beginner`, `Intermediate → intermediate`, `Advanced → expert`. Empty/unknown becomes `null`.
-- `image_url` is **always `null`**. Source `photo_url` points at `pocketyoga.com` and is not redistributed.
+- `image_url` is `"catalog/yoga-poses/<catalog_id>.png"` (app-relative, **no leading slash** — see note below) when a local image exists at `public/catalog/yoga-poses/<catalog_id>.png`, otherwise `null`. Source `photo_url` points at `pocketyoga.com` and is **not** redistributed via the generated JSON.
 - `pose_type` is emitted as first-class metadata via the `pose_types` array, normalized to the DB enum (e.g. `"Standing"` → `"standing"`, `"Forward Bend"` → `"forward_bend"`).
 - `sanskrit_name` is emitted as a first-class field on the exercise (no longer folded into `notes`). The free-exercise-db generator emits `sanskrit_name: null` so both catalogs share the same shape.
 - When a yoga pose name collides with a free-exercise-db exercise name, the display name gets ` (Yoga)` appended (driven by the catalog's `duplicateSuffix`). The `id` and `catalog_id` are unaffected.
@@ -133,6 +133,40 @@ node scripts/generate-yoga-poses-library.mjs \
 1. Open the app.
 2. Go to **Settings → Data → Import**.
 3. Select the generated JSON file.
+
+---
+
+## Local yoga pose images (mac / dev only)
+
+`scripts/download-yoga-pose-images.mjs` downloads each pose's `photo_url` from `vendor/yoga/yoga_poses.json` into `public/catalog/yoga-poses/<catalog_id>.png`. The yoga generator then references those local files via `image_url`, and the Exercise Library detail pane renders them.
+
+> ⚠️ **Mac / dev only.** `public/catalog/` is gitignored, never committed, and stripped from Android APKs at build time (see "Android exclusion" below). Do not redistribute the downloaded images — they come from `pocketyoga.com` and are stored locally as a development convenience only.
+
+### Workflow
+
+```sh
+npm run download:yoga-images   # populates public/catalog/yoga-poses/
+npm run generate:yoga-poses    # emits scripts/generated/yoga-poses-library.json with image_url set
+# then import scripts/generated/yoga-poses-library.json via Settings → Data → Import
+```
+
+The downloader is **idempotent**: existing files are skipped by default. Pass `--force` to re-download, or `--limit <n>` to fetch only the first N poses (useful for smoke-testing).
+
+### Why `image_url` is app-relative (no leading slash)
+
+Generated `image_url` values look like `catalog/yoga-poses/big-toe-pose.png`, **not** `/catalog/yoga-poses/big-toe-pose.png`. Tauri serves the bundled web app from a non-root base URL on mac, so absolute `/catalog/...` paths fail to resolve in the webview and the image silently 404s. App-relative paths resolve correctly against the served document base in both `vite dev` and the packaged Tauri bundle.
+
+Per-image failures (HTTP errors, missing `photo_url`, network timeouts) are tolerated — the script logs counts and continues. A pose without a downloaded image still imports normally; the detail pane simply omits the image. The script exits non-zero only on structural errors (missing input JSON, unwritable output dir).
+
+### Android exclusion
+
+Vite copies everything under `public/` into the build output, which Tauri then bundles into both desktop binaries and Android APKs. To keep these images out of the APK:
+
+- `vite.config.ts` registers a small `closeBundle` plugin that detects `TAURI_ENV_PLATFORM=android` (set automatically by `tauri android build/dev`) and removes `dist/catalog/` after the bundle is written.
+- The plugin is a no-op for desktop / `vite dev` builds, so mac and dev workflows keep the images.
+- If you ever rename `public/catalog/`, update the path in `vite.config.ts` to match — otherwise the images will leak into the APK.
+
+There is no per-file allowlist; everything under `public/catalog/` is treated as local-dev-only catalog assets.
 
 ---
 

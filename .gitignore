@@ -18,6 +18,10 @@ dist-ssr/
 vendor/
 scripts/generated/
 
+# Locally downloaded catalog images — mac/dev only, never committed.
+# See scripts/README.md and vite.config.ts for the Android exclusion mechanism.
+public/catalog/
+
 logs/
 *.log
 npm-debug.log*

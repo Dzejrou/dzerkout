@@ -12,7 +12,8 @@
     "android:build:debug": "tauri android build --apk --debug",
     "android:build:release": "tauri android build --apk",
     "generate:free-exercise-db": "node scripts/generate-free-exercise-db-library.mjs",
-    "generate:yoga-poses": "node scripts/generate-yoga-poses-library.mjs"
+    "generate:yoga-poses": "node scripts/generate-yoga-poses-library.mjs",
+    "download:yoga-images": "node scripts/download-yoga-pose-images.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

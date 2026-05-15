@@ -6,8 +6,14 @@
  * (schema: "dzerkout.library", version 1).
  *
  * Notes:
- *   - photo_url values point at pocketyoga.com and are intentionally NOT used;
- *     image_url is always null in the output.
+ *   - Source `photo_url` values point at pocketyoga.com and are not used
+ *     directly. Run `npm run download:yoga-images` first to populate local
+ *     copies in public/catalog/yoga-poses/<catalog_id>.png; this generator
+ *     then sets `image_url` to `catalog/yoga-poses/<catalog_id>.png` (no
+ *     leading slash — Tauri serves the bundled app at a non-root base, so
+ *     absolute `/...` paths break in the mac/Tauri webview) when the local
+ *     file exists, otherwise emits `image_url: null`. Local images are
+ *     mac/dev only and are excluded from Android APKs (see scripts/README.md).
  *   - pose_type is emitted as first-class metadata via the pose_types array,
  *     using normalized DB enum values (e.g. "Standing" → "standing").
  *   - Sanskrit name is emitted as the structured `sanskrit_name` field (no
@@ -46,6 +52,10 @@ const OUTPUT_PATH = resolve(
   flag("--output") ?? "scripts/generated/yoga-poses-library.json",
 );
 const MAX = flag("--max") ? parseInt(flag("--max"), 10) : null;
+const LOCAL_IMAGES_DIR = resolve(ROOT, "public/catalog/yoga-poses");
+// App-relative path (no leading slash) — Tauri's mac webview loads the bundled
+// app from a non-root base, so absolute `/catalog/...` paths fail to resolve.
+const LOCAL_IMAGE_URL_PREFIX = "catalog/yoga-poses";
 
 // ── Valid enum sets (mirrors Rust domain/types.rs) ────────────────────────────
 
@@ -210,6 +220,8 @@ const skipped = [];
 const exercises = [];
 const seenSlugs = new Map();
 const disambiguated = [];
+let imagesPresent = 0;
+let imagesMissing = 0;
 
 for (let idx = 0; idx < raw.length; idx++) {
   const src = raw[idx];
@@ -264,12 +276,21 @@ for (let idx = 0; idx < raw.length; idx++) {
     disambiguated.push({ original: name, final: displayName });
   }
 
+  const localImagePath = resolve(LOCAL_IMAGES_DIR, `${slug}.png`);
+  let imageUrl = null;
+  if (existsSync(localImagePath)) {
+    imageUrl = `${LOCAL_IMAGE_URL_PREFIX}/${slug}.png`;
+    imagesPresent++;
+  } else {
+    imagesMissing++;
+  }
+
   exercises.push({
     id: uuidV5(NS_OID, `${CATALOG.source}:${slug}`),
     name: displayName,
     notes,
     tags: [...TAGS],
-    image_url: null,
+    image_url: imageUrl,
     catalog_source: CATALOG.source,
     catalog_id: slug,
     is_catalog: true,
@@ -339,6 +360,8 @@ if (MAX && exercises.length > MAX) {
 }
 console.log(`  Output path:        ${OUTPUT_PATH}`);
 console.log(`  Output size:        ${fileSizeKb} KB`);
+console.log(`  Local images:       ${imagesPresent} present, ${imagesMissing} missing`);
+console.log(`    (run \`npm run download:yoga-images\` to populate ${LOCAL_IMAGES_DIR})`);
 
 console.log("\n  By level:");
 for (const [lv, n] of tally(finalExercises, "level")) {

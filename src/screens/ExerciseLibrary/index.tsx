@@ -53,6 +53,9 @@ function DetailPane({
     }
   }
 
+  const [imageBroken, setImageBroken] = useState(false);
+  useEffect(() => { setImageBroken(false); }, [exercise.image_url]);
+
   return (
     <div style={detailRootStyle}>
       {/* Header */}
@@ -80,6 +83,18 @@ function DetailPane({
       </div>
 
       <div style={detailDividerStyle} />
+
+      {/* Image (when present and loadable) */}
+      {exercise.image_url && !imageBroken && (
+        <div style={detailImageWrapStyle}>
+          <img
+            src={exercise.image_url}
+            alt={exercise.name}
+            style={detailImageStyle}
+            onError={() => setImageBroken(true)}
+          />
+        </div>
+      )}
 
       {/* Tags section */}
       <section style={detailSectionStyle}>
@@ -1109,6 +1124,26 @@ const detailDividerStyle: React.CSSProperties = {
   height: 1,
   background: DIVIDER,
   margin: "0 0 20px",
+};
+
+const detailImageWrapStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  background: CARD,
+  border: `1px solid ${BORDER}`,
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 20,
+  maxHeight: 280,
+  overflow: "hidden",
+};
+
+const detailImageStyle: React.CSSProperties = {
+  display: "block",
+  maxWidth: "100%",
+  maxHeight: 256,
+  objectFit: "contain",
 };
 
 const detailSectionStyle: React.CSSProperties = {
