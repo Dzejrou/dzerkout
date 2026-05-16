@@ -1,7 +1,7 @@
 {
   "schema": "dzerkout.library",
   "version": 1,
-  "exported_at": "2026-05-16T17:19:07.587401+00:00",
+  "exported_at": "2026-05-16T17:30:07.314618+00:00",
   "exercises": [
     {
       "id": "6d2c9c9b-5642-517b-92fa-dfdf7d9985cb",
@@ -10205,6 +10205,45 @@
         "balancing",
         "standing"
       ]
+    },
+    {
+      "id": "07940378-8e24-48f6-a3ac-24ab84d824e7",
+      "name": "Hindu Push-up",
+      "notes": null,
+      "tags": [
+        "cardio",
+        "core",
+        "mobility",
+        "pull",
+        "push",
+        "yoga"
+      ],
+      "image_url": null,
+      "image_urls_json": null,
+      "catalog_source": null,
+      "catalog_id": null,
+      "is_catalog": false,
+      "category": "cardio",
+      "equipment": "body only",
+      "level": "intermediate",
+      "mechanic": "compound",
+      "force": null,
+      "instructions_json": "[\"Downward facing dog\",\"Chaturanga\",\"High cobra\",\"High plank\"]",
+      "sanskrit_name": "Sadharan Dand",
+      "primary_muscles": [
+        "chest",
+        "shoulders",
+        "triceps"
+      ],
+      "secondary_muscles": [
+        "forearms",
+        "glutes",
+        "hamstrings",
+        "lower back",
+        "middle back",
+        "quadriceps"
+      ],
+      "pose_types": []
     },
     {
       "id": "ff08f403-1d6b-5902-8a78-734803580058",
