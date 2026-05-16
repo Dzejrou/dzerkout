@@ -66,8 +66,17 @@ node scripts/generate-free-exercise-db-library.mjs \
 
 - `scripts/generated/free-exercise-db-library.json` (gitignored)
 - Schema: `dzerkout.library` version 1 — identical to a manual library export from the app
+- `image_url` and `image_urls_json` are populated from local files under `public/catalog/free-exercise-db/<catalog_id>/` when present; both stay `null` when no local images exist. See [Local free-exercise-db images](#local-free-exercise-db-images-mac--dev-only) below for the copy workflow.
 
 The generated file is **not** automatically used by the app. It is a standalone JSON file for evaluation.
+
+### Workflow with local images (mac/dev only)
+
+```sh
+npm run copy:free-exercise-db-images   # populates public/catalog/free-exercise-db/
+npm run generate:free-exercise-db      # emits JSON with image_url + image_urls_json set
+# then import scripts/generated/free-exercise-db-library.json via Settings → Data → Import
+```
 
 ### Import for evaluation
 
@@ -167,6 +176,32 @@ Vite copies everything under `public/` into the build output, which Tauri then b
 - If you ever rename `public/catalog/`, update the path in `vite.config.ts` to match — otherwise the images will leak into the APK.
 
 There is no per-file allowlist; everything under `public/catalog/` is treated as local-dev-only catalog assets.
+
+---
+
+## Local free-exercise-db images (mac / dev only)
+
+`scripts/copy-free-exercise-db-images.mjs` copies each exercise's image files from the gitignored vendor checkout (`vendor/free-exercise-db/exercises/<src.id>/<basename>`) into `public/catalog/free-exercise-db/<catalog_id>/<basename>`. The free-exercise-db generator then references those local files via `image_url` (first image) and `image_urls_json` (full ordered array of locally-present images), and the Exercise Library detail pane renders them as a vertical stack.
+
+> ⚠️ **Mac / dev only.** `public/catalog/` is gitignored, never committed, and stripped from Android APKs at build time (see Android exclusion below). The free-exercise-db source itself is Unlicense / public domain, but we still don't ship the images inside Android binaries — keep parity with the yoga images and avoid bloating the APK.
+
+### Workflow
+
+```sh
+npm run copy:free-exercise-db-images   # populates public/catalog/free-exercise-db/
+npm run generate:free-exercise-db      # emits JSON with image_url + image_urls_json set
+# then import scripts/generated/free-exercise-db-library.json via Settings → Data → Import
+```
+
+The copier is **idempotent**: existing destination files are skipped by default. Pass `--force` to overwrite, or `--limit <n>` to copy only the first N exercises' images (useful for smoke-testing).
+
+### Multi-image support: `image_urls_json`
+
+Free-exercise-db ships **two images per exercise** (`0.jpg`, `1.jpg`). The generator emits both into a JSON-stringified array stored in `image_urls_json`, e.g. `'["catalog/free-exercise-db/3_4_Sit-Up/0.jpg","catalog/free-exercise-db/3_4_Sit-Up/1.jpg"]'`. The detail pane parses this and renders each image one below the other; if a single image fails to load, only that image is hidden, not the whole stack. The single-image `image_url` column is still set to the first image so older code paths and exports remain valid.
+
+### Android exclusion
+
+The same `closeBundle` plugin in `vite.config.ts` that strips `dist/catalog/yoga-poses/` also strips `dist/catalog/free-exercise-db/`. No additional configuration needed — the plugin removes all of `dist/catalog/` for Android builds.
 
 ---
 

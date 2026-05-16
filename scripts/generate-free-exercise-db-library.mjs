@@ -5,6 +5,16 @@
  * Converts vendor/free-exercise-db/dist/exercises.json into dzerkout library
  * JSON format (schema: "dzerkout.library", version 1).
  *
+ * Local image wiring (mac/dev only):
+ *   For each exercise we look up `public/catalog/free-exercise-db/<src.id>/<basename>`
+ *   for every image listed in the source. Run `npm run copy:free-exercise-db-images`
+ *   first to populate that tree. The generator then sets:
+ *     - `image_url` to the first existing local path (or null)
+ *     - `image_urls_json` to a JSON-stringified array of all existing local
+ *       paths (or null)
+ *   Local images are excluded from Android APKs by vite.config.ts.
+ *
+
  * Usage:
  *   node scripts/generate-free-exercise-db-library.mjs [options]
  *
@@ -37,6 +47,10 @@ function flag(name) {
 const INPUT_PATH = resolve(ROOT, "vendor/free-exercise-db/dist/exercises.json");
 const OUTPUT_PATH = resolve(ROOT, flag("--output") ?? "scripts/generated/free-exercise-db-library.json");
 const MAX = flag("--max") ? parseInt(flag("--max"), 10) : null;
+const LOCAL_IMAGES_DIR = resolve(ROOT, "public/catalog/free-exercise-db");
+// App-relative path (no leading slash) — Tauri's mac webview loads the bundled
+// app from a non-root base, so absolute `/catalog/...` paths fail to resolve.
+const LOCAL_IMAGE_URL_PREFIX = "catalog/free-exercise-db";
 
 const DEFAULT_EXCLUDE = ["strongman", "olympic weightlifting"];
 const excludeRaw = flag("--exclude-category");
@@ -134,6 +148,9 @@ console.log(`\nSource exercises loaded: ${raw.length}`);
 
 const skipped = [];
 const exercises = [];
+let exercisesWithImages = 0;
+let exercisesWithoutImages = 0;
+let totalImageFiles = 0;
 
 for (const src of raw) {
   // Category filter
@@ -190,12 +207,36 @@ for (const src of raw) {
   const instructionsJson =
     instructions.length > 0 ? JSON.stringify(instructions) : null;
 
+  // Resolve local catalog images. Source `images` are paths like
+  // `<src.id>/0.jpg`; the copy script writes them to
+  // `public/catalog/free-exercise-db/<src.id>/<basename>`.
+  const sourceImages = Array.isArray(src.images) ? src.images : [];
+  const localImageUrls = [];
+  for (const relPath of sourceImages) {
+    if (typeof relPath !== "string" || relPath.trim() === "") continue;
+    const basename = relPath.split("/").pop();
+    if (!basename) continue;
+    const localPath = resolve(LOCAL_IMAGES_DIR, src.id, basename);
+    if (existsSync(localPath)) {
+      localImageUrls.push(`${LOCAL_IMAGE_URL_PREFIX}/${src.id}/${basename}`);
+    }
+  }
+  if (localImageUrls.length > 0) {
+    exercisesWithImages++;
+    totalImageFiles += localImageUrls.length;
+  } else {
+    exercisesWithoutImages++;
+  }
+  const imageUrl = localImageUrls.length > 0 ? localImageUrls[0] : null;
+  const imageUrlsJson = localImageUrls.length > 0 ? JSON.stringify(localImageUrls) : null;
+
   exercises.push({
     id: catalogId(src.id),
     name: src.name,
     notes: null,
     tags: deriveTags(src),
-    image_url: null,
+    image_url: imageUrl,
+    image_urls_json: imageUrlsJson,
     catalog_source: CATALOG.source,
     catalog_id: src.id,
     is_catalog: true,
@@ -265,6 +306,8 @@ if (MAX && exercises.length > MAX) {
 }
 console.log(`  Output path:        ${OUTPUT_PATH}`);
 console.log(`  Output size:        ${fileSizeKb} KB`);
+console.log(`  Local images:       ${exercisesWithImages} exercises with images, ${exercisesWithoutImages} without; ${totalImageFiles} files referenced`);
+console.log(`    (run \`npm run copy:free-exercise-db-images\` to populate ${LOCAL_IMAGES_DIR})`);
 
 console.log("\n  By category:");
 for (const [cat, n] of tally(finalExercises, "category")) {

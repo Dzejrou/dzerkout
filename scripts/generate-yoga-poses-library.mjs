@@ -291,6 +291,7 @@ for (let idx = 0; idx < raw.length; idx++) {
     notes,
     tags: [...TAGS],
     image_url: imageUrl,
+    image_urls_json: imageUrl ? JSON.stringify([imageUrl]) : null,
     catalog_source: CATALOG.source,
     catalog_id: slug,
     is_catalog: true,

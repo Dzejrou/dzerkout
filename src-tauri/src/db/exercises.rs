@@ -11,7 +11,7 @@ use std::collections::HashMap;
 pub async fn find_all(pool: &SqlitePool) -> Result<Vec<ExerciseRow>, sqlx::Error> {
     sqlx::query_as!(
         ExerciseRow,
-        "SELECT id, name, notes, image_url,
+        "SELECT id, name, notes, image_url, image_urls_json,
                 catalog_source, catalog_id, is_catalog,
                 category, equipment, level, mechanic, force, instructions_json,
                 sanskrit_name,
@@ -28,7 +28,7 @@ pub async fn find_by_id(
 ) -> Result<Option<ExerciseRow>, sqlx::Error> {
     sqlx::query_as!(
         ExerciseRow,
-        "SELECT id, name, notes, image_url,
+        "SELECT id, name, notes, image_url, image_urls_json,
                 catalog_source, catalog_id, is_catalog,
                 category, equipment, level, mechanic, force, instructions_json,
                 sanskrit_name,
@@ -57,7 +57,7 @@ pub async fn insert(
              sanskrit_name
          )
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         RETURNING id, name, notes, image_url,
+         RETURNING id, name, notes, image_url, image_urls_json,
                    catalog_source, catalog_id, is_catalog,
                    category, equipment, level, mechanic, force, instructions_json,
                    sanskrit_name,
@@ -90,7 +90,7 @@ pub async fn update(
         ExerciseRow,
         "UPDATE exercises SET name = ?, notes = ?
          WHERE id = ?
-         RETURNING id, name, notes, image_url,
+         RETURNING id, name, notes, image_url, image_urls_json,
                    catalog_source, catalog_id, is_catalog,
                    category, equipment, level, mechanic, force, instructions_json,
                    sanskrit_name,
@@ -519,7 +519,7 @@ pub async fn search(
     let count_sql =
         format!("SELECT COUNT(DISTINCT e.id) as cnt FROM exercises e{joins}{where_sql}");
     let data_sql = format!(
-        "SELECT DISTINCT e.id, e.name, e.notes, e.image_url,
+        "SELECT DISTINCT e.id, e.name, e.notes, e.image_url, e.image_urls_json,
                 e.catalog_source, e.catalog_id, e.is_catalog,
                 e.category, e.equipment, e.level, e.mechanic, e.force, e.instructions_json,
                 e.sanskrit_name,

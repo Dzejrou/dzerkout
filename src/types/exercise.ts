@@ -3,6 +3,10 @@ export interface Exercise {
   name: string;
   notes: string | null;
   image_url: string | null;
+  /** JSON-encoded array of image URL strings, e.g.
+   *  `'["catalog/foo/0.jpg","catalog/foo/1.jpg"]'`. Null when no
+   *  multi-image set is stored; UI falls back to `image_url` in that case. */
+  image_urls_json: string | null;
   tags: string[];
   catalog_source: string | null;
   catalog_id: string | null;

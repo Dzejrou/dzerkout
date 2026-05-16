@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, name, notes, image_url,\n                catalog_source, catalog_id, is_catalog,\n                category, equipment, level, mechanic, force, instructions_json,\n                sanskrit_name,\n                created_at, updated_at\n         FROM exercises WHERE id = ?",
+  "query": "SELECT id, name, notes, image_url, image_urls_json,\n                catalog_source, catalog_id, is_catalog,\n                category, equipment, level, mechanic, force, instructions_json,\n                sanskrit_name,\n                created_at, updated_at\n         FROM exercises ORDER BY name",
   "describe": {
     "columns": [
       {
@@ -24,72 +24,78 @@
         "type_info": "Text"
       },
       {
-        "name": "catalog_source",
+        "name": "image_urls_json",
         "ordinal": 4,
         "type_info": "Text"
       },
       {
-        "name": "catalog_id",
+        "name": "catalog_source",
         "ordinal": 5,
         "type_info": "Text"
       },
       {
-        "name": "is_catalog",
+        "name": "catalog_id",
         "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_catalog",
+        "ordinal": 7,
         "type_info": "Integer"
       },
       {
         "name": "category",
-        "ordinal": 7,
-        "type_info": "Text"
-      },
-      {
-        "name": "equipment",
         "ordinal": 8,
         "type_info": "Text"
       },
       {
-        "name": "level",
+        "name": "equipment",
         "ordinal": 9,
         "type_info": "Text"
       },
       {
-        "name": "mechanic",
+        "name": "level",
         "ordinal": 10,
         "type_info": "Text"
       },
       {
-        "name": "force",
+        "name": "mechanic",
         "ordinal": 11,
         "type_info": "Text"
       },
       {
-        "name": "instructions_json",
+        "name": "force",
         "ordinal": 12,
         "type_info": "Text"
       },
       {
-        "name": "sanskrit_name",
+        "name": "instructions_json",
         "ordinal": 13,
         "type_info": "Text"
       },
       {
-        "name": "created_at",
+        "name": "sanskrit_name",
         "ordinal": 14,
         "type_info": "Text"
       },
       {
-        "name": "updated_at",
+        "name": "created_at",
         "ordinal": 15,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 16,
         "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 0
     },
     "nullable": [
       false,
       false,
+      true,
       true,
       true,
       true,
@@ -106,5 +112,5 @@
       false
     ]
   },
-  "hash": "7cb8ee3b2c13ea155b7fa8605dac2b090b9182c44ed938bae14025d9480893ac"
+  "hash": "8890bd53f26bfafa1893e346cde0dcaeaa97fd69e4a864877c999998497d0ad2"
 }

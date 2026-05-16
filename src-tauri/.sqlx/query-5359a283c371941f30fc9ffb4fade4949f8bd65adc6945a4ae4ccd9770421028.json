@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO exercises\n                 (id, name, notes, image_url, image_urls_json,\n                  catalog_source, catalog_id, is_catalog,\n                  category, equipment, level, mechanic, force, instructions_json,\n                  sanskrit_name)\n             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n             ON CONFLICT(id) DO UPDATE SET\n               name              = excluded.name,\n               notes             = excluded.notes,\n               image_url         = excluded.image_url,\n               image_urls_json   = excluded.image_urls_json,\n               catalog_source    = excluded.catalog_source,\n               catalog_id        = excluded.catalog_id,\n               is_catalog        = excluded.is_catalog,\n               category          = excluded.category,\n               equipment         = excluded.equipment,\n               level             = excluded.level,\n               mechanic          = excluded.mechanic,\n               force             = excluded.force,\n               instructions_json = excluded.instructions_json,\n               sanskrit_name     = excluded.sanskrit_name",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 15
+    },
+    "nullable": []
+  },
+  "hash": "5359a283c371941f30fc9ffb4fade4949f8bd65adc6945a4ae4ccd9770421028"
+}

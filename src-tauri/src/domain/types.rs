@@ -134,6 +134,10 @@ pub struct ExerciseRow {
     pub name: String,
     pub notes: Option<String>,
     pub image_url: Option<String>,
+    /// JSON array of image URL strings, e.g. `["catalog/foo/0.jpg", "catalog/foo/1.jpg"]`.
+    /// NULL when the exercise has no multi-image set; the renderer falls back
+    /// to `image_url` in that case. Validated in the domain layer before write.
+    pub image_urls_json: Option<String>,
     pub catalog_source: Option<String>,
     pub catalog_id: Option<String>,
     pub is_catalog: i64,
@@ -155,6 +159,7 @@ pub struct Exercise {
     pub name: String,
     pub notes: Option<String>,
     pub image_url: Option<String>,
+    pub image_urls_json: Option<String>,
     pub tags: Vec<String>,
     pub catalog_source: Option<String>,
     pub catalog_id: Option<String>,
@@ -186,6 +191,7 @@ impl Exercise {
             name: row.name,
             notes: row.notes,
             image_url: row.image_url,
+            image_urls_json: row.image_urls_json,
             tags,
             catalog_source: row.catalog_source,
             catalog_id: row.catalog_id,

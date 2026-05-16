@@ -305,6 +305,187 @@ async fn test_import_without_sanskrit_name_succeeds(pool: SqlitePool) {
     assert!(stored[0].sanskrit_name.is_none());
 }
 
+/// image_urls_json round-trips through export → import.
+#[sqlx::test]
+async fn test_image_urls_json_roundtrip(pool: SqlitePool) {
+    let json = r#"{
+      "schema": "dzerkout.library",
+      "version": 1,
+      "exported_at": "2024-01-01T00:00:00Z",
+      "exercises": [{
+        "id": "fed-multi-1",
+        "name": "Multi Image",
+        "notes": null,
+        "tags": [],
+        "image_url": "catalog/free-exercise-db/multi/0.jpg",
+        "image_urls_json": "[\"catalog/free-exercise-db/multi/0.jpg\",\"catalog/free-exercise-db/multi/1.jpg\"]",
+        "catalog_source": "free-exercise-db",
+        "catalog_id": "multi",
+        "is_catalog": true,
+        "category": null,
+        "equipment": null,
+        "level": null,
+        "mechanic": null,
+        "force": null,
+        "instructions_json": null,
+        "primary_muscles": [],
+        "secondary_muscles": [],
+        "pose_types": []
+      }],
+      "set_templates": [],
+      "workout_templates": [],
+      "sessions": [],
+      "session_sets": [],
+      "session_exercises": []
+    }"#;
+
+    library::import_library_json(&pool, json).await.unwrap();
+
+    let stored = exercise::list(&pool).await.unwrap();
+    assert_eq!(stored.len(), 1);
+    let raw = stored[0].image_urls_json.as_deref().expect("image_urls_json stored");
+    let parsed: Vec<String> = serde_json::from_str(raw).unwrap();
+    assert_eq!(parsed, vec![
+        "catalog/free-exercise-db/multi/0.jpg".to_string(),
+        "catalog/free-exercise-db/multi/1.jpg".to_string(),
+    ]);
+
+    let exported = library::export_full_library(&pool).await.unwrap();
+    assert!(exported.contains("\"image_urls_json\""));
+    assert!(exported.contains("multi/1.jpg"));
+}
+
+/// Old payloads without `image_urls_json` still import — defaults to None.
+#[sqlx::test]
+async fn test_import_without_image_urls_json_succeeds(pool: SqlitePool) {
+    let ex = catalog_exercise("fed-old-1", "Old Exercise", "free-exercise-db", "old-1");
+    let catalog = catalog_json(&[ex]);
+    library::import_library_json(&pool, &catalog).await.unwrap();
+
+    let stored = exercise::list(&pool).await.unwrap();
+    assert_eq!(stored.len(), 1);
+    assert!(stored[0].image_urls_json.is_none());
+}
+
+/// Malformed JSON in image_urls_json is rejected at the import boundary.
+#[sqlx::test]
+async fn test_import_rejects_malformed_image_urls_json(pool: SqlitePool) {
+    let ex = format!(
+        r#"{{
+          "id": "fed-bad-json",
+          "name": "Bad JSON",
+          "notes": null,
+          "tags": [],
+          "image_url": null,
+          "image_urls_json": "not-json",
+          "catalog_source": "free-exercise-db",
+          "catalog_id": "bad-json",
+          "is_catalog": true,
+          "category": null,
+          "equipment": null,
+          "level": null,
+          "mechanic": null,
+          "force": null,
+          "instructions_json": null,
+          "primary_muscles": [],
+          "secondary_muscles": [],
+          "pose_types": []
+        }}"#
+    );
+    let catalog = catalog_json(&[ex]);
+    let err = library::import_library_json(&pool, &catalog).await.unwrap_err();
+    assert!(matches!(err, AppError::Validation(_)));
+}
+
+/// image_urls_json must be a JSON array (not an object/number/string).
+#[sqlx::test]
+async fn test_import_rejects_non_array_image_urls_json(pool: SqlitePool) {
+    let ex = format!(
+        r#"{{
+          "id": "fed-bad-shape",
+          "name": "Bad Shape",
+          "notes": null,
+          "tags": [],
+          "image_url": null,
+          "image_urls_json": "{{\"k\":\"v\"}}",
+          "catalog_source": "free-exercise-db",
+          "catalog_id": "bad-shape",
+          "is_catalog": true,
+          "category": null,
+          "equipment": null,
+          "level": null,
+          "mechanic": null,
+          "force": null,
+          "instructions_json": null,
+          "primary_muscles": [],
+          "secondary_muscles": [],
+          "pose_types": []
+        }}"#
+    );
+    let catalog = catalog_json(&[ex]);
+    let err = library::import_library_json(&pool, &catalog).await.unwrap_err();
+    assert!(matches!(err, AppError::Validation(_)));
+}
+
+/// image_urls_json array elements must be non-empty strings.
+#[sqlx::test]
+async fn test_import_rejects_image_urls_json_with_non_string_element(pool: SqlitePool) {
+    let ex = format!(
+        r#"{{
+          "id": "fed-non-str",
+          "name": "Non String",
+          "notes": null,
+          "tags": [],
+          "image_url": null,
+          "image_urls_json": "[\"ok.jpg\", 5]",
+          "catalog_source": "free-exercise-db",
+          "catalog_id": "non-str",
+          "is_catalog": true,
+          "category": null,
+          "equipment": null,
+          "level": null,
+          "mechanic": null,
+          "force": null,
+          "instructions_json": null,
+          "primary_muscles": [],
+          "secondary_muscles": [],
+          "pose_types": []
+        }}"#
+    );
+    let catalog = catalog_json(&[ex]);
+    let err = library::import_library_json(&pool, &catalog).await.unwrap_err();
+    assert!(matches!(err, AppError::Validation(_)));
+}
+
+#[sqlx::test]
+async fn test_import_rejects_image_urls_json_with_empty_string(pool: SqlitePool) {
+    let ex = format!(
+        r#"{{
+          "id": "fed-empty-str",
+          "name": "Empty String",
+          "notes": null,
+          "tags": [],
+          "image_url": null,
+          "image_urls_json": "[\"ok.jpg\", \"\"]",
+          "catalog_source": "free-exercise-db",
+          "catalog_id": "empty-str",
+          "is_catalog": true,
+          "category": null,
+          "equipment": null,
+          "level": null,
+          "mechanic": null,
+          "force": null,
+          "instructions_json": null,
+          "primary_muscles": [],
+          "secondary_muscles": [],
+          "pose_types": []
+        }}"#
+    );
+    let catalog = catalog_json(&[ex]);
+    let err = library::import_library_json(&pool, &catalog).await.unwrap_err();
+    assert!(matches!(err, AppError::Validation(_)));
+}
+
 /// Within a single import payload, duplicate exercise names are rejected.
 #[sqlx::test]
 async fn test_duplicate_name_within_payload_rejected(pool: SqlitePool) {

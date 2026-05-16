@@ -42,6 +42,10 @@ pub struct ExportedExercise {
     /// Absent in older exports — defaults on deserialise.
     #[serde(default)]
     pub image_url: Option<String>,
+    /// JSON-encoded array of image URL strings. Absent in older exports.
+    /// Validated as `JSON array of non-empty strings` at import time.
+    #[serde(default)]
+    pub image_urls_json: Option<String>,
     #[serde(default)]
     pub catalog_source: Option<String>,
     #[serde(default)]
@@ -210,6 +214,35 @@ pub struct SeedResult {
 // ── First-run seed ────────────────────────────────────────────────────────────
 
 // ── Shared validation helpers ─────────────────────────────────────────────────
+
+fn validate_image_urls_json(json: &str, exercise_name: &str) -> Result<(), AppError> {
+    match serde_json::from_str::<serde_json::Value>(json) {
+        Ok(serde_json::Value::Array(arr)) => {
+            for item in &arr {
+                match item.as_str() {
+                    Some(s) if !s.is_empty() => {}
+                    Some(_) => {
+                        return Err(AppError::Validation(format!(
+                            "exercise '{exercise_name}': image_urls_json must contain non-empty strings"
+                        )));
+                    }
+                    None => {
+                        return Err(AppError::Validation(format!(
+                            "exercise '{exercise_name}': image_urls_json must be an array of strings"
+                        )));
+                    }
+                }
+            }
+            Ok(())
+        }
+        Ok(_) => Err(AppError::Validation(format!(
+            "exercise '{exercise_name}': image_urls_json must be a JSON array"
+        ))),
+        Err(_) => Err(AppError::Validation(format!(
+            "exercise '{exercise_name}': image_urls_json is not valid JSON"
+        ))),
+    }
+}
 
 fn validate_instructions_json(json: &str, exercise_name: &str) -> Result<(), AppError> {
     match serde_json::from_str::<serde_json::Value>(json) {
@@ -451,6 +484,7 @@ pub async fn export_full_library(pool: &SqlitePool) -> Result<String, AppError> 
             ExportedExercise {
                 tags,
                 image_url: row.image_url,
+                image_urls_json: row.image_urls_json,
                 catalog_source: row.catalog_source,
                 catalog_id: row.catalog_id,
                 is_catalog: row.is_catalog != 0,
@@ -593,6 +627,9 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
         }
         if let Some(json) = &ex.instructions_json {
             validate_instructions_json(json, &ex.name)?;
+        }
+        if let Some(json) = &ex.image_urls_json {
+            validate_image_urls_json(json, &ex.name)?;
         }
         for m in &ex.primary_muscles {
             if !VALID_EXERCISE_MUSCLES.contains(&m.as_str()) {
@@ -840,15 +877,16 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
         let is_catalog = ex.is_catalog as i64;
         sqlx::query!(
             "INSERT INTO exercises
-                 (id, name, notes, image_url,
+                 (id, name, notes, image_url, image_urls_json,
                   catalog_source, catalog_id, is_catalog,
                   category, equipment, level, mechanic, force, instructions_json,
                   sanskrit_name)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                name              = excluded.name,
                notes             = excluded.notes,
                image_url         = excluded.image_url,
+               image_urls_json   = excluded.image_urls_json,
                catalog_source    = excluded.catalog_source,
                catalog_id        = excluded.catalog_id,
                is_catalog        = excluded.is_catalog,
@@ -863,6 +901,7 @@ pub async fn import_library_json(pool: &SqlitePool, json: &str) -> Result<Import
             ex.name,
             ex.notes,
             ex.image_url,
+            ex.image_urls_json,
             ex.catalog_source,
             ex.catalog_id,
             is_catalog,

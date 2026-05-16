@@ -53,8 +53,27 @@ function DetailPane({
     }
   }
 
-  const [imageBroken, setImageBroken] = useState(false);
-  useEffect(() => { setImageBroken(false); }, [exercise.image_url]);
+  const imageUrls: string[] = (() => {
+    if (exercise.image_urls_json) {
+      try {
+        const parsed: unknown = JSON.parse(exercise.image_urls_json);
+        if (Array.isArray(parsed)) {
+          const valid = parsed.filter(
+            (v): v is string => typeof v === "string" && v.trim() !== "",
+          );
+          if (valid.length > 0) return valid;
+        }
+      } catch {
+        // fall through to single image
+      }
+    }
+    return exercise.image_url ? [exercise.image_url] : [];
+  })();
+
+  const imageStackKey = imageUrls.join("|");
+  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
+  useEffect(() => { setBrokenImages(new Set()); }, [imageStackKey]);
+  const visibleImages = imageUrls.filter((u) => !brokenImages.has(u));
 
   return (
     <div style={detailRootStyle}>
@@ -84,15 +103,26 @@ function DetailPane({
 
       <div style={detailDividerStyle} />
 
-      {/* Image (when present and loadable) */}
-      {exercise.image_url && !imageBroken && (
-        <div style={detailImageWrapStyle}>
-          <img
-            src={exercise.image_url}
-            alt={exercise.name}
-            style={detailImageStyle}
-            onError={() => setImageBroken(true)}
-          />
+      {/* Image stack (one or more local images, when present and loadable) */}
+      {visibleImages.length > 0 && (
+        <div style={detailImageStackStyle}>
+          {visibleImages.map((url) => (
+            <div key={url} style={detailImageWrapStyle}>
+              <img
+                src={url}
+                alt={exercise.name}
+                style={detailImageStyle}
+                onError={() =>
+                  setBrokenImages((prev) => {
+                    if (prev.has(url)) return prev;
+                    const next = new Set(prev);
+                    next.add(url);
+                    return next;
+                  })
+                }
+              />
+            </div>
+          ))}
         </div>
       )}
 
@@ -1126,6 +1156,13 @@ const detailDividerStyle: React.CSSProperties = {
   margin: "0 0 20px",
 };
 
+const detailImageStackStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+  marginBottom: 20,
+};
+
 const detailImageWrapStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "center",
@@ -1134,7 +1171,6 @@ const detailImageWrapStyle: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: 12,
   padding: 12,
-  marginBottom: 20,
   maxHeight: 280,
   overflow: "hidden",
 };
